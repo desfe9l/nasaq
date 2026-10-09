@@ -6,7 +6,7 @@
  * kept for inspection and are not auto-applied.
  */
 
-import { DESIGN_CATEGORIES, DESIGN_CONSTITUTION_VERSION, type DesignCategory } from "./design-constitution";
+import { DESIGN_CATEGORIES, DESIGN_CONSTITUTION_VERSION, type DesignCategory } from "@/lib/intelligence/design-constitution";
 
 export const DESIGN_MEMORY_KINDS = [
   "approved",

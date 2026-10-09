@@ -19,7 +19,7 @@ import {
   DESIGN_CONSTITUTION_VERSION,
   imposeNasaqPalette,
   type DesignCategory,
-} from "./design-constitution";
+} from "@/lib/intelligence/design-constitution";
 import { memoryAppliesToCategory, resolveMemory, type DesignMemoryView } from "./design-memory";
 
 export const TWIN_MAX_ROUNDS = 2;

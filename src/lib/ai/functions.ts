@@ -23,7 +23,7 @@ import {
   type DesignBriefResult,
 } from "./design-contract";
 import type { DesignMemoryInput, DesignMemoryView } from "./design-memory";
-import { DESIGN_CONSTITUTION_VERSION } from "./design-constitution";
+import { DESIGN_CONSTITUTION_VERSION } from "@/lib/intelligence/design-constitution";
 
 let getRequestRef: typeof import("@tanstack/react-start/server").getRequest | null = null;
 

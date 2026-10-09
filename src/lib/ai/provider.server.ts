@@ -23,7 +23,7 @@ import {
   type DesignBrief,
   type DesignBriefInput,
 } from "./design-contract.ts";
-import { constitutionSystemAddendum } from "./design-constitution.ts";
+import { constitutionSystemAddendum } from "@/lib/intelligence/design-constitution";
 
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 

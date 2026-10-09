@@ -46,3 +46,20 @@ export {
   stylePresets,
 } from "./style-presets";
 export type { StylePreset, StylePresetId } from "./style-presets";
+
+// Shared Design Constitution — single source for design rules consumed by both
+// the primary intelligence pipeline and the design twin.
+export {
+  DESIGN_CONSTITUTION_VERSION,
+  DESIGN_CATEGORIES,
+  DESIGN_CONSTITUTION,
+} from "./design-constitution";
+export type { DesignCategory, ConstitutionRule, DesignConstitution } from "./design-constitution";
+export {
+  mentionsNasaq,
+  mentionsCustomerBrand,
+  imposeNasaqPalette,
+  categoryFromBrief,
+  constitutionRulesFor,
+  constitutionSystemAddendum,
+} from "./design-constitution";

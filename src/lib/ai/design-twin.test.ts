@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { imposeNasaqPalette } from "./design-constitution.ts";
+import { imposeNasaqPalette } from "@/lib/intelligence/design-constitution";
 import { applyAIEditorOperations, type AIEditorCommandApi } from "./editor-bridge.ts";
 import { executeDesignTwin, planTwin, runDesignTwinBenchmarks } from "./design-twin.ts";
 import type { Project } from "@/lib/editor/model.ts";

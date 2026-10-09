@@ -50,19 +50,29 @@ import {
 } from "./AccountMenuPanel";
 
 /**
- * The three appearance states, each with a glyph that cannot be mistaken for
- * another: a sun for «فاتح», a sun behind cloud for «خافت», a crescent for
- * «داكن». `AppearanceMode` keeps the order of the palette itself.
+ * The three appearance states in cycle order: Light → Dark → Dim → Light...
+ * Each has a distinct glyph and Arabic name.
  */
-const THEME_CHOICES: readonly {
+const THEME_CYCLE: readonly {
   id: AppearanceMode;
   label: string;
   icon: typeof Sun;
 }[] = [
   { id: "light", label: "فاتح", icon: Sun },
-  { id: "dim", label: "خافت", icon: CloudSun },
   { id: "dark", label: "داكن", icon: MoonStar },
+  { id: "dim", label: "خافت", icon: CloudSun },
 ];
+
+/** Get the next theme in the cycle. */
+function getNextTheme(current: AppearanceMode): AppearanceMode {
+  const idx = THEME_CYCLE.findIndex((t) => t.id === current);
+  return THEME_CYCLE[(idx + 1) % THEME_CYCLE.length].id;
+}
+
+/** Get the theme choice by id. */
+function getThemeChoice(id: AppearanceMode) {
+  return THEME_CYCLE.find((t) => t.id === id) ?? THEME_CYCLE[0];
+}
 
 /**
  * The editor call-to-action in the site chrome.
@@ -410,42 +420,24 @@ export function SiteHeader({ current }: { current: string }) {
           activeId={current}
         />
 
-        <div className="site-header-actions flex shrink-0 items-center gap-1.5">
-          {/*
-           * Appearance — three distinct states, each with its own icon and
-           * Arabic name, so «فاتح / خافت / داكن» is read rather than guessed.
-           * A single cycling palette icon told the author nothing about which
-           * mode they were in or what the next press would do.
-           */}
-          <div
-            role="group"
-            aria-label="مظهر الواجهة"
-            className="site-appearance flex h-11 items-center gap-0.5 rounded-[10px] border border-line bg-surface p-0.5"
-          >
-            {THEME_CHOICES.map((choice) => {
-              const Icon = choice.icon;
-              const active = appearance === choice.id;
-              return (
-                <button
-                  key={choice.id}
-                  type="button"
-                  onClick={() => setTheme(choice.id)}
-                  aria-pressed={active}
-                  aria-label={`مظهر ${choice.label}`}
-                  title={`مظهر ${choice.label}`}
-                  data-active={active ? "true" : undefined}
-                  className={cn(
-                    "site-appearance-option grid size-9 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
-                    active
-                      ? "bg-navy text-on-brand shadow-sm"
-                      : "text-muted hover:bg-line-2 hover:text-ink",
-                  )}
-                >
-                  <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
+<div className="site-header-actions flex shrink-0 items-center gap-1.5">
+            {/*
+             * Appearance — a single compact cycling button: Light → Dark → Dim.
+             * Shows the current mode's icon and name; press to advance.
+             */}
+            <button
+              type="button"
+              onClick={() => setTheme(getNextTheme(appearance))}
+              aria-label={`مظهر الواجهة: ${getThemeChoice(appearance).label}. اضغط للتبديل إلى ${getThemeChoice(getNextTheme(appearance)).label}`}
+              title={`مظهر ${getThemeChoice(appearance).label} — اضغط للتبديل إلى ${getThemeChoice(getNextTheme(appearance)).label}`}
+              className="site-appearance-cycle inline-flex h-11 min-w-[56px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-bold text-ink transition-[background-color,border-color,color] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              {(() => {
+                const ThemeIcon = getThemeChoice(appearance).icon;
+                return <ThemeIcon className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />;
+              })()}
+              <span className="site-appearance-label hidden sm:inline">{getThemeChoice(appearance).label}</span>
+            </button>
           {/*
            * «اطلب خدمة» — the platform's own request channel, in the chrome.
            *

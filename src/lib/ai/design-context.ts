@@ -1,4 +1,4 @@
-import { categoryFromBrief } from "./design-constitution";
+import { categoryFromBrief } from "@/lib/intelligence/design-constitution";
 import {
   memoryAppliesToCategory,
   resolveMemory,
