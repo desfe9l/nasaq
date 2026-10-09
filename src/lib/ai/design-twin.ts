@@ -107,7 +107,7 @@ export function planTwin(input: Pick<TwinExecutionInput, "prompt" | "format" | "
     ?? (brief?.format === "wide-slide" || brief?.format === "tall-story" || brief?.format === "a4-book" ? brief.format : undefined)
     ?? (category === "presentation" ? "wide-slide" : category === "social" ? "tall-story" : "a4-book");
   if (memory.rules.format === "a4-book" || memory.rules.format === "wide-slide" || memory.rules.format === "tall-story") {
-    if (!input.format) format = memory.rules.format;
+    if (!input.format && !brief) format = memory.rules.format;
   }
   let pages = input.pages ?? brief?.pages ?? (format === "wide-slide" ? 4 : format === "tall-story" ? 1 : 3);
   pages = Math.min(12, Math.max(1, Math.round(pages)));
@@ -404,6 +404,8 @@ export function executeDesignTwin(input: TwinExecutionInput): TwinDelivery {
   if (input.geminiBrief?.org) overrides.org = input.geminiBrief.org;
   if (input.geminiBrief?.coverStyle) overrides.coverStyle = input.geminiBrief.coverStyle;
   if (input.geminiBrief) overrides.bilingual = input.geminiBrief.bilingual;
+  if (input.geminiBrief?.compositions) overrides.compositions = input.geminiBrief.compositions;
+  overrides.dimensions = plan.format === "wide-slide" ? { w: 338.7, h: 190.5 } : plan.format === "tall-story" ? { w: 210, h: 560 } : { w: 210, h: 297 };
   if (input.geminiBrief?.pageLayouts) overrides.pageLayouts = input.geminiBrief.pageLayouts;
   if (plan.imposeNasaqPalette) overrides.palette = NASAQ_PALETTE;
   const generated = generateDesignFromPrompt(prompt, overrides as Partial<PromptAnalysis>);

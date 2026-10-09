@@ -1,3 +1,4 @@
+import { normalizeCompositions, type DesignComposition } from "./design-composition";
 import {
   normalizePageLayoutDirectives,
   planPageLayouts,
@@ -35,6 +36,7 @@ export interface DesignBriefInput {
 }
 
 export interface DesignBrief {
+  compositions?: DesignComposition[];
   title: string;
   subtitle: string;
   org: string;
@@ -129,6 +131,7 @@ export function normalizeDesignBrief(value: unknown, input: DesignBriefInput): D
   const requestedStyle = String(raw.style ?? input.style ?? "institutional");
   const coverStyle = String(raw.coverStyle ?? "formal");
   return {
+    ...(raw.compositions !== undefined ? { compositions: normalizeCompositions(raw.compositions, pages) } : {}),
     // Provider omissions are fields for the owner to fill, never facts for the
     // generator to infer or institutional claims for it to make.
     title: text(raw.title, "[عنوان المستند]"),

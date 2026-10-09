@@ -106,6 +106,9 @@ export function generateDesignFromPrompt(
     ...parsed,
     ...(overrides || {}),
   };
+  if (overrides?.format && !overrides.dimensions) {
+    base.dimensions = overrides.format === "wide-slide" ? { w: 338.7, h: 190.5 } : overrides.format === "tall-story" ? { w: 210, h: 560 } : { w: 210, h: 297 };
+  }
   const identity = brand && brandIsConfigured(brand) ? brand : null;
   const intent = identity ? applyBrandToIntent(base, identity) : base;
 
