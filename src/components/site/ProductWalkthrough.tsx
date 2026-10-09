@@ -211,7 +211,10 @@ export function ProductEcosystem() {
         </div>
         <ol className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {ECOSYSTEM.map(({ icon: Icon, title, copy }, index) => (
-            <li key={title} className="relative flex min-h-[126px] flex-col rounded-[13px] border border-line bg-surface p-4">
+            <li
+              key={title}
+              className={`relative flex min-h-[126px] flex-col rounded-[13px] border border-line bg-surface p-4 ${index === ECOSYSTEM.length - 1 ? "sm:col-span-2 lg:col-span-1" : ""}`}
+            >
               <div className="flex items-center justify-between">
                 <span className="grid size-9 place-items-center rounded-[10px] border border-brand/10 bg-navy/5 text-brand"><Icon className="size-4" aria-hidden="true" /></span>
                 <span className="font-mono text-[10px] font-bold text-muted">0{index + 1}</span>
