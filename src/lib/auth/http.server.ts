@@ -26,6 +26,7 @@
  *     instead of crashing the module graph at import time.
  */
 import { authBaseURL, authTrustedOrigins } from "./config";
+import { resolveCredentialOrigin } from "../host-routing";
 import {
   clearedOAuthStateCookie,
   createOAuthState,
@@ -207,7 +208,10 @@ function handleUnexpected(error: unknown): Response {
   return failureResponse(outcome.failure);
 }
 
-/** The live token for this request: bearer (preview) first, then the cookie. */
+/** The origin that may receive the session cookie and the OAuth redirect URI. */
+function credentialOrigin(request: Request, fallback: string): string {
+  return resolveCredentialOrigin(request) ?? authBaseURL(process.env) ?? fallback;
+}
 function tokenOf(request: Request): string | null {
   return (
     sessionTokenFromAuthorization(request.headers.get("authorization")) ??
@@ -318,7 +322,7 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
           message: "طريقة تسجيل الدخول المطلوبة غير مفعّلة على هذه النسخة.",
         });
       }
-      const origin = authBaseURL(process.env) ?? url.origin;
+      const origin = credentialOrigin(request, url.origin);
       const state = createOAuthState({
         callbackURL: body.callbackURL,
         errorCallbackURL: body.errorCallbackURL,
@@ -349,7 +353,7 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
       if (!state || !code || !stateMatches(state.state, returnedState)) {
         return redirectWith(errorTarget, [clearedOAuthStateCookie()]);
       }
-      const origin = authBaseURL(process.env) ?? url.origin;
+      const origin = credentialOrigin(request, url.origin);
       const exchanged = await exchangeGoogleCode({
         code,
         verifier: state.verifier,

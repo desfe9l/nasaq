@@ -16,6 +16,7 @@
  * React route here paints the full app shell in the popup. The opener lives in
  * `client.ts` (`signIn` → `openSignInPopup`).
  */
+import { resolveCredentialOrigin } from "../host-routing";
 import {
   createOAuthState,
   encodeOAuthState,
@@ -86,7 +87,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       errorCallbackURL: `${back}&error=1`,
     });
     const location = googleAuthorizeUrl({
-      redirectUri: googleRedirectUri(url.origin),
+      redirectUri: googleRedirectUri(resolveCredentialOrigin(request) ?? url.origin),
       state,
     });
     if (!location) {

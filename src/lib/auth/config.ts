@@ -35,6 +35,7 @@
  */
 
 import { emailAndPasswordEnabled } from "./email-password";
+import { PRODUCT_AUTH_HOSTS, PRODUCT_AUTH_ORIGINS } from "../host-routing";
 import {
   LIVE_PREVIEW_ALLOWED_HOSTS,
   LIVE_PREVIEW_TRUSTED_ORIGINS,
@@ -193,6 +194,7 @@ export function deploymentHosts(env: AuthEnvironment): string[] {
   for (const key of VERCEL_HOST_VARS) push(readEnv(env, key));
   for (const pattern of LIVE_PREVIEW_ALLOWED_HOSTS) hosts.push(pattern);
   for (const host of LOCAL_DEV_HOSTS) if (!hosts.includes(host)) hosts.push(host);
+  for (const host of PRODUCT_AUTH_HOSTS) if (!hosts.includes(host)) hosts.push(host);
   return hosts;
 }
 
@@ -281,6 +283,7 @@ export function authTrustedOrigins(env: AuthEnvironment): string[] {
   for (const pattern of vercelPreviewOriginPatterns(env)) origins.add(pattern);
   for (const origin of LIVE_PREVIEW_TRUSTED_ORIGINS) origins.add(origin);
   for (const origin of LOCAL_DEV_ORIGINS) origins.add(origin);
+  for (const origin of PRODUCT_AUTH_ORIGINS) origins.add(origin);
   for (const entry of parseEnvList(readEnv(env, "NASAQ_TRUSTED_ORIGINS"))) {
     addPattern(entry);
   }

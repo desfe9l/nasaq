@@ -8,6 +8,7 @@ import {
   templateIdFromShortToken,
 } from "@/lib/templates/published";
 import { templateShareImage } from "@/lib/templates/share-image";
+import { SITE_ORIGIN } from "@/lib/og/share";
 import type { AdminTemplateSummary } from "@/lib/admin/types";
 
 /**
@@ -99,7 +100,7 @@ export const Route = createFileRoute("/t/$code")({
  */
 function originBase(): string {
   if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
-  return "https://nasaq-sa.vercel.app";
+  return SITE_ORIGIN;
 }
 
 function ShortTemplateRoute() {
