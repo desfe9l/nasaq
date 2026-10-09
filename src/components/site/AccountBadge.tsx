@@ -18,15 +18,15 @@ import { cn } from "@/lib/utils";
  */
 export type AccountTier = "LOADING" | "LICENSED" | "ADMIN" | "SUSPENDED" | "FREE";
 
-export function useAccountTier(user: AppUser | null): AccountTier {
+export function useAccountTier(user: AppUser | null): AccountTier & { isOwner?: boolean } {
   // `useLicense` short-circuits when there is no cached key and no user id, so
   // mounting this for a real user costs exactly one status call.
-  const { isLoading, hasLicense, isAdmin, isSuspended } = useLicense(user?.id, user?.primaryEmail ?? null);
-  if (!user) return "FREE";
-  if (isLoading) return "LOADING";
-  if (isAdmin) return "ADMIN";
-  if (isSuspended) return "SUSPENDED";
-  return hasLicense ? "LICENSED" : "FREE";
+  const { isLoading, hasLicense, isAdmin, isSuspended, isOwner } = useLicense(user?.id, user?.primaryEmail ?? null);
+  if (!user) return { tier: "FREE", isOwner: false } as any;
+  if (isLoading) return { tier: "LOADING", isOwner: Boolean(isOwner) } as any;
+  if (isAdmin) return { tier: "ADMIN", isOwner: Boolean(isOwner) } as any;
+  if (isSuspended) return { tier: "SUSPENDED", isOwner: Boolean(isOwner) } as any;
+  return { tier: hasLicense ? "LICENSED" : "FREE", isOwner: Boolean(isOwner) } as any;
 }
 
 const BADGE_META: Record<
@@ -73,15 +73,18 @@ const BADGE_META: Record<
  */
 export function AccountBadge({
   tier,
+  isOwner = false,
   compact = false,
   className,
 }: {
   tier: AccountTier;
+  isOwner?: boolean;
   compact?: boolean;
   className?: string;
 }) {
   const meta = BADGE_META[tier];
   const Icon = meta.Icon;
+  const label = (tier === "ADMIN" && isOwner) ? "المالك الرئيسي" : meta.label;
   return (
     <span
       data-account-status={tier}
@@ -92,20 +95,22 @@ export function AccountBadge({
         className,
       )}
       title={
-        tier === "ADMIN"
-          ? "مشترك — صلاحيات إدارية كاملة"
-          : tier === "LICENSED"
-            ? "مشترك"
-            : tier === "SUSPENDED"
-              ? "الحساب موقوف مؤقتًا بقرار الإدارة"
-            : tier === "LOADING"
-              ? "جارٍ التحقق من حالة الترخيص"
-              : "حساب مجاني — الترخيص يفتح المزايا المتقدمة"
+        (tier === "ADMIN" && isOwner)
+          ? "المالك الرئيسي — صلاحيات إدارية كاملة"
+          : tier === "ADMIN"
+            ? "مشترك — صلاحيات إدارية كاملة"
+            : tier === "LICENSED"
+              ? "مشترك"
+              : tier === "SUSPENDED"
+                ? "الحساب موقوف مؤقتًا بقرار الإدارة"
+              : tier === "LOADING"
+                ? "جارٍ التحقق من حالة الترخيص"
+                : "حساب مجاني — الترخيص يفتح المزايا المتقدمة"
       }
     >
       <Icon className={cn("size-3 shrink-0", tier === "LOADING" && "animate-spin")} aria-hidden />
 
-      <span>{meta.label}</span>
+      <span>{label}</span>
 
     </span>
   );

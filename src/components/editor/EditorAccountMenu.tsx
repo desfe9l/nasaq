@@ -64,7 +64,8 @@ import { requestLeave } from "@/lib/editor/leave-controller";
  * while the card is open for a real session.
  */
 function AdminEditorLinks({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
   if (tier !== "ADMIN") return null;
   return (
     <>
@@ -77,7 +78,8 @@ function AdminEditorLinks({ user }: { user: AppUser }) {
 }
 
 function MyTemplatesLink({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
     <a href={templatesFilterPathFor({ pill: "custom" })} role="menuitem" className={accountMenuItemClass}>
@@ -87,7 +89,8 @@ function MyTemplatesLink({ user }: { user: AppUser }) {
   );
 }
 function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: () => void }) {
-  const tier = useAccountTier(user);
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
     <button type="button" role="menuitem" onClick={onRequest} className={accountMenuItemClass}>

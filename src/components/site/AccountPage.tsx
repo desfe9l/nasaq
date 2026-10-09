@@ -25,7 +25,7 @@ import type {
 } from "@/lib/commercial/types";
 import { cn } from "@/lib/utils";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
-import { ADMIN_ROUTES } from "@/lib/site-routes";
+import { ADMIN_ROUTES, OWNER_VAULT_ROUTE } from "@/lib/site-routes";
 
 type AccountData = {
   account: CustomerAccount;
@@ -213,7 +213,7 @@ function AdminAccessCard() {
           إدارة التراخيص
         </a>
         <a
-          href="/owner-vault"
+          href={OWNER_VAULT_ROUTE}
           className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           إعدادات المالك

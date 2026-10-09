@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
-import { CREATE_ROUTE, EDITOR_ROUTE, IMPORT_ROUTE, LOGIN_ROUTE } from "@/lib/site-routes";
+import { ADMIN_ROUTES, CREATE_ROUTE, EDITOR_ROUTE, IMPORT_ROUTE, LOGIN_ROUTE, OWNER_VAULT_ROUTE } from "@/lib/site-routes";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
@@ -139,10 +139,9 @@ function NewDocumentButton() {
 
 /** Own component so `useAccountTier` only mounts for a real signed-in session. */
 function NewDocumentForUser({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
   const { entry } = useEditorEntry();
-  // Nothing until the session AND the licence state resolve — exactly like
-  // `EditorEntryLink`, a licensed author must not see the button flash late.
   if (!entry.ready || !entry.direct) return null;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
@@ -274,6 +273,8 @@ function HeaderAccount() {
         <KeyRound className="size-4 opacity-70" aria-hidden />
         ترخيصي وتفعيله
       </a>
+      <AdminSiteLinks user={user} />
+
       <button
         type="button"
         role="menuitem"
@@ -583,5 +584,29 @@ export function BrandLockup() {
       <span aria-hidden className="text-muted">|</span>
       <span className="text-[10px] tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
     </span>
+  );
+}
+
+
+/** Admin links for site menu. */
+function AdminSiteLinks({ user }: { user: AppUser }) {
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
+  if (tier !== "ADMIN") return null;
+  return (
+    <>
+      <a href={ADMIN_ROUTES.dashboard} role="menuitem" className={accountMenuItemClass}>
+        لوحة الإدارة
+      </a>
+      <a href={ADMIN_ROUTES.templates} role="menuitem" className={accountMenuItemClass}>
+        إدارة القوالب
+      </a>
+      <a href={ADMIN_ROUTES.licenses} role="menuitem" className={accountMenuItemClass}>
+        إدارة التراخيص
+      </a>
+      <a href={OWNER_VAULT_ROUTE} role="menuitem" className={accountMenuItemClass}>
+        إعدادات المالك
+      </a>
+    </>
   );
 }

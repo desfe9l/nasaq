@@ -90,7 +90,7 @@ export const analyzeImageFn = createServerFn({ method: "POST" })
       };
     }
     const verdict = privileged
-      ? checkAppSafetyLimit("ai:image", await clientIdentifier())
+      ? checkAppSafetyLimit("ai:image", await clientIdentifier(), { isOwner: access.isOwner })
       : checkOperationLimit("ai:image", context.userId, await clientIdentifier());
     if (!verdict.allowed) {
       return {

@@ -117,3 +117,23 @@ test("the public cache TTL has a sane default", () => {
   assert.equal(publicCacheTtlMs(), DEFAULT_PUBLIC_CACHE_TTL_MS);
   assert.ok(DEFAULT_PUBLIC_CACHE_TTL_MS <= 60_000, "public reads must not go stale for long");
 });
+
+test("owner bypasses all quota checks", () => {
+  resetRateLimits();
+  const policy = operationPolicy("ai:report");
+  for (let i = 0; i < policy.userPerMinute * 2; i += 1) {
+    const v = checkOperationLimit("ai:report", "owner-1", "10.0.0.1", { isOwner: true });
+    assert.equal(v.allowed, true);
+  }
+});
+
+test("subscriber is subject to normal limits when not privileged", () => {
+  resetRateLimits();
+  const policy = operationPolicy("ai:report");
+  let allowed = 0;
+  for (let i = 0; i < policy.userPerMinute + 5; i += 1) {
+    const v = checkOperationLimit("ai:report", "sub-1", "10.1.1.1");
+    if (v.allowed) allowed += 1;
+  }
+  assert.equal(allowed, policy.userPerMinute);
+});

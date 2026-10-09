@@ -34,7 +34,8 @@ export type AIEditorOperation =
   | { operationId?: string; type: "duplicate_page"; pageId?: string }
   | { operationId?: string; type: "delete_page"; pageId?: string }
   | { operationId?: string; type: "update_page"; pageId: string; name: string }
-  | { operationId?: string; type: "insert_report_draft"; draft: ReportDraft; existingId?: string };
+  | { operationId?: string; type: "insert_report_draft"; draft: ReportDraft; existingId?: string }
+  | { operationId?: string; type: "generate_design"; project: Project; options?: { autoName?: boolean } };
 
 export type AIEditorOperationResult =
   | { ok: true; operationId: string; createdIds?: string[] }
@@ -75,7 +76,7 @@ const SUPPORTED_AI_OPERATIONS: readonly AIEditorOperation["type"][] = [
   "generate_document", "create_element", "update_element", "update_text", "update_style", "replace_image",
   "move_element", "resize_element", "replace_element", "apply_layout", "delete_element", "duplicate_element",
   "group_elements", "ungroup_elements", "reorder_element", "set_background", "create_page", "duplicate_page",
-  "delete_page", "update_page", "insert_report_draft",
+  "delete_page", "update_page", "insert_report_draft", "generate_design",
 ];
 
 export function getEditorAICapabilities(): readonly AIEditorOperation["type"][] {
@@ -237,6 +238,15 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
           const id = api.insertReportDraft(operation.draft, operation.existingId);
           if (!id) throw new Error("insert_report_draft_failed");
           createdIds = [id];
+          break;
+        }
+        case "generate_design": {
+          if (api.createDocument) {
+            const ok = await api.createDocument(operation.project, operation.options);
+            if (!ok) throw new Error("generate_design_failed");
+          } else {
+            throw new Error("generate_design_unsupported");
+          }
           break;
         }
       }

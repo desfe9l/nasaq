@@ -5,7 +5,9 @@ import { AccountBadge, useAccountTier } from "./AccountBadge";
 
 /** One identity/status composition for both headers, using server-resolved licensing. */
 export function AccountControlContent({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
+  const tierResult = useAccountTier(user) as any;
+  const tier = tierResult.tier || tierResult;
+  const isOwner = tierResult.isOwner || false;
   const { label } = accountIdentity(user);
   return (
     <span className="account-control-content">
@@ -13,7 +15,7 @@ export function AccountControlContent({ user }: { user: AppUser }) {
         <AccountAvatar user={user} size={20} />
         <span className="account-control-name" title={label}>{label}</span>
       </span>
-      <AccountBadge tier={tier} compact />
+      <AccountBadge tier={tier} isOwner={isOwner} compact />
     </span>
   );
 }

@@ -116,7 +116,7 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
     // Application-owned budget (`@/lib/policy/limits`). Admins and the owner are
     // exempt from the per-user budget, but the IP safety ceiling still bounds them.
     const verdict = privileged
-      ? checkAppSafetyLimit("ai:report", await clientIdentifier())
+      ? checkAppSafetyLimit("ai:report", await clientIdentifier(), { isOwner: access.isOwner })
       : checkOperationLimit("ai:report", context.userId, await clientIdentifier());
     if (!verdict.allowed) {
       return {
@@ -188,7 +188,7 @@ export const generateDesignBriefFn = createServerFn({ method: "POST" })
     const designClosed = await aiServiceClosed(designPrivileged);
     if (designClosed) return designClosed;
     const designVerdict = designPrivileged
-      ? checkAppSafetyLimit("ai:design", await clientIdentifier())
+      ? checkAppSafetyLimit("ai:design", await clientIdentifier(), { isOwner: access.isOwner })
       : checkOperationLimit("ai:design", context.userId, await clientIdentifier());
     if (!designVerdict.allowed) {
       return { ok: false, code: "rate_limited", message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة." };
@@ -257,7 +257,7 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
     if (selectionClosed) return selectionClosed;
 
     const selectionVerdict = selectionPrivileged
-      ? checkAppSafetyLimit("ai:selection", await clientIdentifier())
+      ? checkAppSafetyLimit("ai:selection", await clientIdentifier(), { isOwner: access.isOwner })
       : checkOperationLimit("ai:selection", context.userId, await clientIdentifier());
     if (!selectionVerdict.allowed) {
       return {
@@ -473,4 +473,51 @@ export const nasaqAiStatusFn = createServerFn({ method: "GET" })
         "توأم التصميم",
       ],
     };
+  });
+
+
+export const generateDesignFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: Partial<DesignBriefInput>) => normalizeDesignBriefInput(data))
+  .handler(async ({ data, context }): Promise<DesignBriefResult> => {
+    if (!validDesignBriefInput(data)) {
+      return { ok: false, code: "invalid", message: "اكتب وصفًا واضحًا للتصميم المطلوب." };
+    }
+    const { getAuthorizationContext, requireFeature } = await import(
+      "@/lib/auth/authorization.server"
+    );
+    const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return { ok: false, code: "license_required", message: "تحتاج هذه الميزة إلى ترخيص نشط." };
+    }
+    const designPrivileged = access.isAdmin || access.isOwner;
+    const designClosed = await aiServiceClosed(designPrivileged);
+    if (designClosed) return designClosed;
+    const designVerdict = designPrivileged
+      ? checkAppSafetyLimit("ai:design", await clientIdentifier(), { isOwner: access.isOwner })
+      : checkOperationLimit("ai:design", context.userId, await clientIdentifier());
+    if (!designVerdict.allowed) {
+      return { ok: false, code: "rate_limited", message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة." };
+    }
+    try {
+      const { generateDesignBrief } = await import("./provider.server");
+      const { loadDesignContext } = await import("./design-context.server");
+      const learned = await loadDesignContext(context.userId, data.prompt);
+      const brief = await generateDesignBrief(data, learned);
+      return { ok: true, brief };
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "provider_error";
+      if (code === "not_configured") {
+        return { ok: false, code: "not_configured", message: "خدمة الذكاء الاصطناعي غير مفعّلة لهذه البيئة بعد." };
+      }
+      if (code === "provider_rate") {
+        return { ok: false, code: "rate_limited", message: "مزود الذكاء الاصطناعي مشغول مؤقتًا. حاول بعد قليل." };
+      }
+      if (code === "provider_rejected") {
+        return { ok: false, code: "provider_error", message: "رفض مزود الذكاء الاصطناعي الطلب." };
+      }
+      return { ok: false, code: "provider_error", message: providerFailureMessage(code, "تعذر توليد التصميم الآن.") };
+    }
   });
