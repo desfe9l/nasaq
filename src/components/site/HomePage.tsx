@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes, Download } from "lucide-react";
+import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
@@ -57,8 +57,8 @@ function FeatureCard({
   return (
     <div
       ref={ref}
-      className={"nsq-card is-interactive"}
-      data-animate={visible ? "reveal" : undefined}
+      className={cn("nsq-card is-interactive", visible && "is-revealed")}
+      data-animate
     >
       <div className="nsq-card-content flex items-start gap-4">
         <span className="mt-0.5 grid size-10 shrink-0 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
@@ -177,8 +177,8 @@ export function HomePage() {
         {/* ── Hero ── */}
         <section
           ref={heroRef}
-          className="border-b border-line/70 bg-page"
-          data-animate={heroVisible ? "reveal" : undefined}
+          className={cn("border-b border-line/70 bg-page", heroVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container grid gap-10 py-[3.5rem] sm:py-[4.5rem] lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-22">
             <div className="flex flex-col">
@@ -254,8 +254,8 @@ export function HomePage() {
         {/* ── What we offer ── */}
         <section
           ref={featuresRef}
-          className="border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]"
-          data-animate={featuresVisible ? "reveal" : undefined}
+          className={cn("border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]", featuresVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container">
             <div className="max-w-2xl">
@@ -264,7 +264,7 @@ export function HomePage() {
                 إنتاج بصري منظم للمخرجات المتكررة
               </h2>
             </div>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
               <FeatureCard
                 icon={Briefcase}
                 title="للفرق المؤسسية"
@@ -290,8 +290,8 @@ export function HomePage() {
         {/* ── Who it's for ── */}
         <section
           ref={audienceRef}
-          className="border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
-          data-animate={audienceVisible ? "reveal" : undefined}
+          className={cn("border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]", audienceVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container">
             <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
@@ -308,8 +308,11 @@ export function HomePage() {
                 {AUDIENCE.map((c) => (
                   <div
                     key={c.title}
-                    className="nsq-card flex items-start gap-4"
-                    data-animate={audienceVisible ? "reveal" : undefined}
+                    className={cn(
+                      "nsq-card flex items-start gap-4",
+                      audienceVisible && "is-revealed",
+                    )}
+                    data-animate
                   >
                     <div className="nsq-card-content flex flex-col items-start gap-3">
                       <span className="grid size-9 shrink-0 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
@@ -332,8 +335,8 @@ export function HomePage() {
         {/* ── Recent projects ── */}
         <section
           ref={projectsRef}
-          className="border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]"
-          data-animate={projectsVisible ? "reveal" : undefined}
+          className={cn("border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]", projectsVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container">
             <div className="flex items-center justify-between gap-3">
@@ -359,7 +362,7 @@ export function HomePage() {
               </p>
             )}
             {recentHidden ? null : projectsLoading ? (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
@@ -368,7 +371,7 @@ export function HomePage() {
                 ))}
               </div>
             ) : recent.length ? (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
                 {recent.map((p) => (
                   <ProjectCard
                     key={p.id}
@@ -394,8 +397,8 @@ export function HomePage() {
         {/* ── Template packs ── */}
         <section
           ref={packsRef}
-          className="border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
-          data-animate={packsVisible ? "reveal" : undefined}
+          className={cn("border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]", packsVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container">
             <h2 className="text-[1.125rem] font-extrabold text-ink">
@@ -405,15 +408,16 @@ export function HomePage() {
               كل قالب ينشئ نسخة جديدة داخل مشروعك.
             </p>
             <div className={`mt-6 ${CARD_WRAP}`}>
-              {PACKS.map((pack, i) => (
+              {PACKS.map((pack) => (
                 <div
                   key={pack.id}
                   className={cn(
                     "nsq-card p-5 text-right",
                     CARD_W,
                     SITE_CARD,
+                    packsVisible && "is-revealed",
                   )}
-                  data-animate={packsVisible ? "reveal" : undefined}
+                  data-animate
                 >
                   <div
                     className="flex flex-col p-5 text-right"
@@ -488,15 +492,15 @@ export function HomePage() {
         {/* ── Features ── */}
         <section
           ref={highlightsRef}
-          className="border-t border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
-          data-animate={highlightsVisible ? "reveal" : undefined}
+          className={cn("border-t border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]", highlightsVisible && "is-revealed")}
+          data-animate
         >
           <div className="nsq-container">
             <p className="nsq-section-eyebrow">الميزات والخدمات الأساسية</p>
             <h2 className="nsq-section-title mt-2.5 text-[1.5rem] sm:text-[1.75rem]">
               أدوات متخصصة لإنتاج المستند المؤسسي
             </h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {HIGHLIGHTS.map((h, i) => (
                 <FeatureCard
                   key={h.title}
