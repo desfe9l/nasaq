@@ -1,6 +1,8 @@
 /** Formats accepted by the image intake path. */
 const ACCEPTED = /^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i;
 
+import type { CanvasEl, Page, Project } from "./model";
+
 export interface PreparedImage {
   src: string;
   /** Intrinsic size in px, used to pick a sensible element box on drop. */
@@ -86,6 +88,83 @@ export function safeImageSrc(src: unknown): string {
   if (/^https?:\/\//i.test(value)) return value;
   if (/^blob:/i.test(value)) return value;
   return "";
+}
+
+/**
+ * Convert an ephemeral blob: URL into a durable data URL.
+ *
+ * AI image generation and canvas rasterisation both produce `blob:` URLs that
+ * are invalidated the moment the owning Blob is revoked (which happens on page
+ * reload, navigation, or garbage collection). If such a URL is persisted into
+ * the document model and then the project is saved and reloaded, the image
+ * silently disappears — the element survives but its pixels are gone.
+ *
+ * This reads the blob's bytes and re-encodes as a `data:` URL so the asset
+ * is self-contained in the serialized project. Remote URLs are returned as-is
+ * (they are server-durable and may already be cached as a platform asset);
+ * already-durable data URLs are returned unchanged. Anything that looks like a
+ * blob but fails to fetch is rejected with a clear error so the caller can
+ * surface an actionable message instead of silently dropping the image.
+ */
+export async function durableImageSrc(src: string): Promise<string> {
+  if (!src) return "";
+  if (src.startsWith("data:")) return src;
+  if (src.startsWith("http://") || src.startsWith("https://")) return src;
+  if (src.startsWith("blob:")) {
+    try {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`blob_fetch_failed:${response.status}`);
+      const blob = await response.blob();
+      if (!ACCEPTED.test(blob.type)) {
+        throw new Error(`blob_unsupported:${blob.type}`);
+      }
+      return await readAsDataUrl(blob);
+    } catch (error) {
+      throw new Error(
+        `تعذر تحويل رابط الصورة المؤقت إلى بيانات دائمة: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return "";
+}
+
+/**
+ * Recursively walk a project tree and convert any ephemeral `blob:` image
+ * sources to durable `data:` URLs.
+ *
+ * Used by the `generate_document` / `generate_design` AI commands, which receive
+ * a full `Project` object from the model. Those projects may carry blob URLs
+ * produced by canvas rasterisation; without conversion, opening the document
+ * after the blob has been revoked shows broken images.
+ *
+ * Non-blob sources (data:, http:, https:) are left untouched; elements without
+ * a `src` (text, shape, etc.) are skipped.
+ */
+export async function sanitizeProjectImages(project: Project): Promise<Project> {
+  async function walkElements(elements: CanvasEl[]): Promise<CanvasEl[]> {
+    return Promise.all(
+      elements.map(async (el) => {
+        const next = { ...el };
+        if (next.src) next.src = await durableImageSrc(next.src).catch(() => next.src);
+        if (next.children?.length) next.children = await walkElements(next.children);
+        return next;
+      }),
+    );
+  }
+  async function walkPage(page: Page): Promise<Page> {
+    if (page.bgImage) {
+      try {
+        page.bgImage = await durableImageSrc(page.bgImage);
+      } catch {
+        /* keep original — the recovery in normalizeProject will clear it */
+      }
+    }
+    if (page.elements?.length) page.elements = await walkElements(page.elements);
+    return page;
+  }
+  const next = { ...project, pages: project.pages };
+  next.pages = await Promise.all(next.pages.map(walkPage));
+  return next;
 }
 
 function readAsDataUrl(file: File | Blob): Promise<string> {
