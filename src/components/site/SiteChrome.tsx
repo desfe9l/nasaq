@@ -10,6 +10,7 @@ import {
   LogIn,
   LogOut,
   MoonStar,
+  Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -264,6 +265,10 @@ function HeaderAccount() {
       <a href="/account#settings" role="menuitem" className={accountMenuItemClass}>
         <UserRound className="size-4 opacity-70" aria-hidden />
         الحساب والإعدادات
+      </a>
+      <a href="/training" role="menuitem" className={accountMenuItemClass}>
+        <Sparkles className="size-4 opacity-70" aria-hidden />
+        تدريب مساعدي
       </a>
       <a href="/license" role="menuitem" className={accountMenuItemClass}>
         <KeyRound className="size-4 opacity-70" aria-hidden />

@@ -38,6 +38,9 @@ export const CREATE_ROUTE = "/create";
 /** The AI design generation studio. */
 export const STUDIO_ROUTE = "/studio";
 
+/** Authenticated Arabic-first personal design training center. */
+export const TRAINING_CENTER_ROUTE = "/training";
+
 /**
  * `/ai` — «من محتوى خام إلى مستند» (`src/routes/ai.tsx`).
  *
@@ -317,6 +320,10 @@ function segment(value: string): string {
 /** `/editor/<projectId>` — a durable address for one document. */
 export function editorPathFor(projectId: string): string {
   return `${EDITOR_ROUTE}/${segment(projectId)}`;
+}
+
+export function trainingCenterPath(): string {
+  return TRAINING_CENTER_ROUTE;
 }
 
 /** `/projects/<projectId>` — the project's own page. */

@@ -34,6 +34,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TrainingRouteImport } from './routes/training'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -56,7 +57,6 @@ import { Route as AdminTemplatesRouteImport } from './routes/admin/templates'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminVaultRouteImport } from './routes/admin/vault'
 import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
-import { Route as ApiOpsServiceStatusRouteImport } from './routes/api/ops/service-status'
 import { Route as EditorIndexRouteImport } from './routes/editor/index'
 import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
@@ -73,6 +73,7 @@ import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/act
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
 import { Route as ApiOpsOwnerRecoveryRouteImport } from './routes/api/ops/owner-recovery'
+import { Route as ApiOpsServiceStatusRouteImport } from './routes/api/ops/service-status'
 import { Route as ApiTemplatesThumbnailRouteImport } from './routes/api/templates/thumbnail'
 import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
@@ -206,6 +207,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TrainingRoute = TrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/workspace',
   path: '/workspace',
@@ -317,11 +323,6 @@ const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
   path: '/api/app-version',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiOpsServiceStatusRoute = ApiOpsServiceStatusRouteImport.update({
-  id: '/api/ops/service-status',
-  path: '/api/ops/service-status',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const EditorIndexRoute = EditorIndexRouteImport.update({
   id: '/editor/',
   path: '/editor/',
@@ -402,6 +403,11 @@ const ApiOpsOwnerRecoveryRoute = ApiOpsOwnerRecoveryRouteImport.update({
   path: '/api/ops/owner-recovery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOpsServiceStatusRoute = ApiOpsServiceStatusRouteImport.update({
+  id: '/api/ops/service-status',
+  path: '/api/ops/service-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTemplatesThumbnailRoute = ApiTemplatesThumbnailRouteImport.update({
   id: '/api/templates/thumbnail',
   path: '/api/templates/thumbnail',
@@ -467,6 +473,7 @@ export interface FileRoutesByFullPath {
   '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
+  '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/admin/ai': typeof AdminAiRoute
@@ -488,7 +495,6 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
-  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -505,6 +511,7 @@ export interface FileRoutesByFullPath {
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -538,6 +545,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
+  '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/admin/ai': typeof AdminAiRoute
@@ -559,7 +567,6 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
-  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -576,6 +583,7 @@ export interface FileRoutesByTo {
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -612,6 +620,7 @@ export interface FileRoutesById {
   '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
+  '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/admin/ai': typeof AdminAiRoute
@@ -633,7 +642,6 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
-  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -650,6 +658,7 @@ export interface FileRoutesById {
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -687,6 +696,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/templates'
     | '/terms'
+    | '/training'
     | '/workspace'
     | '/الهوية'
     | '/admin/ai'
@@ -708,7 +718,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
-    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -725,6 +734,7 @@ export interface FileRouteTypes {
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/ops/owner-recovery'
+    | '/api/ops/service-status'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -758,6 +768,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/studio'
     | '/terms'
+    | '/training'
     | '/workspace'
     | '/الهوية'
     | '/admin/ai'
@@ -779,7 +790,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
-    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -796,6 +806,7 @@ export interface FileRouteTypes {
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/ops/owner-recovery'
+    | '/api/ops/service-status'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -831,6 +842,7 @@ export interface FileRouteTypes {
     | '/studio'
     | '/templates'
     | '/terms'
+    | '/training'
     | '/workspace'
     | '/الهوية'
     | '/admin/ai'
@@ -852,7 +864,6 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
-    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -869,6 +880,7 @@ export interface FileRouteTypes {
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/ops/owner-recovery'
+    | '/api/ops/service-status'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -905,10 +917,10 @@ export interface RootRouteChildren {
   StudioRoute: typeof StudioRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   TermsRoute: typeof TermsRoute
+  TrainingRoute: typeof TrainingRoute
   WorkspaceRoute: typeof WorkspaceRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAppVersionRoute: typeof ApiAppVersionRoute
-  ApiOpsServiceStatusRoute: typeof ApiOpsServiceStatusRoute
   EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
@@ -921,6 +933,7 @@ export interface RootRouteChildren {
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
   ApiOpsOwnerRecoveryRoute: typeof ApiOpsOwnerRecoveryRoute
+  ApiOpsServiceStatusRoute: typeof ApiOpsServiceStatusRoute
   ApiTemplatesThumbnailRoute: typeof ApiTemplatesThumbnailRoute
   ApiWebhooksGumroadRoute: typeof ApiWebhooksGumroadRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
@@ -1103,6 +1116,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/training': {
+      id: '/training'
+      path: '/training'
+      fullPath: '/training'
+      preLoaderRoute: typeof TrainingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/workspace': {
       id: '/workspace'
       path: '/workspace'
@@ -1257,13 +1277,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAppVersionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/ops/service-status': {
-      id: '/api/ops/service-status'
-      path: '/api/ops/service-status'
-      fullPath: '/api/ops/service-status'
-      preLoaderRoute: typeof ApiOpsServiceStatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/editor/': {
       id: '/editor/'
       path: '/editor'
@@ -1374,6 +1387,13 @@ declare module '@tanstack/react-router' {
       path: '/api/ops/owner-recovery'
       fullPath: '/api/ops/owner-recovery'
       preLoaderRoute: typeof ApiOpsOwnerRecoveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ops/service-status': {
+      id: '/api/ops/service-status'
+      path: '/api/ops/service-status'
+      fullPath: '/api/ops/service-status'
+      preLoaderRoute: typeof ApiOpsServiceStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/templates/thumbnail': {
@@ -1545,11 +1565,11 @@ const rootRouteChildren: RootRouteChildren = {
   StudioRoute: StudioRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   TermsRoute: TermsRoute,
+  TrainingRoute: TrainingRoute,
   WorkspaceRoute: WorkspaceRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAppVersionRoute: ApiAppVersionRoute,
-  ApiOpsServiceStatusRoute: ApiOpsServiceStatusRoute,
   EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
@@ -1562,6 +1582,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
   ApiOpsOwnerRecoveryRoute: ApiOpsOwnerRecoveryRoute,
+  ApiOpsServiceStatusRoute: ApiOpsServiceStatusRoute,
   ApiTemplatesThumbnailRoute: ApiTemplatesThumbnailRoute,
   ApiWebhooksGumroadRoute: ApiWebhooksGumroadRoute,
   ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
