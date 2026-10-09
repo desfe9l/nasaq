@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SignUpPage } from "@/components/site/SignUpPage";
-import { SITE_ORIGIN } from "@/lib/og/share";
+import { WORKSPACE_ORIGIN } from "@/lib/host-routing";
 import { SIGN_UP_ROUTE } from "@/lib/site-routes";
 
 /**
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/signup")({
     const title = "إنشاء حساب | نَسَق";
     const description =
       "أنشئ حسابك في نَسَق (NASAQ) بالبريد الإلكتروني وكلمة المرور لحفظ مشاريعك ومستنداتك، والدخول إلى المحرر وأدوات الذكاء الاصطناعي.";
-    const url = `${SITE_ORIGIN}${SIGN_UP_ROUTE}`;
+    const url = `${WORKSPACE_ORIGIN}${SIGN_UP_ROUTE}`;
     return {
       meta: [
         { title },

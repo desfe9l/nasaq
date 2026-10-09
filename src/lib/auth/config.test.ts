@@ -124,6 +124,22 @@ describe("base URL and trusted origins", () => {
     assert.ok(origins.includes("http://127.0.0.1:8080"));
   });
 
+  it("trusts the public and workspace domains exactly, and not lookalikes", () => {
+    const origins = authTrustedOrigins(PRODUCTION);
+    assert.ok(origins.includes("https://www.nasaq.team"));
+    assert.ok(origins.includes("https://nasaq.team"));
+    assert.ok(origins.includes("https://nasaq.work"));
+    assert.ok(origins.includes("https://www.nasaq.work"));
+    assert.ok(origins.includes("https://nasaq-sa.vercel.app"));
+    assert.ok(!origins.includes("https://nasaq.team.evil.com"));
+    assert.ok(!origins.includes("https://*.nasaq.team"));
+    assert.ok(!origins.includes("https://*.nasaq.work"));
+    const hosts = authAllowedHosts(PRODUCTION);
+    assert.ok(hosts.includes("www.nasaq.team"));
+    assert.ok(hosts.includes("nasaq.work"));
+    assert.ok(hosts.includes("nasaq-sa.vercel.app"));
+  });
+
   it("keeps the live-preview iframe origins", () => {
     const origins = authTrustedOrigins({});
     assert.ok(origins.includes("https://*.e2b.app"));

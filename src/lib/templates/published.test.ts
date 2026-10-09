@@ -19,7 +19,7 @@ test("published links identify a template without leaking content", () => {
   assert.equal(templateDisplaySlug({ id: "tpl_1", slug: null }), "tpl_1");
   assert.equal(slugifyTitle("تقرير سنوي 2025"), "تقرير-سنوي-2025");
   assert.equal(slugifyTitle("Annual Report 2025"), "annual-report-2025");
-  assert.equal(publishedTemplateAbsoluteUrl("my-template"), "https://nasaq-sa.vercel.app/templates/my-template");
+  assert.equal(publishedTemplateAbsoluteUrl("my-template"), "https://www.nasaq.team/templates/my-template");
 });
 
 test("published JSON opens as an independent copy, without original project identity", () => {

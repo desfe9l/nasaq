@@ -20,8 +20,10 @@
  * WhatsApp, LinkedIn and Slack.
  */
 
-/** Canonical public origin — the one the marketing and share URLs are built on. */
-export const SITE_ORIGIN = "https://nasaq-sa.vercel.app";
+import { PUBLIC_ORIGIN } from "@/lib/host-routing";
+
+/** Canonical public origin — marketing pages and share URLs are built on it. */
+export const SITE_ORIGIN = PUBLIC_ORIGIN;
 
 /**
  * The platform's share card: the current نَسَق mark, in the brand's own green.

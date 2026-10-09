@@ -17,7 +17,7 @@ test("personal templates stay private until sharing is explicit", () => {
   assert.equal(personalSharePath(token), `/templates/share/${token}`);
   assert.equal(
     personalShareAbsoluteUrl(token),
-    `https://nasaq-sa.vercel.app/templates/share/${token}`,
+    `https://www.nasaq.team/templates/share/${token}`,
   );
   assert.equal(personalSharePath("../admin"), null);
 });

@@ -21,6 +21,7 @@ import { initInstallPrompt } from "@/lib/app-install";
 import "@/lib/theme";
 import { BRAND } from "@/lib/brand";
 import { legacyRedirectFor } from "@/lib/site-routes";
+import { decideHostRequest } from "@/lib/host-routing";
 import {
   SITE_ORIGIN,
   SITE_OG_IMAGE,
@@ -46,14 +47,30 @@ export const Route = createRootRoute({
    */
   beforeLoad: ({ location }) => {
     const target = legacyRedirectFor(location.pathname);
-    if (!target) return;
+    if (target) {
+      /*
+       * `Location` is an HTTP header, so it must be ASCII: the brand-kit
+       * destination contains Arabic, and an unencoded header throws inside the
+       * server runtime (500 instead of a redirect). Encoding here keeps both the
+       * header and the browser's follow-up request correct.
+       */
+      throw redirect({ href: encodeURI(target), replace: true, statusCode: 301 });
+    }
     /*
-     * `Location` is an HTTP header, so it must be ASCII: the brand-kit
-     * destination contains Arabic, and an unencoded header throws inside the
-     * server runtime (500 instead of a redirect). Encoding here keeps both the
-     * header and the browser's follow-up request correct.
+     * Client navigations never hit the server host middleware. The same
+     * decision table runs here so a click on «دخول» from the marketing site
+     * leaves for the workspace host instead of painting the editor on .team.
+     * Server document loads are redirected by `server/middleware/01-host-routing`
+     * before this runs. Local, preview, and nasaq-sa.vercel.app are no-ops.
      */
-    throw redirect({ href: encodeURI(target), replace: true, statusCode: 301 });
+    if (typeof window === "undefined") return;
+    const decision = decideHostRequest({
+      hostname: window.location.hostname,
+      pathname: location.pathname,
+      search: location.searchStr,
+    });
+    if (!decision) return;
+    throw redirect({ href: decision.location, replace: true, statusCode: decision.status });
   },
   head: () => ({
     meta: [
