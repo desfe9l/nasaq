@@ -375,20 +375,20 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       };
     }
     if (access.isSuspended) {
-      return { hasLicense: false, isSuspended: true, entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+      return { hasLicense: false, isSuspended: true, isOwner: access.isOwner, entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
         message: "أوقفت الإدارة وصول هذا الحساب مؤقتًا. تواصل مع الإدارة لاستعادة التفعيل." };
     }
     if (access.license) {
       // getAuthorizationContext already revalidated Keygen for this very
       // request; do not issue a second provider call from the status page.
-      return { hasLicense: true, license: publicLicense(access.license), entitlements: access.entitlements };
+      return { hasLicense: true, license: publicLicense(access.license), isOwner: access.isOwner, entitlements: access.entitlements };
     }
     if (access.trial) {
-      return { hasLicense: true, trial: access.trial, entitlements: access.entitlements };
+      return { hasLicense: true, trial: access.trial, isOwner: access.isOwner, entitlements: access.entitlements };
     }
     const ownLicenses = await findLicensesByUserId(context.userId);
     const previous = ownLicenses[0];
-    if (!previous) return { hasLicense: false, trial: null, entitlements: access.entitlements };
+    if (!previous) return { hasLicense: false, trial: null, isOwner: access.isOwner, entitlements: access.entitlements };
     // Keep the type and inactive state visible without unlocking features.
     const info = publicLicense(previous);
     if (info.status === "ACTIVE" && info.expiresAt && Date.parse(info.expiresAt) <= Date.now()) {

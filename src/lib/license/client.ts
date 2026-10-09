@@ -70,6 +70,8 @@ export interface LicenseState {
   isSuspended?: boolean;
   /** True when access is granted by a verified administrator identity. */
   isAdmin: boolean;
+  /** True when this account is the configured platform owner. */
+  isOwner?: boolean;
   /** License info (null if no license, administrator, or loading). */
   license: LicenseInfo | null;
   /** Server-owned introductory trial, when the account is currently eligible. */
@@ -86,6 +88,7 @@ const INITIAL_STATE: LicenseState = {
   isLoading: true,
   hasLicense: false,
   isAdmin: false,
+  isOwner: false,
   license: null,
   trial: null,
   entitlements: EMPTY_ENTITLEMENTS,
@@ -166,6 +169,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           isLoading: false,
           hasLicense: true,
           isAdmin: Boolean(result.isAdmin),
+          isOwner: Boolean(result.isOwner),
           license: null,
           trial: null,
           entitlements: result.entitlements,
@@ -192,7 +196,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           error: null,
         });
       } else {
-        setState({ isLoading: false, hasLicense: false, isAdmin: false,
+        setState({ isLoading: false, hasLicense: false, isAdmin: false, isOwner: Boolean(result.isOwner),
           isSuspended: result.isSuspended === true,
           license: result.license ?? null, trial: null,
           entitlements: EMPTY_ENTITLEMENTS, error: result.message ?? null });

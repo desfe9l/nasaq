@@ -69,8 +69,11 @@ export function checkOperationLimit(
   op: OperationId,
   userId: string | null | undefined,
   ip: string,
-  options?: { privileged?: boolean },
+  options?: { privileged?: boolean; isOwner?: boolean },
 ): LimitVerdict {
+  if (options?.isOwner) {
+    return { allowed: true };
+  }
   const policy = operationPolicy(op);
   if (!options?.privileged) {
     if (!checkRateLimit(`${op}:user`, rateLimitKey(userId, ip), policy.userPerMinute, WINDOW_MS)) {
@@ -87,8 +90,8 @@ export function checkOperationLimit(
  * Budget ONE operation against the application safety ceiling ONLY.
  * Used for privileged surfaces where the caller's own budget is not the point.
  */
-export function checkAppSafetyLimit(op: OperationId, ip: string): LimitVerdict {
-  return checkOperationLimit(op, null, ip, { privileged: true });
+export function checkAppSafetyLimit(op: OperationId, ip: string, options?: { isOwner?: boolean }): LimitVerdict {
+  return checkOperationLimit(op, null, ip, { privileged: true, isOwner: options?.isOwner });
 }
 
 /**
