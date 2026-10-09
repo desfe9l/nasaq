@@ -29,10 +29,10 @@ if (args.error) {
 
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const url = checkedUrl(args.url);
-const outPng = checkedOutputPath(args.outPng, ["/workspace"]);
+const outPng = checkedOutputPath(args.outPng, ["/workspace", "/app", process.cwd()]);
 const derived = derivedPaths(outPng);
-const mobilePng = checkedOutputPath(derived.mobilePng, ["/workspace"]);
-const outJson = checkedOutputPath(derived.verdictJson, ["/workspace"], "verdict JSON");
+const mobilePng = checkedOutputPath(derived.mobilePng, ["/workspace", "/app", process.cwd()]);
+const outJson = checkedOutputPath(derived.verdictJson, ["/workspace", "/app", process.cwd()], "verdict JSON");
 
 const MAX_BASELINE_BYTES = 1024 * 1024;
 const baselineRequested = Boolean(args.baseline);
@@ -40,7 +40,7 @@ let baselinePath = null;
 let baselineResolveError = null;
 if (baselineRequested) {
   try {
-    baselinePath = checkedOutputPath(realpathSync(args.baseline), ["/workspace"], "baseline");
+    baselinePath = checkedOutputPath(realpathSync(args.baseline), ["/workspace", "/app", process.cwd()], "baseline");
   } catch (err) {
     baselineResolveError = err?.code ?? "unresolvable path";
   }

@@ -7,6 +7,69 @@
 
 export type AppearanceMode = "light" | "dim" | "dark";
 
+/**
+ * Standard theme cycle order across the application:
+ * Light → Dark → Dim → Light
+ */
+export function getNextAppearance(current: AppearanceMode): AppearanceMode {
+  switch (current) {
+    case "light":
+      return "dark";
+    case "dark":
+      return "dim";
+    case "dim":
+      return "light";
+    default:
+      return "dark";
+  }
+}
+
+export interface ThemeMeta {
+  id: AppearanceMode;
+  label: string;
+  nextLabel: string;
+  nextId: AppearanceMode;
+  hint: string;
+}
+
+export function getThemeMeta(appearance: AppearanceMode): ThemeMeta {
+  const nextId = getNextAppearance(appearance);
+  switch (appearance) {
+    case "light":
+      return {
+        id: "light",
+        label: "فاتح",
+        nextLabel: "داكن",
+        nextId,
+        hint: "واجهة مضيئة للنهار",
+      };
+    case "dark":
+      return {
+        id: "dark",
+        label: "داكن",
+        nextLabel: "خافت",
+        nextId,
+        hint: "واجهة معتمة لليل",
+      };
+    case "dim":
+      return {
+        id: "dim",
+        label: "خافت",
+        nextLabel: "فاتح",
+        nextId,
+        hint: "إضاءة متوسطة مريحة للعين",
+      };
+    default:
+      return {
+        id: "light",
+        label: "فاتح",
+        nextLabel: "داكن",
+        nextId: "dark",
+        hint: "واجهة مضيئة للنهار",
+      };
+  }
+}
+
 const THEME_KEY = "nasaq-theme";
 const THEME_EVENT = "nasaq:appearance-change";
 

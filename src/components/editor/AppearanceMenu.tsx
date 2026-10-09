@@ -26,13 +26,13 @@ const MODES: {
   Icon: typeof Sun;
 }[] = [
   { id: "light", label: "فاتح", hint: "واجهة مضيئة للنهار", Icon: Sun },
+  { id: "dark", label: "داكن", hint: "واجهة معتمة لليل", Icon: Moon },
   {
     id: "dim",
     label: "خافت",
     hint: "إضاءة متوسطة مريحة للعين",
     Icon: SunDim,
   },
-  { id: "dark", label: "داكن", hint: "واجهة معتمة لليل", Icon: Moon },
 ];
 
 export function AppearanceMenu() {

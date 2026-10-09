@@ -21,6 +21,8 @@ import {
   readStoredTheme,
   writeStoredTheme,
   subscribeTheme,
+  getNextAppearance,
+  getThemeMeta,
   type AppearanceMode,
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -50,19 +52,44 @@ import {
 } from "./AccountMenuPanel";
 
 /**
- * The three appearance states, each with a glyph that cannot be mistaken for
- * another: a sun for «فاتح», a sun behind cloud for «خافت», a crescent for
- * «داكن». `AppearanceMode` keeps the order of the palette itself.
+ * Single compact theme switcher button.
+ * Pressing cycles: Light → Dark → Dim → Light.
  */
-const THEME_CHOICES: readonly {
-  id: AppearanceMode;
-  label: string;
-  icon: typeof Sun;
-}[] = [
-  { id: "light", label: "فاتح", icon: Sun },
-  { id: "dim", label: "خافت", icon: CloudSun },
-  { id: "dark", label: "داكن", icon: MoonStar },
-];
+function CompactThemeButton() {
+  const [appearance, setAppearance] = useState<AppearanceMode>(
+    () => readStoredTheme() ?? "light",
+  );
+
+  useEffect(() => subscribeTheme(setAppearance), []);
+
+  const meta = getThemeMeta(appearance);
+  const Icon =
+    appearance === "dark"
+      ? MoonStar
+      : appearance === "dim"
+        ? CloudSun
+        : Sun;
+
+  const cycleTheme = () => {
+    const next = getNextAppearance(appearance);
+    setAppearance(next);
+    writeStoredTheme(next);
+  };
+
+  const labelText = `المظهر: ${meta.label} (انقر للتحويل إلى ${meta.nextLabel})`;
+
+  return (
+    <button
+      type="button"
+      onClick={cycleTheme}
+      aria-label={labelText}
+      title={labelText}
+      className="site-header-action inline-flex size-11 items-center justify-center rounded-[8px] border border-line bg-surface text-ink transition hover:border-brand hover:bg-line-2 hover:text-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+    >
+      <Icon className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+    </button>
+  );
+}
 
 /**
  * The editor call-to-action in the site chrome.
@@ -369,12 +396,6 @@ function AnnouncementBar() {
 }
 
 export function SiteHeader({ current }: { current: string }) {
-  // The root-level theme module applies the saved mode before routes render.
-  const [appearance, setAppearance] = useState(
-    () => readStoredTheme() ?? "light",
-  );
-  useEffect(() => subscribeTheme(setAppearance), []);
-
   /*
    * Navigation is session-aware: a shelf that belongs to an account is never
    * advertised to a visitor (see `siteNavFor`). While the session resolves we
@@ -382,11 +403,6 @@ export function SiteHeader({ current }: { current: string }) {
    */
   const { user } = useCurrentUserState();
   const navItems = useMemo(() => siteNavFor(Boolean(user)), [user]);
-
-  const setTheme = (next: AppearanceMode) => {
-    setAppearance(next);
-    writeStoredTheme(next);
-  };
 
   return (
     <>
@@ -411,41 +427,8 @@ export function SiteHeader({ current }: { current: string }) {
         />
 
         <div className="site-header-actions flex shrink-0 items-center gap-1.5">
-          {/*
-           * Appearance — three distinct states, each with its own icon and
-           * Arabic name, so «فاتح / خافت / داكن» is read rather than guessed.
-           * A single cycling palette icon told the author nothing about which
-           * mode they were in or what the next press would do.
-           */}
-          <div
-            role="group"
-            aria-label="مظهر الواجهة"
-            className="site-appearance flex h-11 items-center gap-0.5 rounded-[10px] border border-line bg-surface p-0.5"
-          >
-            {THEME_CHOICES.map((choice) => {
-              const Icon = choice.icon;
-              const active = appearance === choice.id;
-              return (
-                <button
-                  key={choice.id}
-                  type="button"
-                  onClick={() => setTheme(choice.id)}
-                  aria-pressed={active}
-                  aria-label={`مظهر ${choice.label}`}
-                  title={`مظهر ${choice.label}`}
-                  data-active={active ? "true" : undefined}
-                  className={cn(
-                    "site-appearance-option grid size-9 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
-                    active
-                      ? "bg-navy text-on-brand shadow-sm"
-                      : "text-muted hover:bg-line-2 hover:text-ink",
-                  )}
-                >
-                  <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
+          {/* Compact unified theme toggle button cycling Light → Dark → Dim → Light */}
+          <CompactThemeButton />
           {/*
            * «اطلب خدمة» — the platform's own request channel, in the chrome.
            *

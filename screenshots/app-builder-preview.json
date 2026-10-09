@@ -5,32 +5,32 @@
       "width": 1280,
       "height": 800,
       "status": 200,
-      "title": "NASAQ | نَسَق",
+      "title": "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية",
       "hasCanvas": false,
-      "bodyTextLen": 0,
-      "bodyTextHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "bodyTextPrefix": "",
+      "bodyTextLen": 6228,
+      "bodyTextHash": "230ceb88b58a7d0077c059b521232d12ad76ca7d9880b7f8e15c9da88f2ba12b",
+      "bodyTextPrefix": "نَسَق NASAQ الرئيسية القوالب التراخيص طلب تصميم الهوية المنصة تو",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
-      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+      "screenshot": "/app/screenshots/app-builder-preview.png"
     },
     "mobile": {
       "width": 390,
       "height": 844,
       "status": 200,
-      "title": "NASAQ | نَسَق",
+      "title": "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية",
       "hasCanvas": false,
-      "bodyTextLen": 561,
-      "bodyTextHash": "433121b8381d839d9ba5074526af4fc461c60217bb4b6f1a97f56d565c34498b",
-      "bodyTextPrefix": "NASAQ | نَسَق منصة التصميم والتحرير المؤسسي A4 فتح مشروع متاب",
+      "bodyTextLen": 8085,
+      "bodyTextHash": "fbb8c35add65dbef6333121724a9f0432287a5a6c62c1b7c03c7aa8ccdb80544",
+      "bodyTextPrefix": "نَسَق NASAQ الرئيسية القوالب التراخيص طلب تصميم الهوية المنصة تو",
       "horizontalOverflow": false,
       "consoleErrors": [],
       "pageErrors": [],
-      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+      "screenshot": "/app/screenshots/app-builder-preview-mobile.png"
     }
   },
   "brandWarnings": [],
   "authWarnings": [],
-  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+  "verdictFile": "/app/screenshots/app-builder-preview.json"
 }
