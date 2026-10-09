@@ -6287,9 +6287,10 @@ button.license-badge-locked:focus-visible {
   }
 }
 
-/* Phone: the strip takes its own row so actions cannot crush it, and the
-   long action labels yield to the icon. The tabs themselves keep their text. */
-@container site-header (max-width: 640px) {
+/* Responsive header layout: on mobile and tablet portrait (up to 860px),
+   the product nav strip moves to its own row so actions do not compress it.
+   On phone viewports (up to 640px), action labels yield to icons. */
+@container site-header (max-width: 860px) {
   .site-header-bar {
     flex-wrap: wrap;
     row-gap: 4px;
@@ -6302,6 +6303,9 @@ button.license-badge-locked:focus-visible {
     padding-top: 2px;
     padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
   }
+}
+
+@container site-header (max-width: 640px) {
   .site-header-action-label {
     position: absolute;
     width: 1px;
