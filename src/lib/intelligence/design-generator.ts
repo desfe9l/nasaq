@@ -1856,6 +1856,36 @@ const SLIDE_BUILDERS: Record<LayoutPatternId, PageBuilder> = {
  *      with a secondary pattern AUTOMATICALLY.
  */
 export function generateFromIntent(intent: PromptAnalysis): Project {
+  // Provider geometry uses the same page/element constructors as the catalog.
+  // Do not run a preset builder or automatic pattern reflow over this plan.
+  if (intent.compositions) {
+    const pages = intent.compositions.slice(0, intent.pages).map((composition, index) => {
+      const page = sheet(`صفحة ${index + 1}`, intent.dimensions.w, intent.dimensions.h, intent.palette.paper);
+      for (const item of composition.elements) {
+        put(page, item.type, {
+          name: item.type === "text" ? "نص" : "شكل",
+          x: item.x * page.w! / 100, y: item.y * page.h! / 100,
+          w: item.w * page.w! / 100, h: item.h * page.h! / 100,
+          content: item.type !== "shape" ? item.content : "",
+          style: {
+            ...(item.type === "table" ? {
+              rows: item.content.split("\n").length, cols: item.content.split("\n")[0].split("\t").length,
+              headerBg: intent.palette.field, headerColor: intent.palette.onField, cellAlign: "right" as const,
+              tableBg: intent.palette.paper,
+            } : {}),
+            fill: item.fill === "none" ? "none" : intent.palette[item.fill],
+            color: intent.palette[item.color], shape: item.shape === "circle" ? "circle" : "rect", shapeId: item.shape,
+            borderWidth: 0, fontFamily: item.role === "body" ? "Noto Naskh Arabic" : "Tajawal",
+            fontSize: item.role === "display" ? 26 : item.role === "meta" ? 9 : 12,
+            fontWeight: item.role === "display" ? 800 : 400,
+            direction: "rtl", textAlign: "right", textBoxMode: "autoHeight",
+          },
+        });
+      }
+      return page;
+    });
+    return { version: 2, name: intent.title, theme: "official", orgName: intent.org, defaultSize: sizeIdOf(pages[0]), pages };
+  }
   const p = intent.palette;
   const isSlide = intent.format === "wide-slide";
   const pagesCount = intent.pages;

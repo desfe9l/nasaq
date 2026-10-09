@@ -1,8 +1,10 @@
+import type { DesignComposition } from "@/lib/ai/design-composition";
 import type { DesignFormat, DesignStyle, PaletteRoles } from "./schema";
 import { paletteForStyle } from "./dna";
 import type { PageLayoutDirective } from "./layout-variety";
 
 export interface PromptAnalysis {
+  compositions?: DesignComposition[];
   rawPrompt: string;
   docType:
     | "official_report"

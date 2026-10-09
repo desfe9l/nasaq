@@ -195,7 +195,9 @@ export const generateDesignBriefFn = createServerFn({ method: "POST" })
     }
     try {
       const { generateDesignBrief } = await import("./provider.server");
-      return { ok: true, brief: await generateDesignBrief(data) };
+      const { loadDesignContext } = await import("./design-context.server");
+      const learned = await loadDesignContext(context.userId, data.prompt);
+      return { ok: true, brief: await generateDesignBrief(data, learned) };
     } catch (error) {
       const code = error instanceof Error ? error.message : "provider_error";
       if (code === "not_configured") {
@@ -318,7 +320,7 @@ export type DesignTwinPrepareResult =
     }
   | {
       ok: false;
-      code: "unauthorized" | "license_required" | "rate_limited" | "invalid" | "not_configured";
+      code: "unauthorized" | "license_required" | "rate_limited" | "invalid" | "not_configured" | "provider_error";
       message: string;
     };
 
@@ -352,15 +354,14 @@ export const prepareDesignTwinFn = createServerFn({ method: "POST" })
     }
 
     let memory: DesignMemoryView[] = [];
-    let memoryError: string | undefined;
     let memoryNotes = "";
     try {
-      const store = await import("./design-memory.server");
-      const rules = await import("./design-memory");
-      memory = await store.listDesignMemory(context.userId);
-      memoryNotes = rules.resolveMemory(memory).notes;
+      const { loadDesignContext } = await import("./design-context.server");
+      const learned = await loadDesignContext(context.userId, input.prompt);
+      memory = learned.memory;
+      memoryNotes = learned.memoryNotes;
     } catch {
-      memoryError = "تعذر قراءة ذاكرة التصميم. لن تُستخدم تفضيلات محفوظة في هذا الطلب.";
+      return { ok: false, code: "provider_error", message: "تعذر قراءة ذاكرة التصميم ومراجعه. لم يتم توليد تصميم؛ حاول مجددًا." };
     }
 
     const audience = String(data.audience ?? "").trim().slice(0, 160);
@@ -373,19 +374,17 @@ export const prepareDesignTwinFn = createServerFn({ method: "POST" })
         ok: true,
         constitutionVersion: DESIGN_CONSTITUTION_VERSION,
         memory,
-        memoryError,
         gemini: { ok: true, brief, model: modelSink.model || "gemini-2.5-flash" },
       };
     } catch (error) {
       const code = error instanceof Error ? error.message : "provider_error";
       const message = code === "not_configured"
-        ? "خدمة Gemini غير مفعّلة في هذه البيئة. سيُبنى التصميم من موجزك عبر محرك نَسَق، وليس من النموذج."
-        : providerFailureMessage(code, "تعذر طلب Gemini. سيُبنى التصميم من موجزك عبر محرك نَسَق، وليس من النموذج.");
+        ? "خدمة Gemini غير مفعّلة في هذه البيئة. لم يتم توليد تصميم؛ حاول مجددًا بعد تفعيل الخدمة."
+        : providerFailureMessage(code, "تعذر طلب Gemini. لم يتم توليد تصميم؛ حاول مجددًا بعد تفعيل الخدمة.");
       return {
         ok: true,
         constitutionVersion: DESIGN_CONSTITUTION_VERSION,
         memory,
-        memoryError,
         gemini: { ok: false, code, message },
       };
     }

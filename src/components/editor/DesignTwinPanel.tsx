@@ -1,3 +1,4 @@
+import { useGenerationRequest } from "@/lib/ai/use-generation-request";
 import { useEffect, useState } from "react";
 import { Check, Loader2, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ const FORMATS = [
  * document command — nothing here is a second canvas.
  */
 export function DesignTwinPanel() {
+  const sessionOwner = useEditor((s) => s.sessionOwner);
   const entitlements = useEditor((s) => s.entitlements);
   const entitlementsResolved = useEditor((s) => s.entitlementsResolved);
   const [prompt, setPrompt] = useState("");
@@ -51,12 +53,16 @@ export function DesignTwinPanel() {
     };
   }, []);
 
+  const request = useGenerationRequest(JSON.stringify([prompt, audience, format, sessionOwner, memory]));
+  useEffect(() => { setDelivery(null); }, [prompt, audience, format, sessionOwner]);
+
   const run = async () => {
     if (!prompt.trim() || busy) return;
     if (entitlementsResolved && !entitlements.ai_report) {
       toast.error("تحتاج هذه الميزة إلى ترخيص نشط. لم يُفتح مستند جديد.");
       return;
     }
+    const ticket = request.begin();
     setBusy(true);
     setDelivery(null);
     try {
@@ -68,26 +74,27 @@ export function DesignTwinPanel() {
           format: format || undefined,
         },
       });
+      if (!request.current(ticket)) return;
       if (!prepared.ok) {
         toast.error(prepared.message);
         return;
       }
+      if (!prepared.gemini.ok) { toast.error(prepared.gemini.message); return; }
       if (prepared.memoryError) toast.message(prepared.memoryError);
       const { executeDesignTwin } = await import("@/lib/ai/design-twin");
       const next = executeDesignTwin({
         prompt,
         audience,
         format: format || undefined,
-        pages: prepared.gemini.ok ? prepared.gemini.brief.pages : undefined,
+        pages: prepared.gemini.brief.pages,
         maxPages: entitlements.unlimited_pages ? undefined : applicationPageLimit(),
-        geminiBrief: prepared.gemini.ok ? prepared.gemini.brief : null,
+        geminiBrief: prepared.gemini.brief,
         memory: prepared.memory,
-        providerMessage: prepared.gemini.ok ? undefined : prepared.gemini.message,
       });
+      if (!request.current(ticket)) return;
       setDelivery(next);
       setMemory(prepared.memory);
-      if (!prepared.gemini.ok) toast.message(prepared.gemini.message);
-      else toast.success("اكتمل التوليد والمراجعة");
+      toast.success("اكتمل التوليد والمراجعة");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر تنفيذ التوأم.");
     } finally {

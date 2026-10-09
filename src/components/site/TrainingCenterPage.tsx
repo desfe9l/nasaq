@@ -1,3 +1,4 @@
+import { useGenerationRequest } from "@/lib/ai/use-generation-request";
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, Check, FileImage, Loader2, RotateCcw, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import { toast } from "sonner";
@@ -70,7 +71,7 @@ function TrainingCenterContent() {
       if (!saved.ok) throw new Error(saved.message);
       setReferences((rows) => [saved.reference, ...rows]);
       const note = [likes && `أحب: ${likes}`, dislikes && `أتجنب: ${dislikes}`].filter(Boolean).join(" | ");
-      if (note) {
+      if (note && scope === "global") {
         const remembered = await updateTrainingMemoryFn({ data: { kind: "preference", category: "", brief: file.name, reason: note, recurring: true, ruleKey: "", ruleValue: "" } });
         if (remembered.ok) setMemory((rows) => [remembered.entry, ...rows]);
       }
@@ -85,14 +86,18 @@ function TrainingCenterContent() {
     if (!result.ok) { toast.error(result.message); return; }
     setMemory((rows) => [result.entry, ...rows]); setFeedback(""); toast.success("تم تحديث ذاكرة التصميم لهذا الحساب.");
   };
+  const request = useGenerationRequest(JSON.stringify([testPrompt, user?.id, references, memory]));
   const testLearned = async () => {
     if (busy) return;
+    const ticket = request.begin();
     setBusy(true);
     try {
       const prepared = await prepareDesignTwinFn({ data: { prompt: testPrompt, mode: "professional" } });
+      if (!request.current(ticket)) return;
       if (!prepared.ok) throw new Error(prepared.message);
+      if (!prepared.gemini.ok) throw new Error(prepared.gemini.message);
       const { executeDesignTwin } = await import("@/lib/ai/design-twin");
-      const delivery = executeDesignTwin({ prompt: testPrompt, maxPages: applicationPageLimit(), geminiBrief: prepared.gemini.ok ? prepared.gemini.brief : null, memory: prepared.memory, providerMessage: prepared.gemini.ok ? undefined : prepared.gemini.message });
+      const delivery = executeDesignTwin({ prompt: testPrompt, maxPages: applicationPageLimit(), geminiBrief: prepared.gemini.brief, memory: prepared.memory });
       /*
        * Boot the editor store exactly the way every other production entry
        * does (the raw-to-document page, the AI studio): resolve THIS
@@ -109,6 +114,7 @@ function TrainingCenterContent() {
         throw new Error("انتهت جلسة التحرير أو تغيّر الحساب؛ سجّل الدخول من جديد ثم أعد المحاولة.");
       }
       if (projectAccessBlock(delivery.project, booted.entitlements)) throw new Error("التصميم يتجاوز حدود خطتك الحالية؛ لم يُفتح أي مستند.");
+      if (!request.current(ticket)) return;
       const applied = await applyAIEditorOperations(useEditor.getState(), [{ type: "generate_document", project: delivery.project }]);
       if (!applied[0]?.ok) throw new Error(applied[0] ? trainingOpenFailureMessage(applied[0]) : "تعذر فتح التصميم الناتج في المحرر.");
       /*

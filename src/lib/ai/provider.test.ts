@@ -352,7 +352,7 @@ test("design and selection responses remain contract-normalized and editable", a
   const restore = withEnv("GEMINI_API_KEY", "test-server-key");
   const previousFetch = globalThis.fetch;
   const responses = [
-    geminiResponse("prose {\"title\":\"عنوان\",\"pages\":99,\"format\":\"bad\"} tail"),
+    geminiResponse(JSON.stringify({ title: "عنوان", pages: 99, format: "bad", compositions: Array.from({ length: 12 }, () => ({ elements: [{ type: "text", content: "عنوان", x: 5, y: 5, w: 90, h: 10 }, { type: "shape", x: 5, y: 70, w: 90, h: 20 }] })) })),
     geminiResponse("```text\n- بند أول | قيمة\n- بند ثان | قيمة\n```") ,
   ];
   globalThis.fetch = async () => responses.shift()!;
@@ -374,7 +374,7 @@ test("design brief system prompt enforces anti-monotony rules and the per-page l
   let requestBody = "";
   globalThis.fetch = async (_input, init) => {
     requestBody = String(init?.body || "");
-    return geminiResponse(JSON.stringify({ title: "عنوان", pages: 3 }));
+    return geminiResponse(JSON.stringify({ title: "عنوان", pages: 3, compositions: Array.from({ length: 3 }, () => ({ elements: [{ type: "text", content: "عنوان", x: 5, y: 5, w: 90, h: 10 }, { type: "shape", x: 5, y: 70, w: 90, h: 20 }] })) }));
   };
   try {
     const brief = await generateDesignBrief({ prompt: "تقرير رسمي", mode: "professional" });
@@ -464,3 +464,15 @@ test("provider auth does not try a fallback model", async () => {
   }
 });
 
+
+test("design generation rejects missing spatial plans instead of falling back to a stock template", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => geminiResponse(JSON.stringify({ title: "عنوان", pages: 1 }));
+  try {
+    await assert.rejects(generateDesignBrief({ prompt: "غلاف جديد", mode: "professional" }), /provider_error/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});

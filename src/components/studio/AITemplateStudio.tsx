@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useGenerationRequest } from "@/lib/ai/use-generation-request";
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   ChevronLeft,
@@ -75,8 +76,7 @@ const FORMAT_OPTIONS: Array<{ id: DesignFormat; label: string; desc: string }> =
 /**
  * One generation entry point for the studio.
  *
- * It exists so the page-load preview, the manual generate and the
- * identity-repaint all obey the SAME rules: the page ceiling of the account's
+ * Provider generation and its style variants obey the SAME rules: the page ceiling of the account's
  * plan, and the institutional identity when it is licensed. `generateFromIntent`
  * would happily build a six-page document for a plan that opens three; the
  * studio is not allowed to promise more than the editor will honour.
@@ -111,16 +111,9 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   const [prompt, setPrompt] = useState(initialPrompt || "صمم تقريرًا رسميًا عن الأمن السيبراني");
   const [busy, setBusy] = useState(false);
   const [stepLabel, setStepLabel] = useState("");
-  const [result, setResult] = useState<StudioGenerationResult | null>(() => {
-    // Generate an initial high-quality default design on mount
-    try {
-      return generateDesignFromPrompt("صمم تقريرًا رسميًا عن الأمن السيبراني");
-    } catch {
-      return null;
-    }
-  });
+  const [result, setResult] = useState<StudioGenerationResult | null>(null);
 
-  const [selectedVariationId, setSelectedVariationId] = useState("sovereign");
+  const [selectedVariationId, setSelectedVariationId] = useState("primary");
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [showTuning, setShowTuning] = useState(false);
 
@@ -133,7 +126,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
 
   // Active variation project
   const currentVariation: DesignVariation | undefined =
-    result?.variations.find((v) => v.id === selectedVariationId) || result?.variations[0];
+    result?.variations.find((v) => v.id === selectedVariationId);
   const activeProject = currentVariation?.project || result?.primaryResult.project;
   const activePage = activeProject?.pages[activePageIndex] || activeProject?.pages[0];
 
@@ -142,9 +135,8 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
    * entitlement is present. Reading is not applying: without the entitlement the
    * kit is simply not handed to the generator.
    */
-  const generatedByHand = useRef(false);
-  const promptRef = useRef(prompt);
-  promptRef.current = prompt;
+  const request = useGenerationRequest(JSON.stringify([prompt.trim(), generationMode, overrideStyle, overrideFormat, overridePages, overrideCover, user?.id]));
+  useEffect(() => { setResult(null); }, [prompt, generationMode, overrideStyle, overrideFormat, overridePages, overrideCover, user?.id]);
   useEffect(() => {
     let alive = true;
     if (!entitlements.brand_kit) {
@@ -159,16 +151,6 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         // A default kit is not an identity: it must not repaint the studio.
         if (!brandIsConfigured(kit)) return;
         setBrandKit(kit);
-        // The preview generated on mount was painted before the kit finished
-        // loading. Repaint it in the identity — once, and only if the author has
-        // not already generated a design of their own.
-        if (!generatedByHand.current) {
-          try {
-            setResult(buildGeneration(promptRef.current, {}, entitlements, kit));
-          } catch {
-            /* the un-branded preview stays; generation is still available */
-          }
-        }
       })
       .catch(() => undefined);
     return () => {
@@ -184,12 +166,14 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       return;
     }
 
+    request.update(JSON.stringify([text, generationMode, overrideStyle, overrideFormat, overridePages, overrideCover, user?.id]));
+    const ticket = request.begin();
     setBusy(true);
+    setResult(null);
     setStepLabel("تحليل الموجه واستخلاص متطلبات الهوية...");
 
     try {
       setStepLabel("إرسال وصف التصميم إلى Gemini عبر المسار الآمن...");
-      generatedByHand.current = true;
       const overrides: Record<string, unknown> = {};
       if (overrideStyle !== "auto") overrides.style = overrideStyle;
       if (overrideFormat !== "auto") {
@@ -214,6 +198,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
           bilingual: /ثنائي|لغتين|عربي.*إنجليزي|إنجليزي.*عربي/i.test(text),
         },
       });
+      if (!request.current(ticket)) return;
       if (!briefResult.ok) throw new Error(briefResult.message);
       setStepLabel("تحويل التوجيه المعتمد إلى عناصر NASAQ قابلة للتحرير...");
       const brief = briefResult.brief;
@@ -232,6 +217,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         bilingual: brief.bilingual,
         visualDirection: brief.visualDirection,
         pageLayouts: brief.pageLayouts,
+        compositions: brief.compositions,
       };
 
       /*
@@ -249,7 +235,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         toast.info(`الخطة الحالية تسمح بـ${applicationPageLimit()} صفحات — وُلّد التصميم ضمنها.`);
       }
       setResult(gen);
-      setSelectedVariationId("sovereign");
+      setSelectedVariationId("primary");
       setActivePageIndex(0);
       toast.success("تم توليد التصميم والبدائل بنجاح");
     } catch (err) {
@@ -616,6 +602,9 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <button type="button" onClick={() => { setSelectedVariationId("primary"); setActivePageIndex(0); }} className="rounded-xl border border-line p-3 text-right text-sm font-bold">
+                التكوين الأصلي حسب الموجز
+              </button>
               {result.variations.map((v) => {
                 const isSelected = v.id === selectedVariationId;
                 return (
