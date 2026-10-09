@@ -28,11 +28,11 @@ export interface ProductTemplateSeed {
   thumbnail: string;
 }
 
-const INK = "#18332b";
-const GREEN = "#006c35";
-const GOLD = "#c9a86a";
-const MUTED = "#62736b";
-const LINE = "#dce5df";
+const INK = "#0c3d2c";
+const GREEN = "#0c3d2c";
+const GOLD = "#c6a05a";
+const MUTED = "#6b7280";
+const LINE = "#6b7280";
 const PAPER = "#ffffff";
 
 function page(name: string, w = 210, h = 297): Page {
@@ -223,7 +223,7 @@ function letterheadPage(title: string, subtitle: string): Page {
   add(target, "line", "خط التوقيع", 112, 210, 60, 0, "", { color: INK, stroke: 0.3 });
   text(target, "التوقيع", "الاسم\nمدير مكتب المراسلات", 112, 214, 60, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
   shape(target, "تذييل أخضر", 0, 274, 210, 23, GREEN);
-  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 280, 174, 7, { size: 8, color: "#f4f7f5", align: "center", font: META });
+  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 280, 174, 7, { size: 8, color: "#ffffff", align: "center", font: META });
   return target;
 }
 
@@ -238,7 +238,7 @@ function voucherPage(title: string, kind: "receipt" | "cash" | "payment"): Page 
       : "تحويل  ·  مصرف الراجحي  ·  مرجع العملية ٢٠٤١";
   shape(target, "رأس السند", 0, 0, 210, 22, GREEN);
   add(target, "line", "خيط ذهبي", 0, 22, 210, 0, "", { color: GOLD, stroke: 0.7 });
-  text(target, "تصنيف السند", copy, 16, 7, 120, 6, { size: 8, color: "#f4f7f5", font: META });
+  text(target, "تصنيف السند", copy, 16, 7, 120, 6, { size: 8, color: "#ffffff", font: META });
   text(target, "عنوان السند", title, 16, 32, 118, 12, { size: 22, color: GREEN, weight: 800 });
   text(target, "رقم السند", "٤٤١٨", 138, 36, 56, 14, { size: 22, color: INK, weight: 800, align: "left" });
   text(target, "تسمية الرقم", "رقم السند", 138, 52, 56, 5, { size: 8, color: MUTED, align: "left", font: META });
@@ -268,8 +268,8 @@ function portfolioPages(): Page[] {
   add(cover, "line", "خيط ذهبي", 0, 168, 210, 0, "", { color: GOLD, stroke: 0.8 });
   add(cover, "image", "صورة الغلاف", 16, 36, 178, 110, "", { objectFit: "cover", radius: 0 }, plate("facade"));
   text(cover, "عنوان الملف", "أعمال مختارة", 18, 180, 174, 6, { size: 10, color: GOLD, weight: 700, font: META });
-  text(cover, "اسم المصمم", "ليان القاسم", 18, 192, 174, 14, { size: 26, weight: 800, color: "#f6f3ee" });
-  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 214, 174, 8, { size: 12, color: "#d7e3dc", font: META });
+  text(cover, "اسم المصمم", "ليان القاسم", 18, 192, 174, 14, { size: 26, weight: 800, color: "#ffffff" });
+  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 214, 174, 8, { size: 12, color: "#1f6b45", font: META });
   text(cover, "بيانات التواصل", "layan@example.com", 18, 232, 174, 7, { size: 11, color: GOLD, font: META });
 
   const about = page("نبذة");
@@ -324,7 +324,7 @@ function digitalCardPage(): Page {
 
 function businessCardPages(): Page[] {
   const front = page("الوجه الأمامي", 94.9, 56.8);
-  shape(front, "أرضية", 0, 0, 94.9, 56.8, "#f7f6f3");
+  shape(front, "أرضية", 0, 0, 94.9, 56.8, "#ffffff");
   shape(front, "حافة الهوية", 90.5, 0, 4.4, 56.8, GREEN);
   text(front, "اسم الموظف", "نورة السبيعي", 6, 8, 80, 8, { size: 11, color: GREEN, weight: 800 });
   text(front, "المسمى الوظيفي", "اتصال مؤسسي", 6, 18, 80, 5, { size: 7, color: INK, font: META });
@@ -334,9 +334,9 @@ function businessCardPages(): Page[] {
 
   const back = page("الوجه الخلفي", 94.9, 56.8);
   shape(back, "أرضية", 0, 0, 94.9, 56.8, GREEN);
-  text(back, "اسم العلامة", "اسم الجهة", 8, 14, 78, 8, { size: 12, color: "#f7f6f3", weight: 800 });
+  text(back, "اسم العلامة", "اسم الجهة", 8, 14, 78, 8, { size: 12, color: "#ffffff", weight: 800 });
   add(back, "line", "فاصل", 56, 26, 28, 0, "", { color: GOLD, stroke: 0.5 });
-  text(back, "عنوان الشركة", "الرياض  ·  مراسلات ومطبوعات", 8, 32, 78, 8, { size: 7, color: "#e7efe9", font: META });
+  text(back, "عنوان الشركة", "الرياض  ·  مراسلات ومطبوعات", 8, 32, 78, 8, { size: 7, color: "#1f6b45", font: META });
   text(back, "ملاحظة الطباعة", "وجه خلفي", 8, 48, 78, 4, { size: 4.5, color: GOLD, font: META });
   return [front, back];
 }
@@ -347,13 +347,13 @@ function greetingPages(): Page[] {
   add(photo, "image", "مشهد التهنئة", 8, 8, 92, 58, "", { objectFit: "cover", radius: 2 }, plate("dune"));
   text(photo, "نص التهنئة", "كل عام وأنتم بخير", 8, 74, 92, 12, { size: 14, color: "#ffffff", weight: 800 });
   add(photo, "line", "خيط", 8, 90, 28, 0, "", { color: GOLD, stroke: 0.7 });
-  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 96, 92, 8, { size: 9, color: "#e7efe9", font: BODY });
+  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 96, 92, 8, { size: 9, color: "#1f6b45", font: BODY });
   text(photo, "اسم المرسل", "نورة", 8, 114, 92, 6, { size: 8, color: GOLD, font: META });
 
   const typeLed = page("تهنئة مكتوبة", 108, 135);
-  shape(typeLed, "أرضية", 0, 0, 108, 135, "#f6f3ee");
-  shape(typeLed, "حافة", 0, 0, 3.5, 135, "#1b4d3e");
-  text(typeLed, "المناسبة", "معايدة", 12, 18, 88, 5, { size: 8, color: "#1b4d3e", weight: 700, font: META });
+  shape(typeLed, "أرضية", 0, 0, 108, 135, "#ffffff");
+  shape(typeLed, "حافة", 0, 0, 3.5, 135, "#1f6b45");
+  text(typeLed, "المناسبة", "معايدة", 12, 18, 88, 5, { size: 8, color: "#1f6b45", weight: 700, font: META });
   text(typeLed, "نص التهنئة", "أجمل\nالأمنيات", 12, 30, 88, 28, { size: 22, weight: 800, font: "Amiri" });
   add(typeLed, "line", "فاصل", 12, 66, 22, 0, "", { color: GOLD, stroke: 0.7 });
   text(typeLed, "رسالة البطاقة", "للأيام التي تأتون بها،\nوللجهد الذي سبقها.", 12, 76, 86, 18, { size: 10, font: BODY, lineHeight: 1.6 });
@@ -363,10 +363,10 @@ function greetingPages(): Page[] {
 
 function ministryPages(): Page {
   const target = page("مراسلات تعليمية");
-  target.bg = "#f7f6f3";
-  shape(target, "زاوية", 176, 0, 34, 28, "#e7efe9", "", "triangle");
-  add(target, "line", "خط الهوية", 0, 0, 210, 0, "", { color: "#1b4d3e", stroke: 2 });
-  text(target, "اسم الجهة التعليمية", "مدرسة النور الأهلية", 18, 14, 174, 9, { size: 16, color: "#1b4d3e", weight: 800 });
+  target.bg = "#ffffff";
+  shape(target, "زاوية", 176, 0, 34, 28, "#1f6b45", "", "triangle");
+  add(target, "line", "خط الهوية", 0, 0, 210, 0, "", { color: "#1f6b45", stroke: 2 });
+  text(target, "اسم الجهة التعليمية", "مدرسة النور الأهلية", 18, 14, 174, 9, { size: 16, color: "#1f6b45", weight: 800 });
   text(target, "الإدارة والقسم", "المرحلة المتوسطة  ·  العام الدراسي ١٤٤٧ — ١٤٤٨", 18, 26, 174, 6, { size: 9, color: MUTED, font: META });
   add(target, "line", "فاصل الرأس", 18, 38, 174, 0, "", { color: GOLD, stroke: 0.45 });
   text(target, "صفة النموذج", "نموذج قابل للتخصيص — ليس اعتمادًا حكوميًا", 18, 44, 174, 6, { size: 8, color: MUTED, align: "center", font: META });
@@ -375,11 +375,11 @@ function ministryPages(): Page {
   text(target, "المرفقات", "مرفق واحد", 140, 58, 52, 6, { size: 10, align: "left", font: META });
   add(target, "line", "حد الحقول", 18, 70, 174, 0, "", { color: LINE, stroke: 0.3 });
   text(target, "الجهة المرسل إليها", "أولياء أمور الصف الثاني المتوسط", 18, 80, 174, 8, { size: 13, weight: 700 });
-  text(target, "الموضوع", "الموضوع: اجتماع الأداء الفصلي", 18, 96, 174, 8, { size: 13, weight: 700, color: "#1b4d3e" });
+  text(target, "الموضوع", "الموضوع: اجتماع الأداء الفصلي", 18, 96, 174, 8, { size: 13, weight: 700, color: "#1f6b45" });
   text(target, "متن الخطاب", "السلام عليكم ورحمة الله وبركاته،\n\nيسعدنا دعوتكم إلى اجتماع الأداء الفصلي يوم الأحد القادم في قاعة الاجتماعات. سنعرض نتائج الفترة وخطة المتابعة.\n\nوتقبلوا خالص التحية.", 18, 114, 174, 58, { size: 12, font: BODY, lineHeight: 1.75 });
-  add(target, "line", "خط التوقيع", 136, 190, 56, 0, "", { color: "#1b4d3e", stroke: 0.3 });
+  add(target, "line", "خط التوقيع", 136, 190, 56, 0, "", { color: "#1f6b45", stroke: 0.3 });
   text(target, "التوقيع", "مديرة المرحلة\nالاسم", 122, 194, 70, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
-  add(target, "line", "خط التذييل", 18, 268, 174, 0, "", { color: "#1b4d3e", stroke: 0.35 });
+  add(target, "line", "خط التذييل", 18, 268, 174, 0, "", { color: "#1f6b45", stroke: 0.35 });
   text(target, "بيانات التواصل", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  nore@example.com", 18, 274, 174, 6, { size: 8, color: MUTED, align: "center", font: META });
   text(target, "تنبيه الملكية", "استبدلوا أي شعار بأصل تملكه الجهة. هذا النموذج بلا شعار محمي.", 18, 284, 174, 6, { size: 7.5, color: MUTED, align: "center", font: META });
   return target;
@@ -436,7 +436,7 @@ function pagePreview(page: Page): string {
     const strokeWidth = Math.max(0, Number(style.borderWidth) || 0);
     if (element.type === "image") {
       const source = element.src && /^data:image\//i.test(element.src) ? escapeXml(element.src) : "";
-      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#edf3ef" stroke="#9db7a7" stroke-width="0.35"/><image href="${source}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#6b7280" stroke="#1f6b45" stroke-width="0.35"/><image href="${source}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
     }
     if (element.type === "line" || element.type === "divider") {
       return `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y + h}" stroke="${escapeXml(style.color || LINE)}" stroke-width="${Math.max(0.25, Number(style.stroke) || 0.35)}"/>`;
