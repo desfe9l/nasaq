@@ -3,20 +3,47 @@ import { BookOpen, Check, FileImage, Loader2, RotateCcw, Sparkles, Trash2, Uploa
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { RequireSignedIn } from "@/lib/auth/gates";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useLicense } from "@/lib/license/client";
 import { analyzeImageFn } from "@/lib/ai/image-functions";
 import { uploadEditorAsset } from "@/lib/storage/functions";
 import { prepareDesignTwinFn } from "@/lib/ai/functions";
-import { applyAIEditorOperations } from "@/lib/ai/editor-bridge";
+import { applyAIEditorOperations, type AIEditorOperationResult } from "@/lib/ai/editor-bridge";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import { useEditor } from "@/lib/editor/store";
 import { getProject, setSetting } from "@/lib/editor/storage";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { applicationPageLimit } from "@/lib/product/product";
-import { trainingCenterPath } from "@/lib/site-routes";
+import { editorPathFor, trainingCenterPath } from "@/lib/site-routes";
 import { listTrainingCenterFn, saveTrainingReferenceFn, deleteTrainingReferenceFn, updateTrainingMemoryFn, deleteTrainingMemoryFn, resetTrainingCenterFn, type TrainingReferenceView } from "@/lib/ai/training-functions";
 import type { DesignMemoryView } from "@/lib/ai/design-memory";
 
+/**
+ * Arabic wording for the editor-bridge failure codes the training center can
+ * hit when opening a generated design. The bridge messages are internal
+ * English; the author gets a sentence that says what happened and that no
+ * document was changed.
+ */
+function trainingOpenFailureMessage(result: AIEditorOperationResult): string {
+  if (result.ok) return "";
+  switch (result.code) {
+    case "invalid_document":
+      return "التصميم الناتج لم يجتز فحص الجودة الداخلي؛ لم يُفتح أي مستند.";
+    case "persistence_failed":
+      return "تعذر حفظ التصميم الناتج؛ لم يتم فتحه في المحرر.";
+    case "invalid_operation":
+    case "unsupported_operation":
+      return "أمر فتح المستند غير مدعوم في هذا الإصدار من المحرر.";
+    default:
+      return "تعذر فتح التصميم الناتج في المحرر؛ لم يتغير أي مستند.";
+  }
+}
+
 function TrainingCenterContent() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useCurrentUserState();
+  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
+  const hydrate = useEditor((s) => s.hydrate);
   const [references, setReferences] = useState<TrainingReferenceView[]>([]);
   const [memory, setMemory] = useState<DesignMemoryView[]>([]);
   const [busy, setBusy] = useState(false);
@@ -59,19 +86,46 @@ function TrainingCenterContent() {
     setMemory((rows) => [result.entry, ...rows]); setFeedback(""); toast.success("تم تحديث ذاكرة التصميم لهذا الحساب.");
   };
   const testLearned = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       const prepared = await prepareDesignTwinFn({ data: { prompt: testPrompt, mode: "professional" } });
       if (!prepared.ok) throw new Error(prepared.message);
       const { executeDesignTwin } = await import("@/lib/ai/design-twin");
       const delivery = executeDesignTwin({ prompt: testPrompt, maxPages: applicationPageLimit(), geminiBrief: prepared.gemini.ok ? prepared.gemini.brief : null, memory: prepared.memory, providerMessage: prepared.gemini.ok ? undefined : prepared.gemini.message });
-      if (projectAccessBlock(delivery.project, useEditor.getState().entitlements)) throw new Error("التصميم يتجاوز حدود خطتك الحالية.");
+      /*
+       * Boot the editor store exactly the way every other production entry
+       * does (the raw-to-document page, the AI studio): resolve THIS
+       * account's entitlements and hydrate the owner-scoped library. The
+       * editor's document command refuses while access is unresolved, and an
+       * un-booted store is precisely how the generated design used to fail
+       * with «تعذر فتحه في المحرر» — a real document that was never created.
+       */
+      const store = useEditor.getState();
+      store.setEntitlements(entitlements);
+      await hydrate();
+      const booted = useEditor.getState();
+      if (user && booted.sessionOwner !== user.id) {
+        throw new Error("انتهت جلسة التحرير أو تغيّر الحساب؛ سجّل الدخول من جديد ثم أعد المحاولة.");
+      }
+      if (projectAccessBlock(delivery.project, booted.entitlements)) throw new Error("التصميم يتجاوز حدود خطتك الحالية؛ لم يُفتح أي مستند.");
       const applied = await applyAIEditorOperations(useEditor.getState(), [{ type: "generate_document", project: delivery.project }]);
-      if (!applied[0]?.ok) throw new Error("تعذر فتح التصميم الناتج.");
+      if (!applied[0]?.ok) throw new Error(applied[0] ? trainingOpenFailureMessage(applied[0]) : "تعذر فتح التصميم الناتج في المحرر.");
+      /*
+       * Verify the row is REALLY persisted before navigating: `/editor/<id>`
+       * resolves the address by reading that id back from storage, so a
+       * missing row there would land on «هذا المستند غير متاح».
+       */
       const projectId = useEditor.getState().id;
       const saved = projectId ? await getProject(projectId) : null;
-      if (saved?.id) { await setSetting("activeProjectId", saved.id); window.location.assign(`/editor/${encodeURIComponent(saved.id)}`); }
-    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر اختبار ما تعلمه المساعد."); }
+      if (!saved?.id) throw new Error("تعذر حفظ المشروع الناتج؛ لم يتم الانتقال إلى المحرر.");
+      await setSetting("activeProjectId", saved.id);
+      toast.success("حُفظ التصميم في مشاريعك — جارٍ فتحه في المحرر…");
+      window.location.assign(editorPathFor(saved.id));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      toast.error(aiCallErrorMessage(error, detail || "تعذر اختبار ما تعلمه المساعد."));
+    }
     finally { setBusy(false); }
   };
   const reset = async () => { if (!window.confirm("سيحذف هذا كل مراجع التدريب وقواعد الذوق لهذا الحساب فقط. متابعة؟")) return; const r = await resetTrainingCenterFn(); if (r.ok) { setReferences([]); setMemory([]); toast.success("تمت إعادة ضبط ملف الذوق."); } };
