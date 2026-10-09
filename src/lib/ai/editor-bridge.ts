@@ -2,6 +2,15 @@ import type { ReportDraft } from "./contract";
 import type { CanvasEl, ElType, Page, Project, ProjectSnapshot, ThemeId } from "@/lib/editor/model";
 import { validateProject } from "@/lib/intelligence/layout";
 import { checkLayoutVariety, enforceLayoutVariety } from "@/lib/intelligence/layout-variety";
+import { durableImageSrc, sanitizeProjectImages } from "@/lib/editor/images";
+
+async function resolveImageSrc(src: string): Promise<string> {
+  try {
+    return await durableImageSrc(src);
+  } catch {
+    return src;
+  }
+}
 
 export type AIEditorErrorCode =
   | "invalid_operation"
@@ -169,6 +178,7 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
     const operation = checked[0] as OperationOf<"generate_document">;
     try {
       let project = operation.project;
+      project = await sanitizeProjectImages(project);
       let problems = validateProject(project);
       // Anti-monotony gate (Layout Variety Check): when two consecutive pages
       // of a generated document share a structure, a secondary layout pattern
@@ -206,15 +216,26 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
       let createdIds: string[] | undefined;
       switch (operation.type) {
         case "create_element": {
-          const created = api.addElementAt(operation.elementType, operation.props, undefined, operation.pageId);
+          const props = { ...operation.props };
+          if (props.src) props.src = await resolveImageSrc(props.src);
+          const created = api.addElementAt(operation.elementType, props, undefined, operation.pageId);
           if (!created) throw new Error("create_element_failed");
           createdIds = [created.id];
           break;
         }
-        case "update_element": api.updateElement(operation.elementId, operation.patch); break;
+        case "update_element": {
+          const patch = { ...operation.patch };
+          if (patch.src) patch.src = await resolveImageSrc(patch.src);
+          api.updateElement(operation.elementId, patch);
+          break;
+        }
         case "update_text": api.updateElement(operation.elementId, { content: operation.content }); break;
         case "update_style": api.updateStyle(operation.elementId, operation.style); break;
-        case "replace_image": api.updateElement(operation.elementId, { src: operation.src, style: operation.style }); break;
+        case "replace_image": {
+          const src = await resolveImageSrc(operation.src);
+          api.updateElement(operation.elementId, { src, style: operation.style });
+          break;
+        }
         case "move_element": api.updateElement(operation.elementId, { x: operation.x, y: operation.y }); break;
         case "resize_element": api.updateElement(operation.elementId, { w: operation.w, h: operation.h }); break;
         case "replace_element": {
@@ -242,7 +263,8 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
         }
         case "generate_design": {
           if (api.createDocument) {
-            const ok = await api.createDocument(operation.project, operation.options);
+            const project = await sanitizeProjectImages(operation.project);
+            const ok = await api.createDocument(project, operation.options);
             if (!ok) throw new Error("generate_design_failed");
           } else {
             throw new Error("generate_design_unsupported");

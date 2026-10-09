@@ -484,6 +484,8 @@ interface EditorStore extends Project, Ui, History {
     owner?: string,
   ) => void;
   clipboard: CanvasEl | null;
+  /** The page the clipboard content was copied from, for cross-page paste. */
+  clipboardSourcePage: string | null;
   /** Session-local formatting clipboard, separate from whole-element copy/paste. */
   styleClipboard: ElStyle | null;
   projects: ProjectMeta[];
@@ -841,7 +843,7 @@ interface EditorStore extends Project, Ui, History {
    * the default keeps the +8mm nudge so a plain ⌘V never hides the copy.
    * Either way it is ONE history entry and the group's layer order survives.
    */
-  pasteClipboard: (inPlace?: boolean) => void;
+  pasteClipboard: (inPlace?: boolean, targetPageId?: string) => void;
   deleteSelected: () => void;
   bring: (dir: "forward" | "back" | "front" | "bottom") => void;
   /**
@@ -1216,7 +1218,16 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
       el.name ||= TYPE_NAME[el.type] || "عنصر";
       // Imported projects carry image sources as plain strings; drop any that
       // could execute script before they reach the canvas or an export.
-      if (el.src) el.src = safeImageSrc(el.src);
+      if (el.src) {
+        // blob: URLs are ephemeral — they are revoked when the Blob is GC'd
+        // or the tab closes. A project saved before the durableImageSrc fix
+        // may still carry a dead blob: URL that renders as a broken image.
+        // Clear it here so the element doesn't hang a broken request; the
+        // AI pipeline now converts blobs to data: URLs before persistence,
+        // so this path is only a safety net for legacy saves.
+        const safe = safeImageSrc(el.src);
+        el.src = safe.startsWith("blob:") ? "" : safe;
+      }
       if (el.children?.length) el.children.forEach(normalizeEl);
       if (!incoming.nativeFormat) constrainElement(el, size);
     };
@@ -2109,6 +2120,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
     },
     clipboard: null,
+    clipboardSourcePage: null,
     styleClipboard: null,
     past: [],
     future: [],
@@ -4114,12 +4126,15 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     selectMany: (ids) => {
       const s = get();
-      const page = activePageOf(s);
+      const active = activePageOf(s);
+      const found = s.pages.find((p) => ids.some((id) => locate(p, id)));
+      const page = found || active;
       if (!page) return;
-      const keep = ids.filter((id) => pickable(page, s.enteredGroupId, id));
+      const keep = ids.filter((id) => locate(page, id));
       set({
         selectedIds: keep,
         selectedId: keep.length ? keep[keep.length - 1] : null,
+        activePageId: keep.length ? page.id : s.activePageId,
       });
     },
 
@@ -4208,7 +4223,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     group: () => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => s.selectedIds.some((id) => locate(p, id))) || activePageOf(s);
       if (!page) return null;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
@@ -4244,7 +4259,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     ungroup: () => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => s.selectedIds.some((id) => locate(p, id))) || activePageOf(s);
       if (!page) return;
       const targets = s.selectedIds
         .map((id) => locate(page, id)?.el)
@@ -5043,7 +5058,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     updateElement: (id, patch, live) => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => locate(p, id)) || activePageOf(s);
       if (!page) return;
       const size = pageSize(page);
       const next = mapElement(page, id, (el) => {
@@ -5085,7 +5100,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     updateStyle: (id, patch, live) => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => locate(p, id)) || activePageOf(s);
       if (!page) return;
       const size = pageSize(page);
       const next = mapElement(page, id, (el) => {
@@ -5101,7 +5116,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     replaceElement: (el, live) => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => locate(p, el.id)) || activePageOf(s);
       if (!page) return;
       const size = pageSize(page);
       const prev = locate(page, el.id)?.el;
@@ -5208,7 +5223,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     duplicateSelected: () => {
       const s = get();
-      const page = activePageOf(s);
+      const page = s.pages.find((p) => s.selectedIds.some((id) => locate(p, id))) || activePageOf(s);
       if (!page) return;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
@@ -5253,6 +5268,7 @@ export const useEditor = create<EditorStore>((set, get) => {
             ? picked[0]
             : createGroupFrom(picked) || picked[0],
         ),
+        clipboardSourcePage: page.id,
       });
     },
 
@@ -5297,10 +5313,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
-    pasteClipboard: (inPlace) => {
+    pasteClipboard: (inPlace, targetPageId) => {
       const s = get();
       if (!s.clipboard) return;
-      const page = activePageOf(s);
+      const page = targetPageId
+        ? s.pages.find((p) => p.id === targetPageId)
+        : activePageOf(s);
       if (!page) return;
       const el = clone(s.clipboard);
       el.id = uid(el.type === "group" ? "grp" : "el");
@@ -5418,14 +5436,15 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     deleteSelected: () => {
       const s = get();
-      const page = activePageOf(s);
-      if (!page) return;
-      // Deleting an element inside a group removes just that member; only
-      // top-level picks need the page list rewritten.
-      const deletable = s.selectedIds.filter((id) => {
-        const found = locate(page, id);
-        return found && !found.el.locked;
-      });
+      // Collect deletable IDs across ALL pages, skipping locked elements.
+      const deletable: string[] = [];
+      for (const page of s.pages) {
+        for (const id of s.selectedIds) {
+          if (deletable.includes(id)) continue;
+          const found = locate(page, id);
+          if (found && !found.el.locked) deletable.push(id);
+        }
+      }
       if (!deletable.length) return;
       const ids = new Set(deletable);
       const strip = (list: CanvasEl[]): CanvasEl[] =>
@@ -5434,11 +5453,16 @@ export const useEditor = create<EditorStore>((set, get) => {
           .map((el) =>
             el.children?.length ? { ...el, children: strip(el.children) } : el,
           );
-      const elements = strip(page.elements);
-      const next = { ...page, elements };
-      normalizeZ(next);
+      // Rebuild every page that had a deleted element.
+      const nextPages = s.pages.map((page) => {
+        if (!page.elements.some((el) => ids.has(el.id))) return page;
+        const elements = strip(page.elements);
+        const next = { ...page, elements };
+        normalizeZ(next);
+        return next;
+      });
       set({
-        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        pages: nextPages,
         selectedId: null,
         selectedIds: [],
       });

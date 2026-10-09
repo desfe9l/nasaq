@@ -191,6 +191,7 @@ function elementsAtPoint(
   const hits: CanvasEl[] = [];
   for (const el of list) {
     if (el.hidden) continue;
+    if (el.locked) continue;
     const absEl =
       offset.x || offset.y
         ? { ...el, x: el.x + offset.x, y: el.y + offset.y }
