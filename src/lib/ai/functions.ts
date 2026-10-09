@@ -18,9 +18,12 @@ import {
 import {
   normalizeDesignBriefInput,
   validDesignBriefInput,
+  type DesignBrief,
   type DesignBriefInput,
   type DesignBriefResult,
 } from "./design-contract";
+import type { DesignMemoryInput, DesignMemoryView } from "./design-memory";
+import { DESIGN_CONSTITUTION_VERSION } from "./design-constitution";
 
 let getRequestRef: typeof import("@tanstack/react-start/server").getRequest | null = null;
 
@@ -299,6 +302,147 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
   });
 
 /**
+ * Design twin preparation. Gemini, when configured, returns art direction.
+ * A missing or failing provider is reported as such and does not invent a
+ * model response. The editor then builds editable elements locally.
+ */
+export type DesignTwinPrepareResult =
+  | {
+      ok: true;
+      constitutionVersion: string;
+      memory: DesignMemoryView[];
+      memoryError?: string;
+      gemini:
+        | { ok: true; brief: DesignBrief; model: string }
+        | { ok: false; code: string; message: string };
+    }
+  | {
+      ok: false;
+      code: "unauthorized" | "license_required" | "rate_limited" | "invalid" | "not_configured";
+      message: string;
+    };
+
+export const prepareDesignTwinFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: Partial<DesignBriefInput> & { audience?: string }) => data)
+  .handler(async ({ data, context }): Promise<DesignTwinPrepareResult> => {
+    const input = normalizeDesignBriefInput(data);
+    if (!validDesignBriefInput(input)) {
+      return { ok: false, code: "invalid", message: "اكتب وصفًا واضحًا للتصميم المطلوب." };
+    }
+    const { getAuthorizationContext, requireFeature } = await import("@/lib/auth/authorization.server");
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return { ok: false, code: "license_required", message: "تحتاج هذه الميزة إلى ترخيص نشط." };
+    }
+    const privileged = access.isAdmin || access.isOwner;
+    const closed = await aiServiceClosed(privileged);
+    if (closed) return closed;
+    const verdict = privileged
+      ? checkAppSafetyLimit("ai:design", await clientIdentifier())
+      : checkOperationLimit("ai:design", context.userId, await clientIdentifier());
+    if (!verdict.allowed) {
+      return { ok: false, code: "rate_limited", message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة." };
+    }
+
+    let memory: DesignMemoryView[] = [];
+    let memoryError: string | undefined;
+    let memoryNotes = "";
+    try {
+      const store = await import("./design-memory.server");
+      const rules = await import("./design-memory");
+      memory = await store.listDesignMemory(context.userId);
+      memoryNotes = rules.resolveMemory(memory).notes;
+    } catch {
+      memoryError = "تعذر قراءة ذاكرة التصميم. لن تُستخدم تفضيلات محفوظة في هذا الطلب.";
+    }
+
+    const audience = String(data.audience ?? "").trim().slice(0, 160);
+    const prompt = audience ? `${input.prompt}\nالجمهور: ${audience}` : input.prompt;
+    try {
+      const { generateDesignBrief } = await import("./provider.server");
+      const modelSink = { model: "" };
+      const brief = await generateDesignBrief({ ...input, prompt }, { memoryNotes, modelSink });
+      return {
+        ok: true,
+        constitutionVersion: DESIGN_CONSTITUTION_VERSION,
+        memory,
+        memoryError,
+        gemini: { ok: true, brief, model: modelSink.model || "gemini-2.5-flash" },
+      };
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "provider_error";
+      const message = code === "not_configured"
+        ? "خدمة Gemini غير مفعّلة في هذه البيئة. سيُبنى التصميم من موجزك عبر محرك نَسَق، وليس من النموذج."
+        : providerFailureMessage(code, "تعذر طلب Gemini. سيُبنى التصميم من موجزك عبر محرك نَسَق، وليس من النموذج.");
+      return {
+        ok: true,
+        constitutionVersion: DESIGN_CONSTITUTION_VERSION,
+        memory,
+        memoryError,
+        gemini: { ok: false, code, message },
+      };
+    }
+  });
+
+export const listDesignMemoryFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ ok: true; memory: DesignMemoryView[] } | { ok: false; message: string }> => {
+    try {
+      const { listDesignMemory } = await import("./design-memory.server");
+      return { ok: true, memory: await listDesignMemory(context.userId) };
+    } catch {
+      return { ok: false, message: "تعذر قراءة ذاكرة التصميم لهذا الحساب." };
+    }
+  });
+
+export const recordDesignMemoryFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: Partial<DesignMemoryInput>) => data)
+  .handler(async ({ data, context }): Promise<{ ok: true; entry: DesignMemoryView } | { ok: false; code: string; message: string }> => {
+    const { getAuthorizationContext, requireFeature } = await import("@/lib/auth/authorization.server");
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return { ok: false, code: "license_required", message: "تحتاج هذه الميزة إلى ترخيص نشط." };
+    }
+    try {
+      const { recordDesignMemory } = await import("./design-memory.server");
+      const entry = await recordDesignMemory(context.userId, data);
+      if (!entry) return { ok: false, code: "invalid", message: "الملاحظة غير مكتملة. الرفض والتصحيح يحتاجان سببًا." };
+      return { ok: true, entry };
+    } catch {
+      return { ok: false, code: "provider_error", message: "تعذر حفظ الملاحظة في حسابك." };
+    }
+  });
+
+export const deleteDesignMemoryFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { id?: string }) => data)
+  .handler(async ({ data, context }): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const id = String(data.id ?? "").trim();
+    if (!id) return { ok: false, message: "لا توجد ملاحظة لحذفها." };
+    try {
+      const { deleteDesignMemory } = await import("./design-memory.server");
+      const removed = await deleteDesignMemory(context.userId, id);
+      return removed ? { ok: true } : { ok: false, message: "الملاحظة ليست في هذا الحساب." };
+    } catch {
+      return { ok: false, message: "تعذر حذف الملاحظة." };
+    }
+  });
+
+/**
  * «نَسَق AI» — the admin-facing status of the ONE AI layer.
  *
  * It answers what an operator can act on: is the Gemini adapter configured at
@@ -312,17 +456,22 @@ export const nasaqAiStatusFn = createServerFn({ method: "GET" })
     configured: boolean;
     model: string;
     capabilities: string[];
+    fallbacks: string[];
+    constitutionVersion: string;
   }> => {
     const model = process.env.NASAQ_AI_MODEL?.trim() || "gemini-2.5-flash";
     return {
       configured: Boolean(process.env.GEMINI_API_KEY?.trim()),
       model,
+      fallbacks: ["gemini-3.5-flash", "gemini-3.1-flash-lite"],
+      constitutionVersion: DESIGN_CONSTITUTION_VERSION,
       capabilities: [
         "تقرير ذكي",
         "توجيه تصميمي قابل للتحرير",
         "إجراءات النص المحدد",
         "تحليل الصور وOCR",
         "توليد محتوى خام إلى مستند",
+        "توأم التصميم",
       ],
     };
   });

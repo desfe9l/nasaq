@@ -81,7 +81,7 @@ explains what is needed) instead of failing obscurely.
 | --- | --- | --- |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in | Provider is simply not offered (`authProviderFlags`); email/password still works. Both are needed — a half-configured pair counts as absent. |
 | `GEMINI_API_KEY` | Every AI feature: report drafts, design briefs, selection transforms, image analysis, template studio | Each AI server function returns `{ok:false, code:"not_configured"}` with an Arabic message. Verified end to end by `npm run test:ai:e2e`. |
-| `NASAQ_AI_MODEL` | Model id for the Gemini boundary (`src/lib/ai/provider.server.ts`) | Defaults to `gemini-2.5-flash`. |
+| `NASAQ_AI_MODEL` | Model id for the Gemini boundary (`src/lib/ai/provider.server.ts`) | Defaults to `gemini-2.5-flash`. A 404 (`invalid_model`) retries `gemini-3.5-flash` then `gemini-3.1-flash-lite`. Auth, quota, and billing errors do not switch models. The key is sent as `x-goog-api-key`, never in the URL. |
 | `NASAQ_PUBLIC_URL` | Owner diagnostics ping; public-origin fallbacks | Falls back to `VERCEL_PROJECT_PRODUCTION_URL` / `BETTER_AUTH_URL`. |
 | `NASAQ_TRUSTED_ORIGINS` | Extra origins allowed to POST credentials (custom domains, staging) | Only this deployment's own hosts are trusted. A credential POST from another origin is refused (`INVALID_ORIGIN`), which `npm run test:auth:e2e` asserts. |
 | `NASAQ_ALLOWED_HOSTS` | Extra host patterns for the per-request base URL | Only hostnames derived from `VERCEL_*` / configured origins are accepted. |

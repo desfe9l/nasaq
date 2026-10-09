@@ -396,8 +396,71 @@ test("design brief system prompt enforces anti-monotony rules and the per-page l
       assert.ok(directive.visualHierarchy.length > 0);
       assert.ok(directive.accentCards >= 0 && directive.accentCards <= 3);
     }
+    assert.match(requestBody, /Personal Design Constitution 2026\.10\.09/);
   } finally {
     globalThis.fetch = previousFetch;
     restore();
   }
 });
+
+test("extractGeminiText ignores thought parts", () => {
+  const text = extractGeminiText({
+    candidates: [{
+      content: {
+        parts: [
+          { thought: true, text: "{\"title\":\"فكر داخلي\"}" },
+          { text: "{\"title\":\"عنوان ظاهر\"}" },
+        ],
+      },
+    }],
+  });
+  assert.equal(text, "{\"title\":\"عنوان ظاهر\"}");
+});
+
+test("404 on the configured model falls back and the key stays out of the URL", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  const urls: string[] = [];
+  const headers: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    urls.push(url);
+    headers.push(String(new Headers(init?.headers).get("x-goog-api-key") || ""));
+    if (url.includes("/models/gemini-2.5-flash:")) {
+      return geminiErrorResponse(404, { code: 404, message: "models/gemini-2.5-flash is not found", status: "NOT_FOUND" });
+    }
+    return geminiResponse("نص ظاهر");
+  };
+  try {
+    const text = await requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 20 });
+    assert.equal(text, "نص ظاهر");
+    assert.equal(urls.some((url) => url.includes("gemini-2.5-flash")), true);
+    assert.equal(urls.some((url) => url.includes("gemini-3.5-flash")), true);
+    assert.equal(urls.some((url) => url.includes("key=")), false);
+    assert.equal(headers.every((value) => value === "test-server-key"), true);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("provider auth does not try a fallback model", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return geminiErrorResponse(401, { code: 401, message: "API key not valid", status: "UNAUTHENTICATED" });
+  };
+  try {
+    await assert.rejects(
+      requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }),
+      /provider_auth/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+

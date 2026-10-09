@@ -70,8 +70,16 @@ function AiSection() {
             </header>
             {status && (
               <p className="mt-3 text-[11.5px] leading-6 text-muted">
-                النموذج: <strong className="text-ink" dir="ltr">{status.model}</strong> · القدرات:{" "}
-                {status.capabilities.join(" · ")}
+                النموذج: <strong className="text-ink" dir="ltr">{status.model}</strong>
+                {status.fallbacks?.length ? (
+                  <>
+                    {" "}· بديل عند 404: <span dir="ltr">{status.fallbacks.join(" ، ")}</span>
+                  </>
+                ) : null}
+                {status.constitutionVersion ? (
+                  <> · الدستور: <span dir="ltr">{status.constitutionVersion}</span></>
+                ) : null}
+                {" "}· القدرات: {status.capabilities.join(" · ")}
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
