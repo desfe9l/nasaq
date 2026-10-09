@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { checkedOutputPath, checkedUrl } from "./browser-guard.mjs";
 import { computeBrandWarnings } from "./brand-check.mjs";
@@ -26,6 +27,7 @@ if (args.error) {
   process.exit(1);
 }
 
+const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const url = checkedUrl(args.url);
 const outPng = checkedOutputPath(args.outPng, ["/workspace"]);
 const derived = derivedPaths(outPng);
@@ -109,7 +111,13 @@ try {
     // networkidle never settles and would burn the whole timeout.
     const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     const status = resp?.status() ?? 0;
-    await page.waitForTimeout(1000);
+    // SSR: false routes need client hydration; wait for actual page content
+    // plus a safety buffer for code-split bundles.
+    await page.waitForFunction(
+      () => document.body.textContent && document.body.textContent.length > 100,
+      { timeout: 10000 },
+    ).catch(() => {});
+    await page.waitForTimeout(1500);
 
     const title = await page.title();
     const hasCanvas = (await page.locator("canvas").count()) > 0;
@@ -140,7 +148,7 @@ try {
     };
   }
 
-  const brandWarnings = computeBrandWarnings({ hasCanvas: viewports.desktop.hasCanvas });
+  const brandWarnings = computeBrandWarnings({ hasCanvas: viewports.desktop.hasCanvas, workspaceRoot });
   // Only a dev server answers /__app-env, so smoking the built output reads as
   // indeterminate — report a divergence, never the absence of an observation.
   const authWarnings = authInvariantWarnings(

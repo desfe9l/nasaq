@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
+import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes, Download } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
@@ -19,17 +19,61 @@ import { LicenseBadge } from "@/components/site/LicenseBadge";
 import { PricingSection } from "@/components/site/PricingSection";
 import { PremiumTemplates } from "@/components/site/PremiumTemplates";
 import { ProductEcosystem, ProductWalkthrough } from "@/components/site/ProductWalkthrough";
+import { PremiumButton } from "@/components/ui/PremiumButton";
+import { useReveal } from "@/components/ui/useReveal";
+import { cn } from "@/lib/utils";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: FileText, title: "تصميم التقارير والوثائق المؤسسية", desc: "مستندات عربية قابلة للتحرير مع صفحات بمقاسات متعددة." },
   { icon: LayoutTemplate, title: "قوالب جاهزة للاستخدام", desc: "ابدأ من تكوينات المستند والقوالب المتاحة داخل المحرر." },
-  { icon: FolderOpen, title: "مكتبة عناصر وملفات", desc: "احفظ الأصول المرئية وأعد استخدامها في مشاريعك." },
+  { icon: FolderOpen, title: "مكتبة عناصار وملفات", desc: "احفظ الأصول المرئية وأعد استخدامها في مشاريعك." },
   { icon: Layers, title: "إدارة الصفحات والعناصر", desc: "أضف الصفحات ونظّم العناصر والطبقات ضمن المستند." },
   { icon: Shapes, title: "أدوات تحرير متقدمة", desc: "حرّر النصوص والصور والأشكال والجداول والمؤشرات." },
   { icon: Palette, title: "دعم الهوية البصرية", desc: "اضبط الألوان والخطوط والشعار وعناصر المستند." },
   { icon: FileDown, title: "تصدير الملفات بصيغ متعددة", desc: "أخرج ملفات PDF وPNG وJPG وWord وPowerPoint وغيرها حسب الصلاحية." },
   { icon: Files, title: "مشاريع محفوظة محليًا", desc: "واصل العمل على ملفاتك ومشاريعك المحفوظة في المتصفح." },
 ];
+
+const AUDIENCE = [
+  { icon: Building2, title: "الشركات والمؤسسات", desc: "تقارير أداء وإحصائيات وخطابات رسمية بهوية موحدة." },
+  { icon: Briefcase, title: "الإدارات التنفيذية", desc: "عروض تنفيذية وملفات تعريفية وتقارير دورية." },
+  { icon: Megaphone, title: "إدارات الإعلام والاتصال", desc: "إنتاج يومي منظم للمخرجات الإعلامية والمؤسسية." },
+  { icon: PenTool, title: "المصممون وصناع التقارير", desc: "تحكم دقيق بالعناصر والخطوط والتصدير دون تعقيد." },
+];
+
+/** Two-row subheading used by feature cards: an icon tile + label + desc. */
+function FeatureCard({
+  icon: Icon,
+  title,
+  desc,
+  revealOrder = 0,
+}: {
+  icon: typeof FileText;
+  title: string;
+  desc: string;
+  revealOrder?: number;
+}) {
+  const [ref, visible] = useReveal<HTMLDivElement>({ delay: revealOrder * 60 });
+  return (
+    <div
+      ref={ref}
+      className={"nsq-card is-interactive"}
+      data-animate={visible ? "reveal" : undefined}
+    >
+      <div className="nsq-card-content flex items-start gap-4">
+        <span className="mt-0.5 grid size-10 shrink-0 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
+          <Icon className="size-4.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-extrabold text-ink">{title}</h3>
+          <p className="mt-1 text-[12px] leading-[1.55] text-muted nsq-wrap">
+            {desc}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function HomePage() {
   const projects = useEditor((s) => s.projects);
@@ -105,68 +149,96 @@ export function HomePage() {
     window.location.assign(editorPathFor(id));
   };
 
+  const heroReady = entry.ready && workspace.ready;
+  const heroHref = heroReady
+    ? workspace.licensed
+      ? WORKSPACE_HOME_PATH
+      : CREATE_ROUTE
+    : undefined;
+  const heroLabel = workspace.licensed
+    ? "مساحة العمل"
+    : entry.ready && entry.direct
+      ? "إنشاء تصميم"
+      : entry.ready
+        ? entry.label
+        : "ابدأ بالتصميم";
+
+  const [heroRef, heroVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [featuresRef, featuresVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [audienceRef, audienceVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [projectsRef, projectsVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [packsRef, packsVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [highlightsRef, highlightsVisible] = useReveal<HTMLElement>({ delay: 120 });
+
   return (
-    <div className="min-h-full bg-page ">
+    <div className="min-h-full bg-page">
       <SiteHeader current="/" />
       <main>
-        {/* Hero — مؤسسي رسمي هادئ */}
-        <section className="border-b border-line/70 bg-page">
-          <div
-            className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20"
-          >
-            <div>
-              <p className="nsq-eyebrow mb-4">
+        {/* ── Hero ── */}
+        <section
+          ref={heroRef}
+          className="border-b border-line/70 bg-page"
+          data-animate={heroVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container grid gap-10 py-[3.5rem] sm:py-[4.5rem] lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-22">
+            <div className="flex flex-col">
+              <p className="nsq-eyebrow self-start">
                 {texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}
               </p>
-              <h1 className="nsq-title max-w-2xl text-[32px] sm:text-[42px]">
+              <h1 className="nsq-title mt-3 max-w-2xl text-[2rem] leading-[1.25] sm:text-[2.5rem] md:text-[2.75rem]">
                 {texts.heroTitle.trim() || PRODUCT_COPY.hero.title}
               </h1>
-              <p className="nsq-lede mt-5">
+              <p className="nsq-lede mt-4">
                 {texts.heroDescription.trim() || PRODUCT_COPY.hero.description}
               </p>
-              <p className="mt-3 max-w-xl text-[13px] leading-6 text-muted">
+              <p className="nsq-wrap mt-2 max-w-xl text-[0.9rem] leading-[1.55] text-muted">
                 منصة واحدة لإعداد التقارير السنوية ولوحات المؤشرات والخطابات الرسمية والعروض التنفيذية، مع التزام كامل بالهوية المؤسسية وجودة طباعة 300 DPI.
               </p>
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
-                <a
-                  /*
-                   * «ابدأ بالتصميم» is the creation promise of the page, so it
-                   * keeps it: a licensed account lands on its workspace Home
-                   * (whose first section is creation); everybody else lands on
-                   * `/create`, where the four ways to begin are chosen. The old
-                   * behaviour sent signed-in authors to the bare editor, which
-                   * only bounced them to `/create` a moment later.
-                   */
-                  href={entry.ready && workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : CREATE_ROUTE) : undefined}
-                  onClick={(event) => {
-                    if (!workspace.ready || !entry.ready) event.preventDefault();
+                <PremiumButton
+                  variant="primary"
+                  size="lg"
+                  onClick={() => {
+                    if (heroHref) window.location.assign(heroHref);
                   }}
-                  aria-disabled={!workspace.ready || !entry.ready}
-                  className="inline-flex h-12 items-center gap-2.5 rounded-[10px] bg-navy px-7 text-[15px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                  aria-disabled={!heroReady}
+                  icon={ArrowLeft}
+                  iconPosition="end"
                 >
-                  <span>ابدأ بالتصميم</span>
-                  <ArrowLeft className="size-[18px]" />
-                </a>
-                <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink transition hover:bg-surface-2 hover:border-line/80">
+                  {heroLabel}
+                </PremiumButton>
+                <PremiumButton
+                  variant="outline"
+                  size="md"
+                  onClick={() => window.location.assign("/purchase")}
+                >
                   استعراض الخطط والأسعار
-                </a>
-                <a href="/projects" className="inline-flex h-11 items-center rounded-[10px] px-3 text-[13px] font-bold text-muted underline-offset-4 transition hover:text-ink hover:underline">
+                </PremiumButton>
+                <PremiumButton
+                  variant="ghost"
+                  size="md"
+                  onClick={() => window.location.assign("/projects")}
+                >
                   كل مشاريعي
-                </a>
+                </PremiumButton>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">تخزين محلي أولًا</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">جاهز للطباعة 300 DPI</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">دعم الخطوط العربية الرسمية</span>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="nsq-badge nsq-badge--neutral">تخزين محلي أولًا</span>
+                <span className="nsq-badge nsq-badge--neutral">جاهز للطباعة 300 DPI</span>
+                <span className="nsq-badge nsq-badge--neutral">دعم الخطوط العربية الرسمية</span>
               </div>
 
-              <p className="mt-5 text-[11px] leading-6 text-muted">{PRODUCT_COPY.demoNote}</p>
+              <p className="nsq-wrap mt-4 text-[0.8rem] leading-[1.5] text-muted">
+                {PRODUCT_COPY.demoNote}
+              </p>
 
-              <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="nsq-wrap mt-3 flex flex-wrap items-center gap-3">
                 <ProjectFileButton />
-                <span className="text-[11px] text-muted">افتح ملف نَسَق ‎.nsq‎ أو نسخة احتياطية محفوظة سابقًا</span>
+                <span className="text-[0.8rem] text-muted">
+                  افتح ملف نَسَق ‎.nsq‎ أو نسخة احتياطية محفوظة سابقًا
+                </span>
               </div>
             </div>
 
@@ -179,54 +251,76 @@ export function HomePage() {
 
         <ProductWalkthrough />
 
-        {/* ماذا تقدم — القدرات الأساسية */}
-        <section className="border-b border-line/60 bg-page py-12 sm:py-14">
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        {/* ── What we offer ── */}
+        <section
+          ref={featuresRef}
+          className="border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]"
+          data-animate={featuresVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container">
             <div className="max-w-2xl">
-              <p className="nsq-eyebrow">ماذا تقدم نَسَق</p>
-              <h2 className="nsq-title-sm mt-2.5 text-[23px]">إنتاج بصري منظم للمخرجات المتكررة</h2>
+              <p className="nsq-section-eyebrow">ماذا تقدم نَسَق</p>
+              <h2 className="nsq-section-title mt-2.5 text-[1.45rem] sm:text-[1.75rem]">
+                إنتاج بصري منظم للمخرجات المتكررة
+              </h2>
             </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {[
-                [Briefcase, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة مع حفظ الهوية."],
-                [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض والطباعة."],
-                [ShieldCheck, "لعمل آمن ومنظم", "تخزين محلي أولًا ومسار واضح للترخيص والتصدير."],
-              ].map(([Icon, title, desc]) => (
-                <div key={String(title)} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface-2 p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
-                  <span className="grid size-9 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
-                    <Icon className="size-4" />
-                  </span>
-                  <div>
-                    <strong className="block text-[13px] font-bold text-ink">{String(title)}</strong>
-                    <span className="mt-1 block text-[12px] leading-6 text-muted">{String(desc)}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FeatureCard
+                icon={Briefcase}
+                title="للفرق المؤسسية"
+                desc="إنتاج منظم للمخرجات المتكررة مع حفظ الهوية."
+                revealOrder={0}
+              />
+              <FeatureCard
+                icon={Workflow}
+                title="لسير العمل الحقيقي"
+                desc="من البيانات والهيكل إلى ملف جاهز للعرض والطباعة."
+                revealOrder={1}
+              />
+              <FeatureCard
+                icon={ShieldCheck}
+                title="لعمل آمن ومنظم"
+                desc="تخزين محلي أولًا ومسار واضح للترخيص والتصدير."
+                revealOrder={2}
+              />
             </div>
           </div>
         </section>
 
-        {/* لمن تناسب — مؤسسي */}
-        <section className="border-b border-line/60 bg-surface-2 py-12 sm:py-14">
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+        {/* ── Who it's for ── */}
+        <section
+          ref={audienceRef}
+          className="border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
+          data-animate={audienceVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container">
             <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
               <div>
-                <p className="text-[11px] font-bold tracking-[0.14em] text-brand">لمن تناسب</p>
-                <h2 className="nsq-title-sm mt-2.5 text-[23px]">مصممة للجهات والمؤسسات والفرق المحترفة</h2>
-                <p className="mt-2 text-[13px] leading-7 text-muted">توفر نَسَق بيئة عمل تناسب المتطلبات الرسمية، مع التزام بالهوية البصرية والجودة الطباعية وسهولة إعادة الاستخدام عبر القوالب.</p>
+                <p className="nsq-section-eyebrow">لمن تناسب</p>
+                <h2 className="nsq-section-title mt-2.5 text-[1.45rem] sm:text-[1.75rem]">
+                  مصممة للجهات والمؤسسات والفرق المحترفة
+                </h2>
+                <p className="nsq-wrap mt-2 text-[0.9rem] leading-[1.55] text-muted">
+                  توفر نَسَق بيئة عمل تناسب المتطلبات الرسمية، مع التزام بالهوية البصرية والجودة الطباعية وسهولة إعادة الاستخدام عبر القوالب.
+                </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  { icon: Building2, title: "الشركات والمؤسسات", desc: "تقارير أداء وإحصائيات وخطابات رسمية بهوية موحدة." },
-                  { icon: Briefcase, title: "الإدارات التنفيذية", desc: "عروض تنفيذية وملفات تعريفية وتقارير دورية." },
-                  { icon: Megaphone, title: "إدارات الإعلام والاتصال", desc: "إنتاج يومي منظم للمخرجات الإعلامية والمؤسسية." },
-                  { icon: PenTool, title: "المصممون وصناع التقارير", desc: "تحكم دقيق بالعناصر والخطوط والتصدير دون تعقيد." },
-                ].map((c) => (
-                  <div key={c.title} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
-                    <c.icon className="mt-0.5 size-4 shrink-0 text-ink" />
-                    <div>
-                      <h3 className="text-[13px] font-bold text-ink">{c.title}</h3>
-                      <p className="mt-1 text-[12px] leading-6 text-muted">{c.desc}</p>
+                {AUDIENCE.map((c) => (
+                  <div
+                    key={c.title}
+                    className="nsq-card flex items-start gap-4"
+                    data-animate={audienceVisible ? "reveal" : undefined}
+                  >
+                    <div className="nsq-card-content flex flex-col items-start gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
+                        <c.icon className="size-4" />
+                      </span>
+                      <div>
+                        <h3 className="text-[14px] font-extrabold text-ink">{c.title}</h3>
+                        <p className="nsq-wrap mt-1 text-[12px] leading-[1.55] text-muted">
+                          {c.desc}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -235,116 +329,206 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* أحدث المشاريع */}
-        <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[18px] font-bold text-ink ">أحدث المشاريع</h2>
-            <button
-              type="button"
-              onClick={toggleRecent}
-              aria-expanded={!recentHidden}
-              className="inline-flex h-8 items-center gap-1 rounded-full border border-line px-3 text-[12px] font-bold text-muted hover:text-ink"
-            >
-              {recentHidden ? "إظهار" : "إخفاء"}
-              <ChevronDown className={`size-3.5 transition-transform ${recentHidden ? "" : "rotate-180"}`} aria-hidden />
-            </button>
+        {/* ── Recent projects ── */}
+        <section
+          ref={projectsRef}
+          className="border-b border-line/60 bg-page py-[2.5rem] sm:py-[3.5rem]"
+          data-animate={projectsVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[1.125rem] font-extrabold text-ink">
+                أحدث المشاريع
+              </h2>
+              <button
+                type="button"
+                onClick={toggleRecent}
+                aria-expanded={!recentHidden}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[0.75rem] font-bold text-muted transition hover:text-ink"
+              >
+                {recentHidden ? "إظهار" : "إخفاء"}
+                <ChevronDown
+                  className={`size-3.5 transition-transform ${recentHidden ? "" : "rotate-180"}`}
+                  aria-hidden
+                />
+              </button>
+            </div>
+            {!recentHidden && (
+              <p className="nsq-wrap mt-1 text-[0.85rem] text-muted">
+                الصفحات تُحفظ محليًا في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.
+              </p>
+            )}
+            {recentHidden ? null : projectsLoading ? (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="h-[148px] animate-pulse rounded-[12px] border border-line bg-surface-2"
+                  />
+                ))}
+              </div>
+            ) : recent.length ? (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {recent.map((p) => (
+                  <ProjectCard
+                    key={p.id}
+                    project={p}
+                    onOpen={openEditor}
+                    compact
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-6 rounded-[12px] border border-dashed border-line bg-surface-2 p-8 text-center">
+                <p className="text-[14px] font-bold text-ink">
+                  لا توجد مشاريع بعد
+                </p>
+                <p className="nsq-wrap mt-1 text-[12px] text-muted">
+                  ابدأ بتقرير رسمي جاهز أو بصفحة فارغة.
+                </p>
+              </div>
+            )}
           </div>
-          {!recentHidden && (
-            <p className="mt-1 text-[13px] text-muted ">المشاريع تُحفظ محليًا في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.</p>
-          )}
-          {recentHidden ? null : projectsLoading ? (
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {[0, 1, 2].map((i) => <div key={i} className="h-[120px] animate-pulse rounded-[12px] border border-line bg-surface-2 " />)}
-            </div>
-          ) : recent.length ? (
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {recent.map((p) => <ProjectCard key={p.id} project={p} onOpen={openEditor} compact />)}
-            </div>
-          ) : (
-            <div className="mt-6 rounded-[12px] border border-dashed border-line bg-surface-2 p-8 text-center ">
-              <p className="text-[13px] font-bold text-ink ">لا توجد مشاريع بعد</p>
-              <p className="mt-1 text-[12px] text-muted ">ابدأ بتقرير رسمي جاهز أو بصفحة فارغة.</p>
-            </div>
-          )}
         </section>
 
-        {/* قوالب البداية */}
-        <section className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-6">
-          <h2 className="text-[18px] font-bold text-ink ">قوالب البداية</h2>
-          <p className="mt-1 text-[13px] text-muted ">كل قالب ينشئ نسخة جديدة داخل مشروعك.</p>
-          <div className={`mt-6 ${CARD_WRAP}`}>
-            {PACKS.map((pack) => (
-              <button
-                key={pack.id}
-                type="button"
-                onClick={() =>
-                  pack.id === "blank"
-                    ? startBlank()
-                    : window.location.assign("/templates")
-                }
-                aria-label={pack.id === "blank" ? "فتح صفحة فارغة" : `استعراض قوالب ${pack.title}`}
-                className={`flex flex-col rounded-[12px] border border-line/70 bg-surface p-5 text-right hover:border-inverse/20 ${CARD_W} ${SITE_CARD}`}
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="grid size-8 place-items-center rounded-[8px] bg-surface-2 text-ink">
-                    <FileText className="size-4" />
-                  </span>
-                  <span className="text-[11px] text-muted">{pack.pages}</span>
-                </div>
-                <strong className="block text-[14px] font-bold text-ink">{pack.title}</strong>
-                <span className="mt-1 block text-[12px] leading-5 text-muted">{pack.desc}</span>
-                  <span className="mt-auto pt-4">
-                    {pack.id === "blank"
-                      ? <LicenseBadge state="licensed" size="sm" label={workspace.licensed ? "مساحة العمل" : entry.ready && entry.direct ? "فتح المحرر" : "فتح العرض"} title={workspace.licensed ? "الدخول إلى مساحة العمل" : "فتح المحرر"} />
-                      : <LicenseBadge
+        {/* ── Template packs ── */}
+        <section
+          ref={packsRef}
+          className="border-b border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
+          data-animate={packsVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container">
+            <h2 className="text-[1.125rem] font-extrabold text-ink">
+              قوالب البداية
+            </h2>
+            <p className="nsq-wrap mt-1 text-[0.85rem] text-muted">
+              كل قالب ينشئ نسخة جديدة داخل مشروعك.
+            </p>
+            <div className={`mt-6 ${CARD_WRAP}`}>
+              {PACKS.map((pack, i) => (
+                <div
+                  key={pack.id}
+                  className={cn(
+                    "nsq-card p-5 text-right",
+                    CARD_W,
+                    SITE_CARD,
+                  )}
+                  data-animate={packsVisible ? "reveal" : undefined}
+                >
+                  <div
+                    className="flex flex-col p-5 text-right"
+                    onClick={() =>
+                      pack.id === "blank"
+                        ? startBlank()
+                        : window.location.assign("/templates")
+                    }
+                    role={pack.id === "blank" ? undefined : "link"}
+                    aria-label={
+                      pack.id === "blank"
+                        ? "فتح صفحة فارغة"
+                        : `استعراض قوالب ${pack.title}`
+                    }
+                    tabIndex={0}
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-[8px] bg-surface-2 text-ink">
+                        <FileText className="size-4" />
+                      </span>
+                      <span className="text-[0.7rem] font-bold text-muted">
+                        {pack.pages}
+                      </span>
+                    </div>
+                    <strong className="block text-[14px] font-bold text-ink">
+                      {pack.title}
+                    </strong>
+                    <span className="nsq-wrap mt-1 block text-[12px] leading-[1.5] text-muted">
+                      {pack.desc}
+                    </span>
+                    <span className="mt-auto pt-4">
+                      {pack.id === "blank" ? (
+                        <LicenseBadge
+                          state="licensed"
+                          size="sm"
+                          label={
+                            workspace.licensed
+                              ? "مساحة العمل"
+                              : entry.ready && entry.direct
+                                ? "فتح المحرر"
+                                : "فتح العرض"
+                          }
+                          title={
+                            workspace.licensed
+                              ? "الدخول إلى مساحة العمل"
+                              : "فتح المحرر"
+                          }
+                        />
+                      ) : (
+                        <LicenseBadge
                           state={workspace.licensed ? "licensed" : "locked"}
                           size="sm"
-                          label={workspace.licensed ? "متاح بترخيصك" : "استعراض القوالب"}
+                          label={
+                            workspace.licensed
+                              ? "متاح بترخيصك"
+                              : "استعراض القوالب"
+                          }
                           title="استعراض القوالب الحقيقية ومعاينتها وفق ترخيصك"
                         />
-                    }
-                  </span>
-              </button>
-            ))}
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* قوالب مميزة — the paid shelf, always populated (see PremiumTemplates). */}
+        {/* ── Premium templates ── */}
         <PremiumTemplates />
 
-        {/* ماذا تتضمن المنصة */}
-        <section className="border-t border-line/60 bg-surface-2 py-12 sm:py-14">
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الميزات والخدمات الأساسية</p>
-            <h2 className="nsq-title-sm mt-2.5 text-[24px]">أدوات متخصصة لإنتاج المستند المؤسسي</h2>
+        {/* ── Features ── */}
+        <section
+          ref={highlightsRef}
+          className="border-t border-line/60 bg-surface-2 py-[2.5rem] sm:py-[3.5rem]"
+          data-animate={highlightsVisible ? "reveal" : undefined}
+        >
+          <div className="nsq-container">
+            <p className="nsq-section-eyebrow">الميزات والخدمات الأساسية</p>
+            <h2 className="nsq-section-title mt-2.5 text-[1.5rem] sm:text-[1.75rem]">
+              أدوات متخصصة لإنتاج المستند المؤسسي
+            </h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {HIGHLIGHTS.map((h) => {
-                const Icon = h.icon;
-                return (
-                  <div key={h.title} className="rounded-[14px] border border-line/60 bg-surface p-5 transition-all duration-200 hover:border-line/80 hover:shadow-card">
-                    <div className="flex items-start gap-3">
-                      <span className="grid size-8 place-items-center rounded-[8px] border border-brand/10 bg-navy/5 text-brand">
-                        <Icon className="size-4" />
-                      </span>
-                      <div>
-                        <strong className="block text-[13px] font-bold text-ink">{h.title}</strong>
-                        <p className="mt-1 text-[12px] leading-6 text-muted">{h.desc}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {HIGHLIGHTS.map((h, i) => (
+                <FeatureCard
+                  key={h.title}
+                  icon={h.icon}
+                  title={h.title}
+                  desc={h.desc}
+                  revealOrder={i}
+                />
+              ))}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
-              <a href="/templates" className="inline-flex h-10 items-center rounded-[10px] bg-inverse px-5 text-[13px] font-bold text-on-inverse transition hover:bg-inverse-hover">استعراض القوالب</a>
-              <a href="/purchase" className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink transition hover:bg-surface-2">الخطط والأسعار</a>
+              <PremiumButton
+                variant="outline"
+                size="md"
+                onClick={() => window.location.assign("/templates")}
+              >
+                استعراض القوالب
+              </PremiumButton>
+              <PremiumButton
+                variant="outline"
+                size="md"
+                onClick={() => window.location.assign("/purchase")}
+              >
+                الخطط والأسعار
+              </PremiumButton>
             </div>
           </div>
         </section>
 
         <ProductEcosystem />
 
-        {/* الخطط والأسعار — مفتاح الفوترة وبطاقات قابلة للشراء */}
+        {/* ── Pricing ── */}
         <PricingSection onStartFree={startFree} />
       </main>
       <SiteFooter />

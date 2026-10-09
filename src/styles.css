@@ -303,6 +303,57 @@
    */
   --shadow-dropdown:
     0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+
+  /*
+   * Motion tokens — a single timing language so a card lift, a dropdown fade,
+   * and a section reveal all read as belonging to one product. Elevate (lift)
+   * is snappier than surface (color) to give a tactile response; state (on/off)
+   * is deliberately instant. Reduced-motion users lose the timing, not the
+   * state change.
+   */
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --motion-duration-xs: 80ms;
+  --motion-duration-sm: 140ms;
+  --motion-duration-md: 220ms;
+  --motion-duration-lg: 360ms;
+  --motion-duration-xl: 520ms;
+  --motion-elevate: 140ms var(--ease-standard);
+  --motion-surface: 200ms var(--ease-standard);
+  --motion-state: 80ms var(--ease-decelerate);
+  --motion-reveal: 520ms var(--ease-emphasized);
+
+  /*
+   * Typography scale — semantic sizes referenced by role, so the hierarchy
+   * adapts to theme and to `rem` scaling. `text-display-lg` is the page H1,
+   * `text-display-sm` the H2, down through supporting text sizes. All line
+   * heights are tuned for Arabic (the display face has tall ascenders that need
+   * extra breathing room).
+   */
+  --text-display-lg: 2.25rem;
+  --text-display-md: 1.75rem;
+  --text-display-sm: 1.375rem;
+  --text-heading: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-label: 0.8125rem;
+  --text-caption: 0.75rem;
+  --text-micro: 0.6875rem;
+
+  /*
+   * Site section rhythm — consistent vertical spacing so pages breathe as
+   * one composition instead of a stack of blocks with ad-hoc gutters.
+   */
+  --section-py: 3.5rem;
+   --section-py-sm: 2.5rem;
+   --container-max: 80rem;
+
+  /*
+   * Skeleton / shimmer surface — a neutral matte base with a
+   * directional light sweep on hover. Kept as a token so every
+   * placeholder reads as the same system, light and dark.
+   */
+  --color-skeleton: color-mix(in srgb, var(--color-line-2) 60%, transparent);
 }
 
 /* =====================================================================
@@ -6140,7 +6191,7 @@ button.license-badge-locked:focus-visible {
   display: none;
 }
 
-.product-nav-tab {
+ .product-nav-tab {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -6159,6 +6210,8 @@ button.license-badge-locked:focus-visible {
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
+  transition: var(--motion-surface);
+  transform-origin: center bottom;
 }
 
 .product-nav-icon {
@@ -6167,20 +6220,27 @@ button.license-badge-locked:focus-visible {
   flex: 0 0 auto;
 }
 
-.site-header .product-nav-tab:hover {
+.product-nav-tab:hover {
   background: var(--color-line-2);
   color: var(--color-ink);
+  transform: translateY(calc(-0.125rem * (var(--motion-elevate) != "none")));
 }
 
-.site-header .product-nav-tab.is-active {
+.product-nav-tab.is-active {
   background: var(--color-navy);
   color: var(--color-on-brand);
+  box-shadow: var(--shadow-card);
+  transform: translateY(calc(-0.125rem * (var(--motion-elevate) != "none")));
 }
 
-.site-header .product-nav-tab:focus-visible,
-.editor-ui .product-nav-tab:focus-visible {
+.product-nav-tab:focus-visible {
   outline: 2px solid var(--color-brand, var(--editor-accent));
   outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-nav-tab { transition: none; transform: none; }
+  .product-nav-tab:hover,
+  .product-nav-tab.is-active { transform: none; }
 }
 
 /* Editor strip sits under the document toolbar, still inside the header,
@@ -6946,4 +7006,518 @@ button.license-badge-locked:focus-visible {
   width: 44px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--color-brand), var(--color-gold));
+}
+
+/* =====================================================================
+ * PREMIUM SITE DESIGN SYSTEM
+ *
+ * Additive layer for the marketing / admin surface: typography polish,
+ * Arabic-first text handling, motion vocabulary, and reusable premium
+ * component classes. The editor chrome is left untouched unless a rule
+ * here carries an `.editor-ui` guard.
+ * ===================================================================== */
+
+/* ── Smooth scroll for in-page navigation ── */
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ── Arabic-first text handling ──────────────────────────────
+ *
+ * `word-break: keep-all` keeps Arabic words (which have no spaces between
+ * every word) intact, while `overflow-wrap: break-word` lets genuinely
+ * long identifiers — URLs, hashes, filenames — wrap without forcing a line
+ * break inside an Arabic word. Applied at the root so every label, toast,
+ * dialog and status message inherits correct wrapping instead of each
+ * component redeclaring it.
+ */
+:root {
+  --arabic-line-height: 1.55;
+  --arabic-line-height-tight: 1.35;
+  --arabic-line-height-loose: 1.65;
+}
+
+html[dir="rtl"] :where(.text-ink, .text-muted, .text-brand, .text-inverse, [dir=""]) {
+  line-height: var(--arabic-line-height);
+}
+
+/*
+ * The site chrome body copy. Arabic needs extra leading because the display
+ * face has tall ascenders and kashida connections; the lede already uses 2.0.
+ * Re-assert here so body paragraphs never collapse to a single token.
+ */
+body:not(.is-editor) {
+  line-height: var(--arabic-line-height);
+}
+
+/* Shared wrap rule for labels, badges, pills — one declaration, every surface. */
+.nsq-wrap {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/*
+ * Technical strings (URLs, IDs, filenames) inside Arabic text.
+ * These SHOULD break aggressively — a long hash that hangs out of a toast
+ * is worse than one that wraps mid-string.
+ */
+.nsq-tech {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Site container helper ── */
+.nsq-container {
+  width: min(100% - 2rem, var(--container-max));
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) {
+  .nsq-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* ── Section rhythm ── */
+.nsq-section {
+  scroll-margin-block-start: env(safe-area-inset-top, 0px);
+}
+.nsq-section > :first-child {
+  margin-block-start: 0;
+}
+.nsq-section > :last-child {
+  margin-block-end: 0;
+}
+
+/* ── Premium surface cards ──────────────────────────────
+ *
+ * A single card family for every marketing surface. Cards use a subtle
+ * inner ring instead of a hard border so they read as paper on a wash,
+ * and lift with a single shared shadow on hover. The `is-interactive`
+ * variant adds the cursor and the lift; the `is-active` variant marks a
+ * selected state (used by plan cards, template categories).
+ */
+.nsq-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: var(--motion-surface);
+}
+html.dark .nsq-card {
+  box-shadow: var(--shadow-card-dark);
+}
+.nsq-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  translate: 0 calc(-0.125rem * (var(--motion-elevate) != "none"));
+}
+html.dark .nsq-card:hover {
+  box-shadow: var(--shadow-card-dark-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nsq-card:hover {
+    translate: none;
+  }
+}
+.nsq-card.is-interactive {
+  cursor: pointer;
+}
+.nsq-card.is-active {
+  border-color: var(--color-navy);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 15%, transparent);
+}
+.nsq-card-content {
+  padding: var(--card-padding, 1.25rem);
+}
+.nsq-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--card-padding, 1.25rem) var(--card-padding, 1.25rem) 0;
+}
+.nsq-card-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.nsq-card-description {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+/* ── Premium button ────────────────────────────── */
+.nsq-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 1.125rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.875rem;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+  transition: var(--motion-elevate);
+  text-align: center;
+}
+.nsq-btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.nsq-btn-primary {
+  background: var(--color-navy);
+  color: var(--color-on-brand);
+}
+.nsq-btn-primary:hover {
+  background: var(--color-navy-2);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-navy) 35%, transparent);
+}
+.nsq-btn-primary:active {
+  transform: translateY(1px);
+}
+.nsq-btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+}
+.nsq-btn-outline:hover {
+  background: var(--color-line-2);
+  border-color: var(--color-line-2);
+}
+.nsq-btn-ghost {
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+}
+.nsq-btn-ghost:hover {
+  color: var(--color-ink);
+  background: var(--color-line-2);
+}
+.nsq-btn-sm {
+  min-height: 34px;
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+}
+.nsq-btn-loading {
+  cursor: wait;
+  opacity: 0.7;
+}
+.nsq-btn:disabled,
+.nsq-btn[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── Premium badge / pill ── */
+.nsq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline: 0.55rem;
+  padding-block: 0.15rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.nsq-badge--brand {
+  background: var(--color-navy);
+  color: var(--color-on-brand);
+}
+.nsq-badge--gold {
+  background: var(--color-gold);
+  color: var(--color-on-gold);
+}
+.nsq-badge--neutral {
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+  border: 1px solid var(--color-line);
+}
+
+/* ── Premium toast / notification ──────────────────────────────
+ *
+ * Refined from the default sonner theme. Surfaces use role tokens so dark
+ * mode adapts; the icon sits in its own column so Arabic copy never collides
+ * with a glyph. Width is clamped so an iPad toast never spans the full screen
+ * or gets clipped.
+ */
+.nsq-toast {
+  max-width: min(90vw, 22rem);
+  gap: 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: var(--arabic-line-height);
+  word-break: keep-all;
+}
+.nsq-toast .nsq-toast-icon {
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  color: var(--color-brand);
+}
+.nsq-toast .nsq-toast-close {
+  opacity: 0.4;
+  transition: opacity 140ms ease;
+  cursor: pointer;
+}
+.nsq-toast .nsq-toast-close:hover {
+  opacity: 1;
+}
+
+/* ── Premium status pill (sync / offline) ────────────────────────────── */
+.nsq-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 28px;
+  min-width: min-content;
+  padding-inline: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  font-size: 0.725rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: var(--shadow-card);
+}
+.nsq-status-pill .nsq-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+.nsq-status-pill.is-ok {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+.nsq-status-pill.is-pending {
+  color: var(--color-brand);
+  border-color: var(--color-brand);
+}
+.nsq-status-pill.is-warn {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+.nsq-status-pill.is-danger {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* ── Premium preparation / loading panel ──────────────────────────────
+ *
+ * Balanced status panel for AI processing, sync, and preparation states.
+ * Uses a calm icon, a concise Arabic message, and optional progress.
+ * Never shows a fake percentage — only measurable progress.
+ */
+.nsq-prep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2.25rem 1.25rem;
+}
+.nsq-prep-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--color-navy / 0.06);
+  color: var(--color-brand);
+}
+.nsq-prep-title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-ink);
+}
+.nsq-prep-text {
+  max-width: 26rem;
+  font-size: var(--text-body);
+  line-height: var(--arabic-line-height);
+  color: var(--color-muted);
+}
+.nsq-prep-progress {
+  width: min(100%, 16rem);
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-line-2);
+  overflow: hidden;
+}
+.nsq-prep-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-navy);
+  transition: width 360ms var(--ease-standard);
+}
+
+/* ── Entrance reveal ──────────────────────────────
+ *
+ * `data-animate` with a `--reveal-delay` custom property gives staggered
+ * section reveals. Honors `prefers-reduced-motion`.
+ */
+[data-animate] {
+  opacity: 0;
+  transform: translateY(1rem);
+  transition: opacity var(--motion-reveal) var(--reveal-delay, 0ms),
+    transform var(--motion-reveal) var(--reveal-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-animate] {
+    transition: none;
+  }
+}
+[data-animate].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+[data-animate="fade"] {
+  transform: none;
+  transition: opacity var(--motion-reveal) var(--reveal-delay, 0ms);
+}
+
+/* Subtle pulse for processing states (PreparationPanel). */
+@keyframes nsq-pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+.animate-pulse-subtle {
+  animation: nsq-pulse-subtle 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-subtle {
+    animation: none;
+  }
+}
+
+/* ── Premium section heading ────────────────────────────── */
+.nsq-section-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-ink);
+}
+.nsq-section-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--color-brand);
+  text-transform: uppercase;
+}
+.nsq-section-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin-inline-end: 0.5rem;
+  background: var(--color-brand);
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+/* ── Premium input ────────────────────────────── */
+.nsq-input {
+  width: 100%;
+  min-height: 44px;
+  padding-inline: 0.875rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: var(--arabic-line-height);
+  outline: none;
+  transition: var(--motion-surface);
+}
+.nsq-input:focus-visible {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent);
+}
+.nsq-input::placeholder {
+  color: var(--color-muted);
+  opacity: 0.85;
+}
+
+/* ── Premium divider ── */
+.nsq-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-line) 50%,
+    transparent
+  );
+}
+
+/* ── Premium stat / KPI ── */
+.nsq-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.nsq-stat-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-ink);
+}
+.nsq-stat-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+/* ── Skeleton shimmer animation ── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+@layer utilities {
+  .bg-skeleton { background-color: var(--color-skeleton); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-skeleton { animation: none; }
+}
+
+/* ── Mobile scroll anchoring for the page ── */
+@media (max-width: 767.95px) {
+  html {
+    scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
+  }
 }

@@ -14,8 +14,15 @@ export function Skeleton({ className, rounded = "rounded-[8px]" }: { className?:
   return (
     <span
       aria-hidden
-      className={cn("block animate-pulse bg-line-2", rounded, className)}
-    />
+      className={cn(
+        "relative block overflow-hidden bg-skeleton text-transparent",
+        "before:absolute before:inset-0 before:translate-x-[-100%] before:animate-[shimmer_1.8s_ease-in-out_infinite] before:border-t before:border-transparent/30 before:bg-gradient-to-r before:from-transparent before:via-white/40 before:to-transparent dark:before:via-zinc-700/40",
+        rounded,
+        className,
+      )}
+    >
+      <span aria-hidden>placeholder</span>
+    </span>
   );
 }
 
@@ -72,13 +79,15 @@ export function EditorWorkspaceSkeleton() {
 /** Marketing / dashboard page placeholder used while a route resolves. */
 export function PageSkeleton({ label = "جارٍ التحميل…" }: { label?: string }) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6" role="status" aria-live="polite">
-      <Skeleton className="h-7 w-56" />
-      <Skeleton className="mt-3 h-4 w-full max-w-xl" />
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-32 w-full" rounded="rounded-[12px]" />
-        ))}
+    <div className="nsq-section py-[3rem] sm:py-[4rem]" role="status" aria-live="polite">
+      <div className="nsq-container">
+        <Skeleton className="h-9 w-56" rounded="rounded-[10px]" />
+        <Skeleton className="mt-3 h-4 w-full max-w-xl" />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-36 w-full" rounded="rounded-[12px]" />
+          ))}
+        </div>
       </div>
       <span className="sr-only">{label}</span>
     </div>
