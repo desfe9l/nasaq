@@ -274,7 +274,11 @@ async function waitForEditorReady() {
 }
 
 // 1. Open saved project -> UI focus without edit -> leave -> no dialog.
-await page.goto(`${base}/editor`);
+// `/editor` without parameters routes to the creation screen since the
+// durable-URL overhaul (#124); `?template=official` is the direct editor
+// boot that restores the author's last document — the behavior this
+// suite exercises.
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 
 const savedName = await page.evaluate(() => {
@@ -306,7 +310,7 @@ await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 1
 assert.equal(await page.locator("#unsaved-leave-title").count(), 0);
 
 // 8 & 9. Edit project -> Leave -> Cancel (إلغاء) & Continue Without Saving (متابعة بدون حفظ).
-await page.goto(`${base}/editor`);
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 await page.evaluate(async () => {
   const store = window.__store.getState();
@@ -333,7 +337,7 @@ if (!(await page.getByRole("menuitem", { name: "مساحة العمل" }).isVisi
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"));
-await page.goto(`${base}/editor`);
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 await page.waitForFunction(() => window.__store.getState().name !== "مسودة غير محفوظة");
 assert.notEqual(await page.evaluate(() => window.__store.getState().name), "مسودة غير محفوظة");
@@ -396,7 +400,7 @@ await page.getByRole("dialog", { name: "لديك تغييرات غير محفو�
 await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 15000 });
 
-await page.goto(`${base}/editor`);
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 assert.equal(await page.evaluate(() => window.__store.getState().name), "محفوظ عبر الرجوع");
 assert.equal(await page.evaluate(() => window.__store.getState().saveState), "saved");

@@ -159,7 +159,12 @@ try {
     page = await author.newPage();
   page.on('console', msg => console.log('BROWSER:', msg.text()));
   page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
-  await page.goto(`${base}/editor?template=official&showcase=1`);
+  // The signed-in ACCOUNT flow, not the showcase preview: a showcase boot
+  // (`?showcase=1`) deliberately adopts no session owner and refuses native
+  // imports, so this test boots the persisting editor with the mocked session.
+  // (Pinned in Node by src/lib/nsq/intake-boot-signed-in.test.ts and
+  // src/lib/nsq/intake-boot-showcase.test.ts.)
+  await page.goto(`${base}/editor?template=official`);
   await ready(page);
   await page.waitForFunction(
     () => window.__nsqStore.getState().sessionOwner === "nsq-test-user",
@@ -276,9 +281,11 @@ try {
     };
     useEditor.getState().setName("Unsaved before native import");
     const file = await writeNsq({ project, activePageIndex: 1 });
-    // Allow time for any autosave of the template document to complete
-    await new Promise((r) => setTimeout(r, 600));
-    // Clear any autosaved template project before importing
+    // Settle the dirty scratch document deterministically (instead of racing
+    // the 400ms autosave), then clear the library so the import is counted
+    // against an empty FREE allowance — otherwise the scratch row occupies
+    // the single free project slot and the import is refused by design.
+    await useEditor.getState().saveNow();
     await (await import("/src/lib/editor/storage.ts")).clearAllProjects();
     if (!(await importReadResult(await readNsq(file.blob))))
       throw Error(
@@ -289,6 +296,12 @@ try {
             actual: (
               await import("/src/lib/editor/storage-owner.ts")
             ).getStorageOwner(),
+            saveState: useEditor.getState().saveState,
+            showcase: useEditor.getState().showcase,
+            entitlementsResolved: useEditor.getState().entitlementsResolved,
+            savedProjects: (
+              await (await import("/src/lib/editor/storage.ts")).listProjects()
+            ).length,
           }),
       );
     useEditor.getState().setActivePage("cover");

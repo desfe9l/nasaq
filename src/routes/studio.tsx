@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { AITemplateStudio } from "@/components/studio/AITemplateStudio";
+import { searchString } from "@/lib/router-search";
 
 export const Route = createFileRoute("/studio")({
   ssr: false,
   head: () => ({ meta: [{ title: "استوديو التوليد بالذكاء الاصطناعي | نَسَق" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    prompt: typeof search.prompt === "string" ? search.prompt : undefined,
+    prompt: searchString(search.prompt),
   }),
   component: StudioRoutePage,
 });

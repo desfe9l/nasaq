@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TemplatesPage } from "@/components/site/TemplatesPage";
+import { searchString } from "@/lib/router-search";
 
 /**
  * `/templates` — the template gallery.
@@ -12,8 +13,8 @@ export const Route = createFileRoute("/templates/")({
   ssr: false,
   head: () => ({ meta: [{ title: "القوالب | نَسَق" }] }),
   validateSearch: (search: Record<string, unknown>) => ({
-    pill: typeof search.pill === "string" ? search.pill : undefined,
-    q: typeof search.q === "string" ? search.q : undefined,
+    pill: searchString(search.pill),
+    q: searchString(search.q),
   }),
   component: TemplatesRoute,
 });
