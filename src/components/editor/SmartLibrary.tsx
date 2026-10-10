@@ -14,7 +14,6 @@ import {
   SHAPE_TOOLS,
   THEMES,
   type CanvasEl,
-  type ElType,
   type ProgressPreset,
   type ThemeId,
 } from "@/lib/editor/model";
@@ -943,7 +942,6 @@ export function SmartLibraryPanel({
     | "backgrounds"
   >("library", { shapes: true, icons: true });
   const addElement = useEditor((s) => s.addElement);
-  const addElementAt = useEditor((s) => s.addElementAt);
   const removeCustomIcon = useEditor((s) => s.removeCustomIcon);
   const customIcons = useEditor((s) => s.customIcons);
   const activePage = useEditor((s) =>

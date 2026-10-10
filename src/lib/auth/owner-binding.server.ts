@@ -282,7 +282,6 @@ export async function legacyEmailForId(sql: Sql, id: string): Promise<string | n
     /* projection unavailable — fall through to the R2 state */
   }
   try {
-    const { r2LegacySource } = await import("./legacy-accounts.server.ts");
     const { getObjectStorage } = await import("../storage/r2.server.ts");
     const storage = getObjectStorage();
     if (!storage) return null;

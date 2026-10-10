@@ -384,7 +384,7 @@ export function EditorApp({
     if (hydrated) {
       window.__nsqStore = useEditor;
     }
-  }, [hydrated, useEditor]);
+  }, [hydrated]);
 
   /*
    * One document, one address. When the author switches documents INSIDE the

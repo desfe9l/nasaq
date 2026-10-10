@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutTemplate, Share2, Lock, FileText, ArrowLeft, Copy, Check, Sparkles, Eye } from "lucide-react";
+import { LayoutTemplate, Share2, FileText, ArrowLeft, Copy, Check, Sparkles, Eye } from "lucide-react";
 import { LicenseBadge, LicenseBadgeIcon } from "./LicenseBadge";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";

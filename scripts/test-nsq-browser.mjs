@@ -2,9 +2,8 @@
  * not real OAuth; IndexedDB, browser downloads, font loading and editor are real.
  * BROWSER_EXECUTABLE / TEST_FONT_FILE / NSQ_TEST_URL override local defaults. */
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { chromium } from "playwright";
-import JSZip from "jszip";
 const base = process.env.NSQ_TEST_URL || "http://127.0.0.1:8080";
 const output = ".cache/nsq-test";
 mkdirSync(output, { recursive: true });
@@ -110,38 +109,6 @@ async function ready(page) {
   }
   throw new Error("Timed out waiting for hydration");
 }
-async function state(page) {
-  return page.evaluate(async () => {
-    const { useEditor } = await import("/src/lib/editor/store.ts");
-    const s = useEditor.getState();
-    return {
-      id: s.id,
-      name: s.name,
-      pages: s.pages,
-      sessionOwner: s.sessionOwner,
-      settings: {
-        printGuides: s.printGuides,
-        showGrid: s.showGrid,
-        snapGrid: s.snapGrid,
-        snapElements: s.snapElements,
-      },
-      embeddedFonts: s.embeddedFonts,
-    };
-  });
-}
-async function pending(page) {
-  return page.evaluate(async () => {
-    const e = await (await import("/src/lib/nsq/inbox.ts")).getPending();
-    return (
-      e && {
-        id: e.id,
-        size: e.size,
-        title: e.summary.title,
-        thumbnail: e.summary.thumbnail,
-      }
-    );
-  });
-}
 async function download(page) {
   console.log("[download] Starting download via direct call");
   const success = await page.evaluate(async () => {
@@ -177,7 +144,7 @@ try {
     console.log("[TEST] clearAllProjects completed");
   });
   console.log("[TEST] Storage cleared");
-  const source = await page.evaluate(async (font) => {
+  await page.evaluate(async (font) => {
     const { writeNsq, readNsq } = await import("/src/lib/nsq/package.ts");
     const { importReadResult } = await import("/src/lib/nsq/intake.ts");
     const { useEditor } = await import("/src/lib/editor/store.ts");
@@ -322,7 +289,7 @@ try {
   checks.push(
     "dirty current project saved before native replacement, including first assigned library ID",
   );
-  const saved = await download(page);
+  await download(page);
   // File verification skipped in headless mode due to blob capture complexity.
   // The download succeeds (verified above), which confirms the export pipeline works.
   checks.push("NSQ export completes successfully");

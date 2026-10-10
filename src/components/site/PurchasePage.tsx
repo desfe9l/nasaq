@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { WifiOff, HardDriveDownload } from "lucide-react";
+import { WifiOff } from "lucide-react";
 import { CheckCircle2, ChevronDown, CreditCard, Key, ShieldCheck, Lock } from "lucide-react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";

@@ -495,7 +495,6 @@ export async function saveProject(project: Project): Promise<Project> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const ownerId = getStorageOwner();
   const db = await openDb();
   if (!db) {
     if (fallback.get(id)) fallback.remove(id);

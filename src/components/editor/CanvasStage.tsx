@@ -20,7 +20,6 @@ import {
   pageSize,
   type Box,
   type CanvasEl,
-  type ElType,
   type Page,
 } from "@/lib/editor/model";
 import {
@@ -33,7 +32,6 @@ import {
 import { useEditor } from "@/lib/editor/store";
 import {
   marqueeForPage,
-  marqueeHitsBox,
   useInteraction,
 } from "@/lib/editor/interaction-store";
 import {
@@ -45,7 +43,6 @@ import {
   type SelectionRegion,
 } from "@/lib/editor/marquee";
 import {
-  BRUSH_LIMITS,
   toolState,
   useTools,
 } from "@/lib/editor/tool-store";

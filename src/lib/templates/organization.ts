@@ -41,7 +41,6 @@ import {
 import type { TemplateCategoryId } from "@/lib/editor/templates";
 import {
   canonicalCategoryId,
-  isKnownTemplateCategoryId,
   isTemplatePlaceholderName,
   knownCategoryLabel,
   templateCategoryLabel,
