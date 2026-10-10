@@ -624,7 +624,7 @@ assert.equal(
 
 await page.getByRole("button", { name: "ملف المشروع", exact: true }).click();
 const menu = page.getByRole("menu", { name: "ملف المشروع" });
-await menu.getByRole("menuitem", { name: /فتح ملف نَسَق/ }).waitFor();
+await menu.getByRole("menuitem", { name: /فتح مشروع أو استيراد ملف/ }).waitFor();
 assert.equal(await menu.getByRole("menuitem", { name: "حفظ كقالب" }).count(), 0);
 assert.equal(await menu.getByRole("menuitem", { name: "حفظ في قوالبي" }).count(), 0);
 assert.deepEqual(errors, []);
