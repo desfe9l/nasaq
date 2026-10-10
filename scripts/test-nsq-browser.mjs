@@ -164,6 +164,14 @@ try {
   await page.waitForFunction(
     () => window.__nsqStore.getState().sessionOwner === "nsq-test-user",
   );
+  // Clear existing projects to ensure clean test state
+  console.log("[TEST] Clearing existing projects");
+  await page.evaluate(async () => {
+    const { clearAllProjects } = await import("/src/lib/editor/storage.ts");
+    await clearAllProjects();
+    console.log("[TEST] clearAllProjects completed");
+  });
+  console.log("[TEST] Storage cleared");
   const source = await page.evaluate(async (font) => {
     const { writeNsq, readNsq } = await import("/src/lib/nsq/package.ts");
     const { importReadResult } = await import("/src/lib/nsq/intake.ts");
@@ -268,6 +276,10 @@ try {
     };
     useEditor.getState().setName("Unsaved before native import");
     const file = await writeNsq({ project, activePageIndex: 1 });
+    // Allow time for any autosave of the template document to complete
+    await new Promise((r) => setTimeout(r, 600));
+    // Clear any autosaved template project before importing
+    await (await import("/src/lib/editor/storage.ts")).clearAllProjects();
     if (!(await importReadResult(await readNsq(file.blob))))
       throw Error(
         "fixture import failed: " +
