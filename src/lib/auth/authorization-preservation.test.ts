@@ -36,7 +36,6 @@ const {
 const OWNER = { id: "owner-1", email: "owner@example.com", emailVerified: true };
 const ADMIN = { id: "admin-1", email: "admin@example.com", emailVerified: true };
 const REGULAR = { id: "user-1", email: "user@example.com", emailVerified: true };
-const UNVERIFIED = { id: "user-2", email: "user@example.com", emailVerified: false };
 
 // ── Owner recognition ────────────────────────────────────────────────────────
 

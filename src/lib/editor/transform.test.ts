@@ -522,7 +522,7 @@ test("applyResizeSnap suspends for a rotated box (no phantom-edge snap)", () => 
 
   // Exactly 0 (mod 360) still snaps.
   const at0 = { x: 10, y: 10, w: 88.4, h: 30 };
-  const g0 = applyResizeSnap(at0, "se", others, size, false, true, 1, 0);
+  applyResizeSnap(at0, "se", others, size, false, true, 1, 0);
   assert.equal(at0.w, 90);
   const at360 = { x: 10, y: 10, w: 88.4, h: 30 };
   const g360 = applyResizeSnap(at360, "se", others, size, false, true, 1, 360);

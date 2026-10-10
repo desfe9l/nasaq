@@ -196,7 +196,6 @@ test("editorial composition is not the same cover as the institutional report", 
 
 import { parsePrompt } from "./prompt-analyzer";
 import { generateDesignFromPrompt } from "./pipeline";
-import { generateVariations } from "./variations";
 
 test("prompt analyzer correctly parses prompt intent, docType, and page count", () => {
   const cyber = parsePrompt("صمم تقريرًا رسميًا عن الأمن السيبراني");

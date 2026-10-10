@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-  Check,
   CheckCircle2,
   Database,
-  Filter,
   Plus,
   RotateCcw,
   Search,
-  SlidersHorizontal,
-  Sparkles,
   Trash2,
   X,
   Eye,
-  Settings,
-  Layers,
-  FileCheck,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -72,7 +65,7 @@ export function AdminStudioKnowledgeBase() {
       ]);
       if (refRes.ok) setReferences(refRes.references);
       if (setRes.ok) setSettings(setRes.settings);
-    } catch (err) {
+    } catch {
       toast.error("تعذر تحميل قاعدة المعرفة");
     } finally {
       setLoading(false);

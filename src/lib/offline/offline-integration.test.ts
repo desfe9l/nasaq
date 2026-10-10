@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { setStorageOwner, getStorageOwner, ANON_OWNER } from "@/lib/editor/storage-owner";
+import { setStorageOwner, ANON_OWNER } from "@/lib/editor/storage-owner";
 import { saveProject, getProject, listProjects, deleteProject } from "@/lib/editor/storage";
 import { createProject } from "@/lib/editor/templates";
 import { cacheEntitlement, getCachedEntitlement, isEntitlementValidOffline } from "./entitlement-cache";
@@ -113,7 +113,7 @@ test("offline-first critical UX: online -> offline edit -> reconnect sync", asyn
 
   // Step 3: Internet returns → automatic sync completes
   setOnline(true);
-  const result = await processSyncQueue();
+  await processSyncQueue();
   // Since cloud not configured, queue should drain locally (considered success)
   // Even without cloud, process should succeed and clear queue
   // Our queue's cloud sync returns not_configured -> success
@@ -162,7 +162,7 @@ test("account isolation: never expose cached projects, assets, templates, or wor
   const bobEnt = await getCachedEntitlement("bob");
   assert.equal(bobEnt, null, "bob must not see alice entitlement");
   // Also check that querying alice's snapshot while as bob doesn't leak
-  const aliceSnapWhileBob = await getWorkspaceSnapshot("alice");
+  await getWorkspaceSnapshot("alice");
   // Direct read with explicit alice owner should work only if explicitly requested, but listPendingQueue should be isolated
   // Ensure queue isolation
   await enqueueSync("project:create", { id: "bob-proj", name: "Bob" }, { dedupeKey: "project:create:bob-proj" });
@@ -247,11 +247,6 @@ test("remote/local version conflicts safely without silently overwriting newer r
 
 test("offline queue prevents duplicate sync operations (dedupe)", async () => {
   setStorageOwner("dedupe-user");
-  // Clear any prior
-  const before = await listPendingQueue("dedupe-user");
-  for (const e of before) {
-    // exhaust via direct IDB delete is not exposed, but we can process
-  }
   // Use unique dedupeKey to avoid interference
   const key = `test-dedupe-${Date.now()}`;
   await enqueueSync("project:rename", { id: "p1", name: "a" }, { dedupeKey: key });

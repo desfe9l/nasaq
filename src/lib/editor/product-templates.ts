@@ -133,13 +133,6 @@ function shape(
   });
 }
 
-function rule(target: Page, y: number, x = 17, w = 176, color = LINE) {
-  return add(target, "line", "فاصل قابل للتحرير", x, y, w, 0, "", {
-    color,
-    stroke: 0.35,
-  });
-}
-
 function resumePage(language: "ar" | "en"): Page {
   const arabic = language === "ar";
   const target = page(arabic ? "السيرة الذاتية" : "Resume");

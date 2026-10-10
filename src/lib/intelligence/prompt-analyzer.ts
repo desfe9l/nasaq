@@ -1,6 +1,5 @@
 import type { DesignComposition } from "@/lib/ai/design-composition";
 import type { DesignFormat, DesignStyle, PaletteRoles } from "./schema";
-import { paletteForStyle } from "./dna";
 import type { PageLayoutDirective } from "./layout-variety";
 
 export interface PromptAnalysis {
@@ -125,7 +124,6 @@ const CORPORATE_BLUE: PaletteRoles = {
 
 export function parsePrompt(prompt: string): PromptAnalysis {
   const clean = prompt.trim();
-  const lower = clean.toLowerCase();
 
   // 1. Detect page count
   let pages = 0;

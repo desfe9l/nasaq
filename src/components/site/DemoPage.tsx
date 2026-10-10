@@ -1,6 +1,5 @@
 import { CheckCircle2, LockKeyhole, Play, Sparkles } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { useEditor } from "@/lib/editor/store";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
@@ -10,7 +9,6 @@ const DEMO_ITEMS = ["مشروع واحد قابل للتحرير", "حتى 3 ص�
 const FULL_ITEMS = ["مكتبة القوالب كاملة", "مشاريع وصفحات بلا حد تجريبي", "Word وPowerPoint وHTML وملف المشروع", "هوية مؤسسية وخيارات فريق قابلة للتفعيل"];
 
 export function DemoPage() {
-  const createProject = useEditor((state) => state.createProject);
   const { user, isPending } = useCurrentUserState();
   const { entry, openNewDocument } = useEditorEntry();
   // A signed-in account reaches this page only by an old link or a click made

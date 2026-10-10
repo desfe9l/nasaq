@@ -19,7 +19,6 @@ import {
   adminSuspendCustomer,
   adminUpdatePaymentSettings,
   adminUpdatePlan,
-  amIAdmin,
   getAdminAuditLog,
   getAdminCustomers,
   getAdminPaymentRequests,

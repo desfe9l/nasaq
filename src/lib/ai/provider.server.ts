@@ -291,7 +291,7 @@ async function requestGeminiModel(apiKey: string, model: string, request: Gemini
             }),
           },
         );
-      } catch (error) {
+      } catch {
         if (request.signal?.aborted) throw new GeminiProviderError("provider_aborted");
         if (timedOut) throw new GeminiProviderError("provider_timeout");
         if (attempt + 1 < maxAttempts) {

@@ -14,7 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBrandIdentity, type BrandIdentityState } from "@/lib/product/use-brand-identity";
 import {
   ArrowLeftRight,
-  CheckCircle2,
   ClipboardCheck,
   FileUp,
   FolderOpen,
@@ -28,8 +27,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  Undo2,
-  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -41,7 +38,6 @@ import { classifyImport } from "@/lib/editor/import/detect";
 import type { TemplateImport } from "@/lib/editor/import/run";
 import { inspectProject } from "@/lib/editor/import/inspect";
 import {
-  repairBreakdown,
   repairProject,
   type RepairFix,
   type RepairCounts,
@@ -56,7 +52,7 @@ import { cn } from "@/lib/utils";
 import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 import { DocumentPreview } from "./PagePreview";
 import { RepairCard } from "./RepairCard";
-import { btn, ghost, goldBtn } from "./buttons";
+import { btn, ghost } from "./buttons";
 import { ImportInspector } from "./ImportInspector";
 import {
   buildFinalProject,

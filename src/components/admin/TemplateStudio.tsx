@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Database, Layers } from "lucide-react";
+import { Sparkles, Database } from "lucide-react";
 import { AITemplateStudio } from "@/components/studio/AITemplateStudio";
 import { AdminStudioKnowledgeBase } from "@/components/admin/AdminStudioKnowledgeBase";
 import { cn } from "@/lib/utils";
