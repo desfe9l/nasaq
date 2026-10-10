@@ -16,7 +16,6 @@ import JSZip from "jszip";
 const output = ".cache/ai-image-export";
 mkdirSync(output, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: process.env.BROWSER_EXECUTABLE || "/usr/bin/chromium",
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });
 try {
