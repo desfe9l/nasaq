@@ -1195,6 +1195,7 @@ export function CanvasStage({
       framePending = false;
       const op = opRef.current;
       if (!op || heldLong) return;
+       if (!decided) return;
       /*
        * ONE modifier rule for every input: the keyboard's Shift/Alt, or the
        * held second finger a touch/Pencil gesture reports through the pointer
