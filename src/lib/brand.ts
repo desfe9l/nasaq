@@ -1,11 +1,10 @@
 /**
  * Single source of truth for the platform identity.
  *
- * The platform speaks institutionally: `owner` / `developer` carry the team
- * identity that appears in public copy and in exported document metadata, never
- * an individual's name. Pick the phrasing per context — `team` for authorship
- * ("فريق نَسَق"), `administration` where the platform itself is the actor, and
- * `workTeam` for a generic crew.
+ * The platform speaks institutionally while preserving the requested public
+ * creator attribution. `owner` / `developer` are used in public copy and
+ * exported document metadata; `team` / `administration` remain available for
+ * operational copy where NASAQ itself is the actor.
  *
  * The phone number is an institutional contact channel: it is rendered only
  * where a visitor is actively looking for the platform (contact page, about
@@ -13,10 +12,10 @@
  */
 
 export const BRAND = {
-  owner: "فريق نَسَق",
-  developer: "فريق نَسَق",
-  developerEn: "NASAQ Team",
-  /** Institutional actors — use per context instead of a personal name. */
+  owner: "فيصل المضياني",
+  developer: "المصمم والمطور فيصل المضياني",
+  developerEn: "Developed by فيصل المضياني",
+  /** Institutional actors — use these for service and administration copy. */
   team: "فريق نَسَق",
   administration: "إدارة نَسَق",
   workTeam: "فريق العمل",

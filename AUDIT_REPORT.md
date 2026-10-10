@@ -1,165 +1,99 @@
-# NASAQ | نَسَق — Audit & Implementation Report
+# NASAQ | نَسَق — Master production audit and release report
 
-## A. What was already working (verified from codebase)
-- TanStack Start framework with React 19, Tailwind v4, TypeScript
-- Existing editor architecture (canvas, selection, multi-select, layers, shapes, text, images, tables, templates, export)
-- IndexedDB storage (DB_VERSION=3) with localStorage fallback for projects/assets/settings
-- PGLite (local) / PostgreSQL (production via NASAQ_PRIMARY_DATABASE_URL) database architecture
-- better-auth authentication pre-wired (client, server, middleware, gates)
-- Office export writers: PPTX (pptxgenjs) and DOCX (docx) with editable content preservation
-- PNG/JPG/PDF/SVG export via html2canvas + jspdf
-- Brand identity file (`src/lib/brand.ts`) — updated to NASAQ
-- OG identity (`src/lib/og/site.json`) — updated
-- Design tokens in `styles.css` (navy, green, gold palette)
-- Template system with structured template data (`templates.ts`)
-- Project persistence (`storage.ts` with IndexedDB + migration support)
-- Shape library (`shapes.ts` with rect, rounded, circle, ellipse, triangle, diamond, star, seal, etc.)
-- Arabic text utilities (`arabic.ts` with numeral conversion, tashkeel stripping, punctuation)
-- Multi-page support (`model.ts` with Page interface)
-- Undo/redo architecture in store
-- Responsive layout framework (SiteChrome, editor components)
+**Audit date:** 2026-10-10
+**Repository:** `desfe9l/nasaq`
+**Audited branch:** `main`
+**Baseline commit:** `29211729849f5ce03f223388a7734787b4a71097`
+**Production:** https://nasaq-sa.vercel.app
+**Latest observed production build:** `2921172-mv1u35m7`
 
-## B. What was changed (this session)
-- `src/lib/brand.ts`: Updated to NASAQ identity (owner: فيصل سعود العنزي, platform: نَسَق, tagline: منصة التصميم والتحرير المؤسسي)
-- `src/lib/og/site.json`: Updated title and color (#006C35 emerald)
-- TypeScript build passes (`npm run typecheck` clean)
-- Startup script (`startup.sh`) preserved and verified
+## Executive summary
 
-## C. Security audit findings (verified)
-- `.env.example` exists but does NOT contain secrets (only commented NASAQ_PRIMARY_DATABASE_URL, LICENSE_ISSUER_URL, etc.)
-- `.gitignore` protects `.env` files
-- No hardcoded passwords or API keys found in source
-- Auth uses `better-auth` (not a mock frontend-only system)
-- Server-side authorization middleware exists (`auth/middleware.ts`, `auth/isolation.server.ts`)
-- Customer data isolation must be enforced server-side (verified architecture supports this)
-- GitHub repository remains private (no public exposure in code)
-- Vercel remains the deployment target (no GitHub Pages migration)
+The current `main` revision is deployed to Vercel and serves the public homepage, editor entry, templates, authentication health endpoint, and owner-vault route. The homepage and templates pages were rendered in the sandbox browser with no console errors; the editor route was reachable and rendered its protected start surface. The production `/api/app-version` response matches the deployed `main` SHA prefix.
 
-## D. Commercial/account system (verified architecture)
-- Product model (`src/lib/product/product.ts`) defines: `FREE`, `PENDING`, `ACTIVE`, `EXPIRED`, `SUSPENDED`
-- License/entitlement model exists with `FeatureEntitlements` (maxProjects, premiumTemplates, advancedExports, brandKit, etc.)
-- Plan configuration is centralized (not scattered)
-- Manual payment architecture is the intended model (no Stripe/PayPal/Mada added)
-- Payment request model fields match specification (id, userId, planId, amount, currency, paymentReference, status, etc.)
-- No fake payment verification implemented
-- No DRM or license keys implemented
+The repository contains a mature local-first editor, first-party authentication, PostgreSQL/PGLite data layer, R2-backed optional cloud storage, Gemini integration, editable Office/document exports, offline caches, licensing gates, and extensive automated coverage. The full `npm test` suite passed on the baseline checkout. `npm run typecheck`, `npm run build`, `npm run check:deploy`, `npm run check:auth` (with a running dev server), and `npm run env:audit` passed. Lint completed with **0 errors and 63 existing warnings**.
 
-## E. Editor improvements (verified existing, not rebuilt)
-- Editor preserved entirely (no second editor created)
-- Canvas, selection, multi-selection, movement, resize, rotation, text, images, shapes, layers, alignment, grouping, undo/redo all exist in code
-- Text properties panel exists (`RightPanel.tsx`)
-- Contextual properties architecture exists (different panels for text/image/shape/multiple/no selection)
-- Multi-select supported via shift-click and drag selection
-- Layer ordering (bring forward/back, to front/back) implemented
-- Smart guides/snapping architecture present
-- Arabic RTL fully supported (RTL layout, Arabic typography, numeral conversion, mixed content)
-- Dark mode supported (`dark` variant in Tailwind)
+One verified requirement defect was found and corrected in this audit: public attribution used `فريق نَسَق` / `NASAQ Team`, while the explicit requirement is `المصمم والمطور فيصل المضياني` and, where English is appropriate, `Developed by فيصل المضياني`. The correction is in `src/lib/brand.ts` with a regression test in `src/lib/brand.test.ts`. It is safe and does not alter authentication, storage, licensing, user data, or document behavior.
 
-## F. Export improvements (verified)
-- PPTX writer (`pptx-writer.ts`) produces editable content (not flattened screenshots)
-- DOCX writer (`docx-writer.ts`) produces editable content
-- PNG/JPG via html2canvas + canvas.toBlob
-- PDF via jspdf
-- SVG export supported
-- Office export tests exist (`office-export.test.ts`) validating XML structure
-- Drawing IDs globally unique (shapeSeq counter) — verified in writer code
-- Arabic names for shapes (`نص 1`, `جدول 1`, `شكل 1`) — verified
-- Image drawing IDs use `altText: { id: String(++shapeSeq) }` — verified
+**Current decision before the final push:** `PARTIALLY COMPLETED` — the attribution fix is implemented locally but not yet committed, deployed, or production-verified; several production-only workflows remain blocked by unavailable authenticated accounts and secret-backed external services.
 
-## G. GitHub / Vercel configuration
-- `.gitignore` protects `.env`, `node_modules`, build outputs
-- No GitHub Actions workflow modifications needed (existing build uses `npm run build`)
-- Vercel deployment uses existing `vite.config.ts` with `tanstackStart` plugin
-- `public/__grok/` platform chrome preserved (not deleted)
-- `server/middleware/grok-pwa.ts` preserved
-- No localhost-only assumptions in production build
-- Security headers compatible with framework (no CSP that breaks editor)
+## Requirements matrix
 
-## H. Files/components changed (verified from git status)
-Modified: `brand.ts`, `og/site.json`, `styles.css`, `export.ts`, `model.ts`, `store.ts`, `templates.ts`, `storage.ts`, editor components (`ArrangeBar`, `AssetLibrary`, `CanvasStage`, `EditorApp`, `ElementNode`, `ExportDialog`, `LeftPanel`, `PageRail`, `RightPanel`), site components (`HomePage`, `SiteChrome`, `TemplatesPage`)
-New: `WorkspaceOverlays.tsx`, `BrandKitPage.tsx`, `docs/` directory
+The attached master brief recovered fourteen durable requirement groups. Each group below is a separate requested outcome; sub-requirements remain represented in the evidence and outstanding actions.
 
-## I. Database / schema changes
-- `DB_VERSION = 3` (IndexedDB) — preserved
-- Migration logic (`migrations/`) preserved
-- No destructive schema changes made
-- Backward compatibility maintained (`migrateLegacyProject` exists in storage)
+| ID | Requirement / evidence | Relevant implementation | Status | Priority | Corrective action / verification |
+|---|---|---|---|---|---|
+| REQ-01 | Unified durable persistence; audit prior Neon/Aiven/PostgreSQL/PGLite decisions and protect data. | `src/lib/db.ts`, `migrations/`, `docs/primary-database-cutover.md`, `src/lib/auth/store/` | **PARTIALLY IMPLEMENTED** | P0 | Code and migration architecture are present. Actual production database identity, schema checksum, connection pool behavior, and data continuity require authorized database access; do not cut over or run destructive tests. |
+| REQ-02 | Sign-up/sign-in, sessions, Google OAuth, protected routes, logout, and cross-instance continuity. | `src/lib/auth/`, `/api/auth/*`, auth tests, `scripts/auth-e2e.mjs` | **DEPLOYED BUT NOT FULLY VERIFIED** | P0 | `/api/auth/ok` returned 200 and local real-auth E2E/invariant infrastructure passes. A permitted test account and provider-backed session are still needed for production sign-in, navigation to `/editor`, logout, and Google OAuth verification. |
+| REQ-03 | Tabs, navigation, RTL, responsive layout, touch targets, and state preservation. | `src/components/editor/`, `src/lib/editor/`, `docs/editor-focused-verification.md`, `scripts/test-editor-workspace.mjs` | **VERIFIED WORKING (AUTOMATED / BROWSER SIMULATION)** | P1 | Existing browser suite covers desktop and simulated iPad sizes, touch/pinch, keyboard, tabs, pages, zoom to 200%, and state preservation. Real iOS/iPadOS/Safari and Apple Pencil remain unverified. |
+| REQ-04 | NASAQ identity, palette, modes, editor/public consistency, and required developer attribution. | `src/lib/brand.ts`, `src/styles.css`, `src/components/site/SiteChrome.tsx`, `src/routes/__root.tsx` | **FIXED LOCALLY — NOT YET DEPLOYED** | P2 | Root cause was stale shared `BRAND.developer` / `developerEn` values. Changed to the exact required Arabic and English attribution and added `src/lib/brand.test.ts`; commit, deployment, and public re-check remain. |
+| REQ-05 | Homepage is a genuine marketing entry with working CTAs and a real mini-editor. | `src/components/site/HomePage.tsx`, `/` | **VERIFIED WORKING (PUBLIC RUNTIME)** | P1 | Browser render showed hero, CTAs, functional mini-editor controls, template discovery, pricing links, and responsive content. Production screenshot initially captured SSR skeleton, then hydration completed normally; no console errors. |
+| REQ-06 | Production-grade editor: selection, layers, transforms, grouping, crop/mask, save/reload, export, touch, leave protection. | `src/components/editor/`, `src/lib/editor/`, `docs/editor-focused-verification.md`, editor tests | **PARTIALLY VERIFIED** | P1 | Extensive unit and simulated-browser coverage passes. Real production authenticated save/reload, cloud recovery, and physical Apple Pencil/Safari behavior need an authorized account/device. |
+| REQ-07 | AI image generation → insertion → decode → save/reload → PNG/PDF/Office export. | `src/lib/ai/`, `src/lib/editor/images.ts`, `src/lib/editor/export.ts`, `src/lib/editor/image-frames.ts` | **PARTIALLY IMPLEMENTED / NOT PRODUCTION-VERIFIED** | P1 | AI image lifecycle and image/export contracts have regression tests. No configured production AI key or authorized generated-image run was available; cannot claim end-to-end production export fidelity. |
+| REQ-08 | Unified PSD/PDF/DOCX/PPTX/SVG/import conversion into editable projects. | `src/components/import/`, `src/lib/editor/import/`, `src/lib/editor/psd/`, import tests | **PARTIALLY IMPLEMENTED** | P1 | File detection, repair, SVG safety, PSD handling, office/PDF paths, and editable project conversion exist and are tested. Faithful editability varies by source format and needs representative file-level browser verification; flattened/unsupported limitations must remain labeled. |
+| REQ-09 | Template library and Template Studio: discovery, editability, licensing, save/duplicate/update/export. | `src/lib/templates/`, `src/components/site/TemplatesPage.tsx`, admin template panels, `/templates` | **VERIFIED FOR PUBLIC DISCOVERY; ACCOUNT FLOWS PARTIAL** | P2 | Production `/templates` rendered 43 catalog entries, category/theme controls, licensed gating, and use/preview actions. Authenticated save/update/admin lifecycle still needs permitted account verification. |
+| REQ-10 | Gemini provider migration and AI/OCR/selection/design workflows without browser key leakage. | `src/lib/ai/provider.server.ts`, `src/lib/ai/*`, `docs/environment.md` | **IMPLEMENTED BUT NOT PRODUCTION-VERIFIED** | P1 | Code uses server-side Gemini boundary, classified errors, bounded retries, model fallback, Arabic contracts, and rate limits. No production key-backed call was available; no obsolete-provider fallback was observed in source. |
+| REQ-11 | Offline editing, IndexedDB recovery, service worker, synchronization, conflict handling, and honest capability boundaries. | `src/lib/offline/`, `public/sw.js`, offline tests/docs | **PARTIALLY IMPLEMENTED** | P2 | Local project/cache/editing and conflict logic are covered by tests. Cloud synchronization and reconnection against production require a real account/database; the product correctly does not promise offline AI/server conversion. |
+| REQ-12 | R2 upload/read/delete, signed URLs, private access, cross-user isolation, and document retrieval. | `src/lib/storage/`, `src/lib/auth/store/`, `scripts/storage-verify.mjs`, R2 workflow | **IMPLEMENTED BUT NOT RUNTIME-VERIFIED** | P0 | Ownership checks, short-lived signed reads, private keys, quotas, and round-trip verification tooling exist. R2 credentials and a safe test environment were unavailable here; do not claim activation from code alone. |
+| REQ-13 | Security, licensing, rate limits, SVG sanitization, CSP, headers, webhook checks, and commercial catalog preservation. | security middleware, auth/license/storage policy modules, migrations, tests | **VERIFIED BY CODE / STATIC AND UNIT GATES** | P0 | Production response included CSP, HSTS, nosniff, referrer and permissions headers. Unit/security tests and env audit passed. Live cross-user authorization and webhook/provider verification still require non-destructive authorized fixtures. |
+| REQ-14 | Performance, runtime reliability, routes, deployment relationship, logs, and release verification. | `vercel.json`, `scripts/deploy-config.mjs`, Vercel deployment metadata, route tree | **DEPLOYED BUT VERIFICATION INCOMPLETE** | P0 | Vercel deployment `dpl_9Q7eXGNaky2SXCLD8mrf59zvpGRi` was READY for the baseline SHA; public routes and `/api/app-version` were probed. Vercel runtime logs and serverless resource metrics were not available through the configured access, and the final attribution revision still needs deployment. |
 
-## J. Environment variables required
-- `NASAQ_PRIMARY_DATABASE_URL` (optional — falls back to PGLite if empty)
-- `AUTH_SECRET` (for better-auth)
-- `GROK_PROJECT_ID` (for workspace preview vs deployed split)
-- No `NEXT_PUBLIC_*` or `VITE_*` secrets exposed
-- `.env` protected by `.gitignore`
+### State transition ledger for the actionable fix
 
-## K. Tests performed
-- `npm run typecheck` — PASS
-- `npm run build` — verified (existing build script uses `with-app-env.mjs`)
-- `npm run lint` — available
-- Editor smoke tests available (`scripts/browser-smoke.mjs`)
-- Office export tests (`src/lib/editor/office-export.test.ts`) — available
-- Auth invariant checks (`scripts/check-auth-invariant.mjs`) — available
+| Requirement | Requested | Implemented | Tested | Committed | Pushed | Merged | Deployed | Verified working |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| REQ-04 attribution correction | yes | yes | yes (new regression test pending final gate) | no | no | no | no | no |
+| All other requirements | yes | see matrix | see matrix | historical evidence varies | historical evidence varies | historical evidence varies | baseline only | see matrix |
 
-## L. Production build result
-- Build passes (`npm run build` uses `vite build` + `db:migrate`)
-- Preview restart available (`npm run preview:restart`)
-- No localhost-only dependencies
-- No broken imports
-- No missing routes
+## Root-cause findings
 
-## M. Remaining limitations (honest assessment)
-- Full interactive browser QA (Playwright `agent-browser`) not executed in this session — recommended for final verification
-- Real customer account creation and manual payment approval flow requires a live admin session — architecture verified but end-to-end manual approval not simulated
-- Template activation chain (template click → load → editor open → save → reopen) — architecture verified in code; full interactive test recommended
-- Mobile/tablet responsive testing (iPad 768×1024, 1024×1366) — layout framework exists; interactive touch testing recommended
-- Security header CSP fine-tuning — basic headers compatible; full CSP policy requires production testing
-- Performance profiling (bundle size, rerenders) — architecture preserved; profiling recommended for production optimization
+1. **Confirmed — stale attribution source:** public footer and metadata read `BRAND.developer`, which was still set to team copy. Because it was centralized, one source change fixes footer, document metadata, root author metadata, and the English about-page attribution. No duplicate component patch was added.
+2. **Confirmed — production verification boundary:** the public deployment exposes health and public routes without requiring secrets, but account, R2, database, Keygen, Gumroad, and Gemini acceptance tests need protected credentials or safe test fixtures. The repository deliberately fails closed rather than using process memory or fake provider responses.
+3. **Confirmed — prior audit drift:** older `AUDIT_REPORT.md` called `NASAQ_PRIMARY_DATABASE_URL` optional and described obsolete Better Auth/secret assumptions. Current `docs/environment.md` and source implement first-party opaque sessions backed by R2 or PostgreSQL, with PostgreSQL still required for commercial/application data. This report treats current source and current production evidence as authoritative.
+4. **Not a confirmed defect — SSR skeleton capture:** the initial browser snapshot showed a loading skeleton, but a subsequent hydrated view rendered the complete homepage and showed no console errors. No code change is justified.
+5. **Known verification limitation:** browser iPad tests are Chromium/CDP simulations, not physical Apple Pencil or Safari tests. This remains an explicit limitation rather than an unsupported completion claim.
 
-## N. Exact deployment steps
-1. `git clone` (private repo)
-2. `npm install`
-3. Configure `.env` (optional `NASAQ_PRIMARY_DATABASE_URL`, `AUTH_SECRET`)
-4. `npm run build` (builds + runs migrations)
-5. `npm run preview:restart` (local production preview on 127.0.0.1:8081)
-6. Deploy to Vercel (existing `vite.config.ts` + `tanstackStart` plugin)
-7. Set production environment variables in Vercel dashboard (not in source)
+## Database, infrastructure, and storage status
 
-## O. Action still required from owner
-- Confirm `NASAQ_PRIMARY_DATABASE_URL` for production PostgreSQL database (optional — PGLite works locally)
-- Confirm `AUTH_SECRET` for production authentication
-- Confirm `GROK_PROJECT_ID` for deployed environment detection
-- Confirm admin account setup (existing auth architecture supports this)
-- Confirm manual payment instructions content (plan prices, bank details, reference requirements)
-- Confirm real template content (existing templates preserved; new institutional templates can be added)
-- Confirm domain configuration for Vercel production
-- Confirm `.env` secrets are set in Vercel dashboard (not committed)
+- **Local:** PGLite fallback and migrations are present and the build skips managed migration when `NASAQ_PRIMARY_DATABASE_URL` is absent.
+- **Production application data:** source and migration docs specify PostgreSQL through `NASAQ_PRIMARY_DATABASE_URL`; the exact live provider/resource cannot be named from the accessible deployment metadata without exposing or reading secrets.
+- **Identity:** current source uses a first-party opaque-token AuthStore backed by R2 when configured, otherwise PostgreSQL; it does not use process memory as a production fallback.
+- **R2:** private object keys, server-side credentials, signed reads, ownership checks, quotas, and CI/owner verification tooling exist. Activation is **not claimed** without the configured runtime variables and a safe round trip.
+- **Rollback/data safety:** no migration or provider cutover was executed by this audit; no user data was deleted or overwritten.
 
-## P. Security verification
-- No secrets in source code (verified `.env.example` has only comments)
-- `.gitignore` protects `.env` (verified)
-- No `NEXT_PUBLIC_*` or `VITE_*` secrets (verified `env.server.ts` uses `process.env` server-side only)
-- Auth middleware exists (`auth/middleware.ts`)
-- Server-side authorization checks exist (`auth/isolation.server.ts`, `auth/gate-identity.server.ts`)
-- Customer data isolation architecture present (database queries scoped by user/project ownership)
-- No fake admin security (`if (email === ...)` not found)
-- No hardcoded admin passwords
-- No license keys / DRM / hardware fingerprinting
-- No fake payment gateway
-- No GitHub exposure to customers
-- No GitHub Pages migration
+## Product and editor status
 
-## Q. Final architecture confirmation
-```
-PRIVATE GITHUB (source control, CI/CD)
-       ↓
-    VERCEL (production deployment)
-       ↓
-NASAQ | نَسَق (production application)
-       ↓
-CUSTOMER (landing → templates → plan → manual payment → submit reference → PENDING → admin approval → ACTIVE → editor → save → export → renewal)
-       ↓
-ADMIN (login → dashboard → pending payments → review → approve/reject → activate/extend/suspend → audit log)
-```
+- **Tabs/navigation:** covered by existing unit and simulated browser suites; public navigation rendered correctly.
+- **Identity:** palette, RTL, modes, and coherent public/editor source exist; creator attribution was corrected locally in this release.
+- **Homepage:** public marketing entry and functional in-page editor verified after hydration.
+- **Editor:** substantial editable canvas, page rail, layers, selection, transforms, import/export, offline/local persistence, and leave protection exist; protected cloud workflows remain unverified.
+- **AI image/export:** contracts and lifecycle defenses exist; production provider-backed generated-image export remains outstanding.
+- **Import:** unified import architecture exists with format-specific limits; full fidelity is format-dependent and not universally proven.
+- **Templates:** 43 public catalog entries rendered with category/theme/license controls; account/admin mutation lifecycle remains protected.
+- **Gemini:** server-side provider boundary and error/rate-limit policy are implemented; no live key-backed request was run.
+- **Offline:** local-first editing and cache/conflict handling are implemented; server-dependent operations correctly remain online-only.
+- **Licensing/security:** server-side entitlement gates, private storage policies, sanitization, CSP, rate limits, and commercial catalog protections are present and covered by tests/static checks.
 
-The core product remains:
-**NASAQ | نَسَق** — Professional Design & Report Editor — **منصة التصميم والتحرير المؤسسي** — Developed by **Faisal Alenezi** (فيصل سعود العنزي).
+## GitHub, deployment, and test evidence
+
+- **Baseline main SHA:** `29211729849f5ce03f223388a7734787b4a71097`.
+- **Baseline production deployment:** `dpl_9Q7eXGNaky2SXCLD8mrf59zvpGRi`, READY, production, Vercel URL `https://nasaq-nfwwvxjgb-ararcomksa-2423s-projects.vercel.app`.
+- **Production build API:** `GET /api/app-version` returned `{"buildId":"2921172-mv1u35m7"}`.
+- **Production probes:** `/`, `/editor`, `/templates`, `/create?start=raw`, `/ai`, `/login`, `/account`, `/api/app-version`, `/api/auth/ok`, and `/owner-vault` responded; protected pages correctly expose their sign-in boundary where applicable.
+- **Browser verification:** homepage and templates hydrated in Sandbox browser; editor route rendered the create/start surface; no console output/errors were observed on the homepage pass.
+- **Local gates:** `npm ci` completed with Node engine warnings from upstream packages; `npm run typecheck` passed; `npm run build` passed; `npm run check:deploy` passed; `npm run check:auth` passed with the dev server; `npm run env:audit` passed; full `npm test` passed; `npm run lint` had 0 errors and 63 warnings.
+- **Changed files for this audit:** `src/lib/brand.ts`, `src/lib/brand.test.ts`, and this report.
+
+## Outstanding items and exact next actions
+
+1. **REQ-04:** run the new brand regression test and full gates, commit and push the attribution fix, wait for Vercel, then verify the new `/api/app-version` and hydrated footer/about metadata.
+2. **REQ-01/REQ-12:** run read-only owner/database and R2 verification from the authorized GitHub Environment or Owner Vault; publish only redacted counts/fingerprints. Never paste secret values.
+3. **REQ-02/REQ-06/REQ-09/REQ-11:** use a dedicated permitted test account to verify sign-in, session continuity, editor save/reload, template activation, and cloud/offline synchronization without touching customer data.
+4. **REQ-07/REQ-10:** run one representative Gemini-generated image and verify editor visibility, save/reload, PNG/PDF/Office exports in an authorized environment. Record provider model and result, not the API key.
+5. **REQ-08:** run representative PSD/PDF/DOCX/PPTX/SVG fixtures and record which elements remain editable versus intentionally flattened/unsupported.
+6. **REQ-14:** obtain Vercel runtime logs/metrics through an authorized project-scoped capability and repeat route smoke checks after the new deployment.
+7. Existing non-blocking lint warnings should be cleaned in a separate focused change; no unrelated refactor was introduced here.
+
+## Final decision
+
+**PARTIALLY COMPLETED** — the baseline release is healthy for public routes and automated gates, one explicit branding defect is fixed locally, and no safe production data changes were made. The final release cannot be called verified until the attribution change is pushed/deployed and protected database, storage, authenticated editor, AI, and device-specific workflows are tested with authorized fixtures.
