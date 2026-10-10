@@ -249,3 +249,22 @@ test("a gesture without modifier support never gains a modifier", () => {
   assert.equal(calls.cancel, 1);
   assert.ok(calls.nav > 0);
 });
+test("AI-generated SVG data URL is allowed by safeImageSrc and yields correct markup for preview", () => {
+  const src = BASE64_SRC; // or PERCENT_SRC
+  const safe = safeImageSrc(src);
+  assert.equal(safe, src, "safeImageSrc should return the SVG data URL unchanged");
+  const markup = svgDataUrlMarkup(safe);
+  assert.match(markup, /<svg[\s\S]*<circle/, "markup should contain the SVG circle");
+});
+test("sub‑slop movement does not start a move gesture", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true); // yieldable, supportsModifier false
+  // Move a tiny amount (less than POINTER_SLOP = 6px)
+  input.move(p(1, 1, 0)); // 1px right
+  // Should not trigger move callback
+  assert.equal(calls.move, 0);
+  // Also ensure no end/cancel
+  assert.equal(calls.end, 0);
+  assert.equal(calls.cancel, 0);
+});
