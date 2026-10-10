@@ -29,6 +29,18 @@ try {
   await page.route("https://fonts.googleapis.com/**", (route) =>
     route.fulfill({ contentType: "text/css", body: "" }),
   );
+  // A real remote picture so the Office export must fetch and convert it.
+  const remotePng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await page.route("**/remote-art.png", (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: remotePng,
+      headers: { "access-control-allow-origin": "*" },
+    }),
+  );
   await page.addInitScript(() =>
     localStorage.setItem("nasaq.onboarding.v1", "done"),
   );
@@ -64,12 +76,48 @@ try {
       return durableImageSrc(svgEls[0].src);
     })();
 
-    useEditor.setState({
-      pages: reopened.pages,
-      activePageId: reopened.pages[0].id,
-      zoom: 0.5,
-      captureArmed: true,
-    });
+    const webpCanvas = document.createElement("canvas");
+    webpCanvas.width = 64;
+    webpCanvas.height = 48;
+    const wctx = webpCanvas.getContext("2d");
+    wctx.fillStyle = "#c0392b";
+    wctx.fillRect(0, 0, 64, 48);
+    wctx.fillStyle = "#f1c40f";
+    wctx.fillRect(20, 14, 24, 20);
+    const webpSrc = webpCanvas.toDataURL("image/webp");
+    const extrasPage = JSON.parse(JSON.stringify(reopened.pages[0]));
+    extrasPage.id = "extras-page";
+    extrasPage.elements = [
+      { id: "webp-el", type: "image", name: "webp", x: 10, y: 10, w: 40, h: 30, rotation: 0, opacity: 1, z: 1, content: "", locked: false, src: webpSrc, style: {} },
+      { id: "remote-el", type: "image", name: "remote", x: 60, y: 10, w: 40, h: 30, rotation: 0, opacity: 1, z: 2, content: "", locked: false, src: "https://assets.test/remote-art.png", style: {} },
+    ];
+    const storePages = [...reopened.pages, extrasPage];
+
+    const armCapture = () =>
+      useEditor.setState({
+        pages: storePages,
+        name: project.name,
+        id: project.id,
+        activePageId: reopened.pages[0].id,
+        zoom: 0.5,
+        captureArmed: true,
+        // The hidden export layer mounts off the dialog's open flag; the capture
+        // DOM only exists once it is set.
+        exportOpen: true,
+        showcase: true,
+      });
+    armCapture();
+
+    // The editor's own mount effects can reset the store after we seed it, so
+    // keep re-arming until every page's capture node is committed to the DOM.
+    const captureMounted = () =>
+      storePages.every((p) =>
+        document.querySelector(`[data-export-page="${CSS.escape(p.id)}"]`),
+      );
+    for (let i = 0; i < 80 && !captureMounted(); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      armCapture();
+    }
 
     // The editor artboard must render the picture, fully decoded.
     let editorImgDecoded = false;
@@ -81,6 +129,15 @@ try {
       editorImgDecoded = imgs.some((img) => img.complete && img.naturalWidth > 0);
       if (!editorImgDecoded)
         await new Promise((r) => requestAnimationFrame(() => r()));
+    }
+    // Every page's capture node must be committed before snapshots are taken;
+    // the layer is lazy-mounted, so poll on a real timer rather than frames.
+    for (let i = 0; i < 60; i++) {
+      const mounted = reopened.pages.every((p) =>
+        document.querySelector(`[data-export-page="${CSS.escape(p.id)}"]`),
+      );
+      if (mounted) break;
+      await new Promise((r) => setTimeout(r, 100));
     }
 
     // Raster export (PNG/PDF base) must show non-white pixels where the plate is.
@@ -112,6 +169,18 @@ try {
     };
     const docx = await toB64(await writeDocx({ scenes: scene, title: "AI" }));
     const pptx = await toB64(await writePptx(scene, "AI"));
+
+    // Non-embeddable rasters must reach Office too. The writers embed
+    // png/jpeg/gif/bmp only, so a webp data URL (an enhanced/AI picture) or a
+    // remote https picture used to vanish from the .docx/.pptx. The extras page
+    // (built above, and mounted into the capture DOM) carries both.
+    const extrasMaterialised = await materializeSceneSources([extrasPage]);
+    const extrasNonEmbeddable = extrasMaterialised
+      .flatMap((p) => p.elements)
+      .filter((el) => /^(data:image\/webp|https?:|blob:)/.test(String(el.src)));
+    const extrasScene = buildScene(extrasMaterialised, extrasMaterialised);
+    const extrasDocx = await toB64(await writeDocx({ scenes: extrasScene, title: "AI" }));
+    const extrasPptx = await toB64(await writePptx(extrasScene, "AI"));
     return {
       svgCount: svgEls.length,
       reopenedSvgCount: reopenedSvg.length,
@@ -119,8 +188,11 @@ try {
       editorImgDecoded,
       rasterColoured: coloured,
       rasterStillSvg: stillSvg.length,
+      extrasNonEmbeddable: extrasNonEmbeddable.length,
       docx,
       pptx,
+      extrasDocx,
+      extrasPptx,
     };
   });
 
@@ -146,12 +218,40 @@ try {
   assert.ok(pptxMedia.length >= 1, "the .pptx embeds the AI picture");
   assert.match(slideXml, /r:embed=/, "the slide places the picture");
 
+  // webp + remote sources must be converted, not dropped.
+  assert.equal(
+    result.extrasNonEmbeddable,
+    0,
+    "no webp/remote/blob source reaches the Office writers",
+  );
+  const extrasDocxZip = await JSZip.loadAsync(Buffer.from(result.extrasDocx, "base64"));
+  const extrasDocxMedia = Object.keys(extrasDocxZip.files).filter((f) =>
+    /word\/media\/.+\.(png|jpe?g)$/i.test(f),
+  );
+  const extrasDocXml = await extrasDocxZip.file("word/document.xml").async("string");
+  const extrasDrawings = (extrasDocXml.match(/<w:drawing>/g) || []).length;
+  assert.ok(extrasDocxMedia.length >= 2, "the .docx embeds the webp and remote pictures");
+  assert.ok(extrasDrawings >= 2, "the .docx places both non-embeddable pictures");
+  const extrasPptxZip = await JSZip.loadAsync(Buffer.from(result.extrasPptx, "base64"));
+  const extrasPptxMedia = Object.keys(extrasPptxZip.files).filter((f) =>
+    /ppt\/media\/.+\.(png|jpe?g)$/i.test(f),
+  );
+  const extrasSlideXml = await extrasPptxZip.file("ppt/slides/slide1.xml").async("string");
+  assert.ok(extrasPptxMedia.length >= 2, "the .pptx embeds the webp and remote pictures");
+  assert.ok(
+    (extrasSlideXml.match(/r:embed=/g) || []).length >= 2,
+    "the slide places both non-embeddable pictures",
+  );
+
   writeFileSync(`${output}/export.docx`, Buffer.from(result.docx, "base64"));
   writeFileSync(`${output}/export.pptx`, Buffer.from(result.pptx, "base64"));
+  writeFileSync(`${output}/export-extras.docx`, Buffer.from(result.extrasDocx, "base64"));
+  writeFileSync(`${output}/export-extras.pptx`, Buffer.from(result.extrasPptx, "base64"));
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
     `ok — AI picture: editor render, save/reload, ${docxMedia.length} DOCX media, ` +
-      `${pptxMedia.length} PPTX media (artifacts in ${output}/)`,
+      `${pptxMedia.length} PPTX media; webp+remote converted ` +
+      `(${extrasDocxMedia.length} DOCX / ${extrasPptxMedia.length} PPTX) (artifacts in ${output}/)`,
   );
 } finally {
   await browser.close();
