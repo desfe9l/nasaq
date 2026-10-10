@@ -55,7 +55,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const [templateMode, setTemplateMode] = useState<"official" | "personal" | null>(null);
   const [official, setOfficial] = useState(false);
   const { user, isPending } = useCurrentUserState();
-  const tier = useAccountTier(user);
+  const { tier } = useAccountTier(user);
   const personal = tier === "LICENSED" || tier === "ADMIN";
   const guest = authEnabled && !isPending && !user;
   const linked = open ? linkedFileName(projectId) : null;

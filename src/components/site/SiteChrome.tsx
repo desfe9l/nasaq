@@ -149,8 +149,7 @@ function NewDocumentButton() {
 
 /** Own component so `useAccountTier` only mounts for a real signed-in session. */
 function NewDocumentForUser({ user }: { user: AppUser }) {
-  const tierResult = useAccountTier(user) as any;
-  const tier = tierResult.tier || tierResult;
+  const { tier } = useAccountTier(user);
   const { entry } = useEditorEntry();
   if (!entry.ready || !entry.direct) return null;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
@@ -582,8 +581,7 @@ export function BrandLockup() {
 
 /** Admin links for site menu. */
 function AdminSiteLinks({ user }: { user: AppUser }) {
-  const tierResult = useAccountTier(user) as any;
-  const tier = tierResult.tier || tierResult;
+  const { tier } = useAccountTier(user);
   if (tier !== "ADMIN") return null;
   return (
     <>

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CreateDesignPage, type CreateDesignSearch } from "@/components/site/CreateDesignPage";
+import { searchString } from "@/lib/router-search";
 
 /**
  * `/create` — the professional creation screen.
@@ -21,8 +22,8 @@ export const Route = createFileRoute("/create")({
       search.start === "raw"
         ? search.start
         : undefined,
-    template: typeof search.template === "string" ? search.template : undefined,
-    size: typeof search.size === "string" ? search.size : undefined,
+    template: searchString(search.template),
+    size: searchString(search.size),
   }),
   component: CreateRoute,
 });

@@ -53,7 +53,7 @@ export function MyTemplatesPage() {
 }
 
 function LicensedTemplates({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
+  const { tier } = useAccountTier(user);
   const { entitlements } = useLicense();
   const brand = useBrandIdentity();
   const [rows, setRows] = useState<Row[] | null>(null);

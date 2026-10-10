@@ -152,7 +152,7 @@ async function runJsdomFallback() {
     const dlg2 = host.querySelector('[role="dialog"]');
     assert.ok(dlg2);
     const saveBtn = Array.from(dlg2.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "حفظ ومتابعة",
+      (b) => b.textContent?.trim() === "حفظ وخروج",
     );
     assert.ok(saveBtn, "Save and Continue button must render");
     saveBtn.click();
@@ -173,7 +173,7 @@ async function runJsdomFallback() {
     const dlg3 = host.querySelector('[role="dialog"]');
     assert.ok(dlg3);
     const discardBtn = Array.from(dlg3.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "متابعة بدون حفظ",
+      (b) => b.textContent?.trim() === "الخروج بدون حفظ",
     );
     assert.ok(discardBtn, "Continue Without Saving button must render");
     discardBtn.click();
@@ -274,7 +274,11 @@ async function waitForEditorReady() {
 }
 
 // 1. Open saved project -> UI focus without edit -> leave -> no dialog.
-await page.goto(`${base}/editor`);
+// `/editor` without parameters routes to the creation screen since the
+// durable-URL overhaul (#124); `?template=official` is the direct editor
+// boot that restores the author's last document — the behavior this
+// suite exercises.
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 
 const savedName = await page.evaluate(() => {
@@ -305,8 +309,8 @@ await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 10000 });
 assert.equal(await page.locator("#unsaved-leave-title").count(), 0);
 
-// 8 & 9. Edit project -> Leave -> Cancel (إلغاء) & Continue Without Saving (متابعة بدون حفظ).
-await page.goto(`${base}/editor`);
+// 8 & 9. Edit project -> Leave -> Cancel (إلغاء) & Continue Without Saving (الخروج بدون حفظ).
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 await page.evaluate(async () => {
   const store = window.__store.getState();
@@ -318,9 +322,9 @@ await page.getByRole("button", { name: /حساب / }).click();
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
 assert.equal(await page.locator("#unsaved-leave-title").innerText(), "لديك تغييرات غير محفوظة");
-assert.match(await page.locator('[role="dialog"]').innerText(), /هل تريد حفظ المشروع قبل المغادرة؟/);
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).waitFor();
+assert.match(await page.locator('[role="dialog"]').innerText(), /هل تريد حفظ المشروع قبل الخروج من المحرر؟/);
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).waitFor();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).waitFor();
 await page.getByRole("button", { name: "إلغاء", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 assert.equal(new URL(page.url()).pathname, "/editor");
@@ -331,9 +335,9 @@ if (!(await page.getByRole("menuitem", { name: "مساحة العمل" }).isVisi
   await page.getByRole("button", { name: /حساب / }).click();
 }
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"));
-await page.goto(`${base}/editor`);
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 await page.waitForFunction(() => window.__store.getState().name !== "مسودة غير محفوظة");
 assert.notEqual(await page.evaluate(() => window.__store.getState().name), "مسودة غير محفوظة");
@@ -375,13 +379,26 @@ await page.reload({ waitUntil: "domcontentloaded" });
 assert.equal(unexpected, false);
 await waitForEditorReady();
 
-// 3 & 7. Edit project -> Browser Back -> confirmation appears -> Cancel -> Back -> Save and Continue (حفظ ومتابعة).
+// 3 & 7. Edit project -> Browser Back -> confirmation appears -> Cancel -> Back -> Save and Continue (حفظ وخروج).
 await page.evaluate(async () => {
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
+  const { buildNewDocument, defaultNewDocument } = await import("/src/lib/editor/new-document.ts");
   const store = window.__store.getState();
   store.setEntitlements(LICENSE_ENTITLEMENTS.PRO, store.sessionOwner ?? undefined);
-  store.pauseScheduledSave();
-  store.setName("محفوظ عبر الرجوع");
+  // The in-page PRO entitlements do not survive the reload below (the mocked
+  // session cannot cache a server entitlement), and hydrate() fail-closes the
+  // boot restore of any premium-pack or over-limit document under FREE. The
+  // persistence round trip therefore uses a real 1-page blank document — the
+  // only shape a FREE boot restore is permitted to reopen.
+  const created = await store.createDocument(
+    buildNewDocument(
+      defaultNewDocument({ name: "مستند الرجوع", pages: 1, pack: "blank" }),
+    ),
+  );
+  if (!created) throw new Error("createDocument refused the blank document");
+  const live = window.__store.getState();
+  live.pauseScheduledSave();
+  live.setName("محفوظ عبر الرجوع");
 });
 await page.waitForFunction(() => window.__store.getState().saveState === "dirty");
 await page.evaluate(() => window.history.back());
@@ -393,10 +410,10 @@ assert.equal(await page.evaluate(() => window.__store.getState().name), "محف�
 
 await page.evaluate(() => window.history.back());
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 15000 });
 
-await page.goto(`${base}/editor`);
+await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 assert.equal(await page.evaluate(() => window.__store.getState().name), "محفوظ عبر الرجوع");
 assert.equal(await page.evaluate(() => window.__store.getState().saveState), "saved");
@@ -430,12 +447,12 @@ assert.equal(await page.evaluate(() => window.__openPromise), false);
 assert.equal(await page.evaluate(() => window.__store.getState().id), firstId);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "تعديل قبل تبديل المشروع");
 
-// Trigger openProject(secondId) -> Discard (متابعة بدون حفظ)
+// Trigger openProject(secondId) -> Discard (الخروج بدون حفظ)
 await page.evaluate((id) => {
   window.__openPromise = window.__store.getState().openProject(id);
 }, secondId);
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__openPromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().id), secondId);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "المشروع الثاني المستهدف");
@@ -445,7 +462,7 @@ assert.equal(
   "discarding when switching projects must not save discarded edits to the first project",
 );
 
-// Edit second project -> openProject(firstId) -> Save and Continue (حفظ ومتابعة)
+// Edit second project -> openProject(firstId) -> Save and Continue (حفظ وخروج)
 await page.evaluate(() => {
   const store = window.__store.getState();
   store.pauseScheduledSave();
@@ -455,7 +472,7 @@ await page.evaluate((id) => {
   window.__openPromise = window.__store.getState().openProject(id);
 }, firstId);
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__openPromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().id), firstId);
 assert.equal(
@@ -480,7 +497,7 @@ assert.equal(await page.evaluate(() => window.__store.getState().name), "تعد�
 await page.getByRole("button", { name: "ملف المشروع", exact: true }).click();
 await page.getByRole("menuitem", { name: "مشروع جديد" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 await page.getByRole("button", { name: "إنشاء المستند" }).click();
 await page.waitForFunction((prevId) => window.__store.getState().id !== prevId, firstId);
@@ -518,7 +535,7 @@ await page.evaluate(async () => {
   });
 });
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__templatePromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "قالب موجز تنفيذي");
 assert.notEqual(
@@ -562,17 +579,21 @@ await page.evaluate(async () => {
 await page.getByRole("button", { name: /حساب / }).click();
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 assert.equal(new URL(page.url()).pathname, "/editor", "save failure must keep user in editor");
 assert.equal(await page.evaluate(() => window.__store.getState().saveState), "error");
 assert.equal(await page.evaluate(() => window.__store.getState().name), "تعديل يفشل حفظه");
 
-// Restore PRO entitlements and save cleanly before testing mobile lifecycle.
+// Restore a clean, FREE-restorable document before testing mobile lifecycle.
+// The in-page PRO entitlements do NOT survive a reload (the mocked session
+// cannot cache a server entitlement), and hydrate() fail-closes the boot
+// restore of any premium-pack document under FREE — so the recovery document
+// must be the free "blank" pack for the draft restore to be permitted.
 await page.evaluate(async () => {
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
   const store = window.__store.getState();
-  window.__store.setState({ pack: "official" });
+  window.__store.setState({ pack: "blank" });
   store.setEntitlements(LICENSE_ENTITLEMENTS.PRO, store.sessionOwner ?? undefined);
   await store.saveNow();
 });
@@ -611,7 +632,7 @@ assert.equal(
 
 await page.getByRole("button", { name: "ملف المشروع", exact: true }).click();
 const menu = page.getByRole("menu", { name: "ملف المشروع" });
-await menu.getByRole("menuitem", { name: /فتح ملف نَسَق/ }).waitFor();
+await menu.getByRole("menuitem", { name: /فتح مشروع أو استيراد ملف/ }).waitFor();
 assert.equal(await menu.getByRole("menuitem", { name: "حفظ كقالب" }).count(), 0);
 assert.equal(await menu.getByRole("menuitem", { name: "حفظ في قوالبي" }).count(), 0);
 assert.deepEqual(errors, []);

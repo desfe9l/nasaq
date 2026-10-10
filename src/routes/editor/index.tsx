@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { EditorApp } from "@/components/editor/EditorApp";
 import { CREATE_ROUTE } from "@/lib/site-routes";
+import { searchString } from "@/lib/router-search";
 
 /**
  * `/editor` — the editor ENTRY, never a blank canvas.
@@ -21,13 +22,16 @@ import { CREATE_ROUTE } from "@/lib/site-routes";
 export const Route = createFileRoute("/editor/")({
   ssr: false,
   head: () => ({ meta: [{ title: "المحرر | نَسَق" }] }),
+  // The router's default search parser JSON-parses values, so `?showcase=1`
+  // arrives as the NUMBER 1 — `searchString` keeps its text form instead of
+  // silently dropping the parameter (which disabled the non-persisting
+  // showcase boot entirely). See `src/lib/router-search.ts`.
   validateSearch: (search: Record<string, unknown>) => ({
-    showcase: typeof search.showcase === "string" ? search.showcase : undefined,
-    template: typeof search.template === "string" ? search.template : undefined,
-    adminTemplate:
-      typeof search.adminTemplate === "string" ? search.adminTemplate : undefined,
-    nsq: typeof search.nsq === "string" ? search.nsq : undefined,
-    project: typeof search.project === "string" ? search.project : undefined,
+    showcase: searchString(search.showcase),
+    template: searchString(search.template),
+    adminTemplate: searchString(search.adminTemplate),
+    nsq: searchString(search.nsq),
+    project: searchString(search.project),
   }),
   component: EditorEntry,
 });
