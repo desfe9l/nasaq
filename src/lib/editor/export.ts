@@ -18,7 +18,7 @@ import {
   type Project,
   type CanvasEl,
 } from "./model";
-import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
+import { officeSvgMarkup } from "./svg";
 import { normalizeBlurMm } from "./blur";
 import { projectAccessBlock } from "./access-limits";
 import { editorAccessResolved, useEditor } from "./store";
@@ -391,7 +391,7 @@ export async function exportDocxEditable(
  * crop or layer-blur paint (including groups that contain it) uses the
  * existing browser renderer — dropping a blur would change the artwork, so it
  * is rasterised instead of being rewritten into a crisp object. */
-async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
+export async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
   const needsPaint = (el: CanvasEl): boolean =>
     !!el.style.gradient ||
     !!el.style.crop ||
@@ -436,12 +436,12 @@ async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
         return (await imageLayer(el)) || { ...el, opacity: 0 };
       if (el.children?.length)
         return { ...el, children: await Promise.all(el.children.map(visit)) };
-      if (el.type !== "svg" || safeSvgSrc(el.src)) return el;
-      const markup = applySvgColors(sanitizeSvgContent(el.content || ""), {
-        fill: el.style.svgFill,
-        stroke: el.style.svgStroke,
-        strokeWidth: el.style.svgStrokeWidth,
-      });
+      // The Office writers embed raster bytes only; an SVG-sourced picture (the
+      // AI design generator's artwork, an uploaded `.svg`, a library asset) or
+      // a native `svg` element is drawn to PNG here so it is never silently
+      // missing from the export. See `officeSvgMarkup`.
+      const markup = officeSvgMarkup(el);
+      if (!markup) return el;
       const png = await svgToPngDataUrl(markup, el.w, el.h, 2);
       return png ? { ...el, src: png } : el;
     };

@@ -111,6 +111,65 @@ export function safeSvgSrc(src: unknown): string {
 }
 
 /**
+ * Recover the SVG markup from a `data:image/svg+xml` URL — base64 or
+ * percent-encoded. Returns "" for anything that is not an SVG data URL.
+ *
+ * The Office writers embed raster bytes only, so an SVG-sourced picture (the
+ * AI design generator's artwork, an uploaded `.svg`, a pasted library asset)
+ * must be turned back into markup before it can be rasterised at the export
+ * boundary. Reading it here keeps that decode in one place.
+ */
+export function svgDataUrlMarkup(src: unknown): string {
+  const value = String(src ?? "").trim();
+  const comma = value.indexOf(",");
+  if (!/^data:image\/svg\+xml/i.test(value) || comma < 0) return "";
+  const header = value.slice(0, comma);
+  const body = value.slice(comma + 1);
+  if (!body) return "";
+  try {
+    if (/;base64/i.test(header)) {
+      const bytes = Uint8Array.from(atob(body.replace(/\s+/g, "")), (c) =>
+        c.charCodeAt(0),
+      );
+      return new TextDecoder().decode(bytes);
+    }
+    return decodeURIComponent(body);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * The sanitised SVG markup an Office export must rasterise for one element, or
+ * "" when the element needs no SVG-to-PNG conversion.
+ *
+ * The Office writers embed raster bytes only. Two shapes reach them as SVG:
+ * a picture whose `src` is a `data:image/svg+xml` URL (the AI design
+ * generator's artwork, an uploaded `.svg`, a pasted library asset), and a
+ * native `svg` element that keeps its vector markup in `content`. Handing
+ * either to the writers as-is drops the picture — docx skips it and pptxgenjs
+ * rejects it for lacking a base64 header — so both are converted here, before
+ * the writers run. Keeping the decision in one pure function is what the
+ * regression test pins.
+ */
+export function officeSvgMarkup(el: {
+  type?: string;
+  src?: unknown;
+  content?: unknown;
+  style?: { svgFill?: string; svgStroke?: string; svgStrokeWidth?: number };
+}): string {
+  const fromSrc = svgDataUrlMarkup(el?.src);
+  if (fromSrc) return sanitizeSvgContent(fromSrc);
+  if (el?.type === "svg" && !safeSvgSrc(el.src))
+    return applySvgColors(sanitizeSvgContent(el.content || ""), {
+      fill: el.style?.svgFill,
+      stroke: el.style?.svgStroke,
+      strokeWidth: el.style?.svgStrokeWidth,
+    });
+  return "";
+}
+
+/**
  * Apply the element's independent fill/stroke/stroke-width overrides onto
  * sanitised markup BEFORE render/export. Each channel is opt-in: an unset
  * override leaves the author's own colors standing (the default), so adding
