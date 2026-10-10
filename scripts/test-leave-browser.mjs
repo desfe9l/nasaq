@@ -383,6 +383,11 @@ await waitForEditorReady();
 await page.evaluate(async () => {
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
   const store = window.__store.getState();
+  // The in-page PRO entitlements do not survive the reload below (the mocked
+  // session cannot cache a server entitlement), and hydrate() fail-closes the
+  // restore of premium-pack documents under FREE — the persistence round trip
+  // must therefore use the free "blank" pack.
+  window.__store.setState({ pack: "blank" });
   store.setEntitlements(LICENSE_ENTITLEMENTS.PRO, store.sessionOwner ?? undefined);
   store.pauseScheduledSave();
   store.setName("محفوظ عبر الرجوع");
