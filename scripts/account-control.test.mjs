@@ -32,13 +32,47 @@ test("account status preserves server-derived tiers without inventing activation
     [{ hasLicense: false }, "FREE"],
   ]) {
     license = state;
-    assert.equal(exports.useAccountTier({ id: "fixture" }), expected);
+    assert.deepEqual({ ...exports.useAccountTier({ id: "fixture" }) }, { tier: expected, isOwner: false });
     const html = renderToStaticMarkup(React.createElement(exports.AccountBadge, { tier: expected }));
     assert.equal(html.includes("مشترك"), ["ADMIN", "LICENSED"].includes(expected));
     assert.ok(!html.includes("مرخص"));
     assert.equal((html.match(/data-account-status=/g) || []).length, 1);
     assert.ok(html.includes("whitespace-nowrap"));
     assert.ok(html.includes("<svg"));
+  }
+});
+
+test("owner refinement only relabels ADMIN and never widens another tier", () => {
+  license = { isAdmin: true, hasLicense: true, isOwner: true };
+  assert.deepEqual({ ...exports.useAccountTier({ id: "fixture" }) }, { tier: "ADMIN", isOwner: true });
+  const ownerHtml = renderToStaticMarkup(
+    React.createElement(exports.AccountBadge, { tier: "ADMIN", isOwner: true }),
+  );
+  assert.ok(ownerHtml.includes("المالك الرئيسي"));
+  license = { hasLicense: false, isOwner: true };
+  assert.equal(exports.useAccountTier({ id: "fixture" }).tier, "FREE");
+  license = { hasLicense: true };
+  assert.deepEqual({ ...exports.useAccountTier(null) }, { tier: "FREE", isOwner: false });
+});
+
+test("every licensing gate reads the tier field instead of comparing the hook result", () => {
+  // Regression guard: useAccountTier returns { tier, isOwner }. A call site
+  // that compares the raw result to a string silently locks licensed users out
+  // (My Templates / personal template saves went dark this way).
+  const consumers = [
+    "src/components/site/AccountControlContent.tsx",
+    "src/components/site/SiteChrome.tsx",
+    "src/components/site/MyTemplatesPage.tsx",
+    "src/components/editor/EditorAccountMenu.tsx",
+    "src/components/editor/ProjectFileMenu.tsx",
+  ];
+  for (const path of consumers) {
+    const text = read(path);
+    const calls = (text.match(/useAccountTier\(/g) || []).length;
+    assert.ok(calls >= 1, `${path} should call useAccountTier`);
+    const destructured = (text.match(/const \{ tier[^}]*\} = useAccountTier\(/g) || []).length;
+    assert.equal(destructured, calls, `${path} must destructure { tier } from useAccountTier`);
+    assert.ok(!text.includes("useAccountTier(user) as any"), `${path} must not cast the tier hook`);
   }
 });
 

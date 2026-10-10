@@ -18,15 +18,21 @@ import { cn } from "@/lib/utils";
  */
 export type AccountTier = "LOADING" | "LICENSED" | "ADMIN" | "SUSPENDED" | "FREE";
 
-export function useAccountTier(user: AppUser | null): AccountTier & { isOwner?: boolean } {
+/**
+ * Server-resolved account standing. `tier` drives the visible badge and every
+ * licensing gate in the UI; `isOwner` only refines the ADMIN label/tooltip.
+ */
+export type AccountTierState = { tier: AccountTier; isOwner: boolean };
+
+export function useAccountTier(user: AppUser | null): AccountTierState {
   // `useLicense` short-circuits when there is no cached key and no user id, so
   // mounting this for a real user costs exactly one status call.
   const { isLoading, hasLicense, isAdmin, isSuspended, isOwner } = useLicense(user?.id, user?.primaryEmail ?? null);
-  if (!user) return { tier: "FREE", isOwner: false } as any;
-  if (isLoading) return { tier: "LOADING", isOwner: Boolean(isOwner) } as any;
-  if (isAdmin) return { tier: "ADMIN", isOwner: Boolean(isOwner) } as any;
-  if (isSuspended) return { tier: "SUSPENDED", isOwner: Boolean(isOwner) } as any;
-  return { tier: hasLicense ? "LICENSED" : "FREE", isOwner: Boolean(isOwner) } as any;
+  if (!user) return { tier: "FREE", isOwner: false };
+  if (isLoading) return { tier: "LOADING", isOwner: Boolean(isOwner) };
+  if (isAdmin) return { tier: "ADMIN", isOwner: Boolean(isOwner) };
+  if (isSuspended) return { tier: "SUSPENDED", isOwner: Boolean(isOwner) };
+  return { tier: hasLicense ? "LICENSED" : "FREE", isOwner: Boolean(isOwner) };
 }
 
 const BADGE_META: Record<
