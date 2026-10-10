@@ -17,6 +17,26 @@ One verified requirement defect was found and corrected in this audit: public at
 
 **Current decision:** `PARTIALLY COMPLETED` — the public release and explicit attribution requirement are complete and verified, while protected database, storage, authenticated editor, AI, and device-specific workflows remain unverified because authorized fixtures and credentials were not available.
 
+## Follow-up implementation session — 2026-10-10 (PR #188)
+
+A continuation session audited `main` at `b9247e333a5a3db6d6d143ed0cb33a13d73f7742`, reconciled this report against the actual repository state, and fixed every defect that could be confirmed with evidence through GitHub-only access. Work was done on branch `arena/88c70384-nasaq` and submitted as **PR #188**.
+
+### Confirmed defects fixed
+
+1. **Account-tier contract regression (red `verify` job on `main`).** `useAccountTier` returns `{ tier, isOwner }`, but six components compared the object itself against tier strings, mis-gating `MyTemplatesPage` and `ProjectFileMenu` (e.g. the FREE tier could see «حفظ كقالب» entries). Root cause fixed in all six call sites; `scripts/account-control.test.mjs` rewritten to assert the real contract (5/5 pass). Commit `3d3e0ad`.
+2. **Router search-param coercion dropped boot intents.** TanStack Router's `defaultParseSearch` JSON-coerces `?showcase=1` to the number `1`, and the routes' `typeof value === "string"` guards silently discarded it — showcase/template boot parameters could be lost. Added `src/lib/router-search.ts` (`searchString()`) with unit tests plus intake-boot regression tests, applied in the `editor/index`, `create`, `studio`, and `templates/index` routes. Commit `4c193b6`.
+3. **CI `browser` job had never passed since its introduction (commit `4ea5f10`).** All failures traced to stale test scripts, not product regressions: outdated leave-dialog copy, an outdated project-file menu label («فتح ملف نَسَق» vs the shipped «فتح مشروع أو استيراد ملف…»), and persistence round trips that used premium-pack or over-page-limit documents — which `hydrate()` intentionally fail-closes on boot restore under FREE entitlements after a reload (the mocked session cannot cache a server entitlement). The scenarios were corrected to use a genuine 1-page `blank` document (the only shape a FREE boot restore may reopen) and current UI copy; the fail-closed licensing behavior itself is correct and unchanged. Commits `e33ef4f`, `2561137`, `e4226bd`, `e1917bc`, `4acbef9`.
+
+### Test and CI evidence
+
+- Local gates on the final branch state: `npm test` 1293/1293; `test:scripts` 245/245; `test:auth` 100/100; `test:admin` 191/191; `typecheck` pass; `lint` 0 errors / 63 pre-existing warnings; production `build` pass; `env:audit` pass; `check:auth` pass; `test:auth:e2e` 9/9; `test:ai:e2e` 5/5.
+- Real-Chromium browser suites run locally against the dev server: `test:nsq:browser` pass; `test:leave:browser` pass (twice, after the fixes above).
+- GitHub Actions run `38028055357` on head `4acbef9`: **`verify` job GREEN** (blocking gate) and **`browser` job GREEN — the first green browser job in the repository's history**. The `verify` job was green on every PR #188 run (38026390864, 38026588586, 38026929714, 38027189088, 38027635427, 38028055357).
+
+### Scope and safety
+
+No destructive migrations, no user-data deletion, no secrets touched; changed files are limited to the six tier-gated components, the new `src/lib/router-search.ts` + tests, the four route files, the two browser test scripts, `scripts/account-control.test.mjs`, `package.json` (test registration), and this report. Production-credential-gated items (REQ-01/02/06/07/08/10/11/12/14 live verification) remain outstanding exactly as listed below.
+
 ## Requirements matrix
 
 The attached master brief recovered fourteen durable requirement groups. Each group below is a separate requested outcome; sub-requirements remain represented in the evidence and outstanding actions.
