@@ -91,6 +91,53 @@ export function safeImageSrc(src: unknown): string {
 }
 
 /**
+ * True when a source is a PNG/JPEG/GIF/BMP data URL, the only raster shapes
+ * `docx-writer` (`imageOptions`) and `pptxgenjs` embed verbatim. Every other
+ * accepted source — `webp`, a remote `https://` URL, a `blob:` — has to be
+ * rasterised to PNG before an Office export or the writers drop it.
+ */
+export function isOfficeEmbeddableRaster(src: unknown): boolean {
+  return /^data:image\/(png|jpe?g|gif|bmp);base64,/i.test(String(src ?? ""));
+}
+
+/**
+ * Draw any accepted raster image source to a PNG data URL.
+ *
+ * The Office writers embed raster bytes and only understand PNG/JPEG/GIF/BMP, so
+ * a `webp` picture, a remote URL, or a legacy `blob:` source has to be painted
+ * to a canvas first — otherwise it is silently missing from the exported
+ * `.docx`/`.pptx`. Remote sources are requested CORS-anonymously so the canvas
+ * stays untainted; an unreadable source returns "" so the caller keeps the
+ * original element unchanged rather than losing it.
+ */
+export async function rasterSourceToPng(src: unknown): Promise<string> {
+  const value = typeof src === "string" ? src.trim() : "";
+  if (!value || value.startsWith("data:image/svg")) return "";
+  const img = new Image();
+  if (/^https?:\/\//i.test(value)) img.crossOrigin = "anonymous";
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("image_load"));
+      img.src = value;
+    });
+    if (!img.naturalWidth || !img.naturalHeight) return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.drawImage(img, 0, 0);
+    const png = canvas.toDataURL("image/png");
+    canvas.width = 0;
+    canvas.height = 0;
+    return png;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Convert an ephemeral blob: URL into a durable data URL.
  *
  * AI image generation and canvas rasterisation both produce `blob:` URLs that

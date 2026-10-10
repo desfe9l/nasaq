@@ -4,6 +4,7 @@ import {
   fitImageBox,
   imageAdjustCss,
   isAcceptedImage,
+  isOfficeEmbeddableRaster,
   placeImageBox,
   safeImageSrc,
   durableImageSrc,
@@ -11,6 +12,33 @@ import {
   sharpnessKernel,
   uniqueImageFiles,
 } from "./images.ts";
+
+describe("isOfficeEmbeddableRaster", () => {
+  it("accepts the raster data URLs the Office writers embed verbatim", () => {
+    for (const mime of ["png", "jpeg", "jpg", "gif", "bmp"]) {
+      assert.equal(
+        isOfficeEmbeddableRaster(`data:image/${mime};base64,AAAA`),
+        true,
+        mime,
+      );
+    }
+  });
+
+  it("flags sources the writers would otherwise drop", () => {
+    // webp is an accepted editor image but not a format docx-writer embeds.
+    assert.equal(isOfficeEmbeddableRaster("data:image/webp;base64,AAAA"), false);
+    // A remote picture and an ephemeral blob reach the users as broken too.
+    assert.equal(isOfficeEmbeddableRaster("https://example.com/a.webp"), false);
+    assert.equal(isOfficeEmbeddableRaster("blob:http://localhost/x"), false);
+    // An SVG data URL is handled by officeSvgMarkup, not this check.
+    assert.equal(
+      isOfficeEmbeddableRaster("data:image/svg+xml;charset=utf-8,%3Csvg/%3E"),
+      false,
+    );
+    assert.equal(isOfficeEmbeddableRaster(""), false);
+    assert.equal(isOfficeEmbeddableRaster(undefined), false);
+  });
+});
 
 describe("isAcceptedImage", () => {
   const file = (type: string) => ({ type }) as File;

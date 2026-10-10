@@ -19,6 +19,7 @@ import {
   type CanvasEl,
 } from "./model";
 import { officeSvgMarkup } from "./svg";
+import { isOfficeEmbeddableRaster, rasterSourceToPng } from "./images";
 import { normalizeBlurMm } from "./blur";
 import { projectAccessBlock } from "./access-limits";
 import { editorAccessResolved, useEditor } from "./store";
@@ -441,7 +442,19 @@ export async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
       // a native `svg` element is drawn to PNG here so it is never silently
       // missing from the export. See `officeSvgMarkup`.
       const markup = officeSvgMarkup(el);
-      if (!markup) return el;
+      if (!markup) {
+        // An image the Office writers cannot embed verbatim — a `webp` data
+        // URL, a remote `https://` URL, a legacy `blob:` source — is drawn to
+        // PNG here too. The writers accept raster bytes only, and their regex
+        // matches png/jpeg/gif/bmp, so anything else used to be dropped from
+        // the .docx/.pptx entirely. Rasterising at the export boundary keeps
+        // the original source in the project and only rewrites the Office copy.
+        if (el.type === "image" && !isOfficeEmbeddableRaster(el.src)) {
+          const png = await rasterSourceToPng(el.src);
+          return png ? { ...el, src: png } : el;
+        }
+        return el;
+      }
       const png = await svgToPngDataUrl(markup, el.w, el.h, 2);
       return png ? { ...el, src: png } : el;
     };
