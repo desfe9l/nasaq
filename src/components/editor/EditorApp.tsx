@@ -378,6 +378,14 @@ export function EditorApp({
     void hydrate();
   }, [hydrate]);
 
+  // Expose store for browser tests after hydration
+  const hydrated = useEditor((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated) {
+      window.__nsqStore = useEditor;
+    }
+  }, [hydrated, useEditor]);
+
   /*
    * One document, one address. When the author switches documents INSIDE the
    * studio (the project menu, a template, a fresh document), the address bar

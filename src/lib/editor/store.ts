@@ -3590,7 +3590,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     importProject: async (data, opts = {}) => {
-      if (!requireEditorAccess()) return false;
+      if (!requireEditorAccess()) {
+        return false;
+      }
       if (!data || !Array.isArray(data.pages) || !data.pages.length) {
         toast.error("ملف المشروع غير صالح — لا يحتوي على صفحات");
         return false;
@@ -3615,7 +3617,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       const sameOwner = () =>
         getStorageOwner() === owner &&
         (!opts.expectedOwner || get().sessionOwner === owner);
-      if (!sameOwner()) return false;
+      if (!sameOwner()) {
+        return false;
+      }
       if (
         hasLeaveGuard() &&
         !opts.expectedOwner &&
@@ -3623,7 +3627,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         hasUnsavedChanges(get().saveState)
       ) {
         const allowed = await requestLeave();
-        if (!allowed || !sameOwner()) return false;
+        if (!allowed || !sameOwner()) {
+          return false;
+        }
       }
       let current = get();
       const sameContent = () =>
@@ -3636,9 +3642,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       const sameDocument = () => get().id === current.id && sameContent();
       if (get().saveState === "dirty" || get().saveState === "saving") {
         await get().saveNow();
-        if (get().saveState === "error" || !sameOwner() || !sameContent())
+        if (get().saveState === "error" || !sameOwner() || !sameContent()) {
           return false;
-        // A first autosave assigns an ID; that is not a user switching documents.
+        }
         current = get();
       }
       const importId =
@@ -3646,7 +3652,9 @@ export const useEditor = create<EditorStore>((set, get) => {
           ? `nsq-${opts.importId}`
           : undefined;
       const existing = importId ? await getProject(importId) : null;
-      if (!sameOwner()) return false;
+      if (!sameOwner()) {
+        return false;
+      }
       const entitlements = get().entitlements;
       if (
         exceedsProjectPageLimit(

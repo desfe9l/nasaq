@@ -139,8 +139,6 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
     setOpen(false);
     if (busy || !allowed()) return;
     setBusy(true);
-    // Called synchronously from the click so the save picker keeps the
-    // user activation it requires.
     void action().finally(() => setBusy(false));
   };
 

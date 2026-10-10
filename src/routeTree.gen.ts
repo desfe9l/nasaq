@@ -19,6 +19,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LicenseRouteImport } from './routes/license'
@@ -130,6 +131,11 @@ const CustomDesignRoute = CustomDesignRouteImport.update({
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ImportRoute = ImportRouteImport.update({
@@ -324,14 +330,14 @@ const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditorIndexRoute = EditorIndexRouteImport.update({
-  id: '/editor/',
-  path: '/editor/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => EditorRoute,
 } as any)
 const EditorProjectIdRoute = EditorProjectIdRouteImport.update({
-  id: '/editor/$projectId',
-  path: '/editor/$projectId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => EditorRoute,
 } as any)
 const PaymentCancelRoute = PaymentCancelRouteImport.update({
   id: '/payment/cancel',
@@ -458,6 +464,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
+  '/editor': typeof EditorRouteWithChildren
   '/import': typeof ImportRoute
   '/library': typeof LibraryRoute
   '/license': typeof LicenseRoute
@@ -605,6 +612,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
+  '/editor': typeof EditorRouteWithChildren
   '/import': typeof ImportRoute
   '/library': typeof LibraryRoute
   '/license': typeof LicenseRoute
@@ -681,6 +689,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/custom-design'
     | '/demo'
+    | '/editor'
     | '/import'
     | '/library'
     | '/license'
@@ -827,6 +836,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/custom-design'
     | '/demo'
+    | '/editor'
     | '/import'
     | '/library'
     | '/license'
@@ -902,6 +912,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   CustomDesignRoute: typeof CustomDesignRoute
   DemoRoute: typeof DemoRoute
+  EditorRoute: typeof EditorRouteWithChildren
   ImportRoute: typeof ImportRoute
   LibraryRoute: typeof LibraryRoute
   LicenseRoute: typeof LicenseRoute
@@ -921,13 +932,11 @@ export interface RootRouteChildren {
   WorkspaceRoute: typeof WorkspaceRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAppVersionRoute: typeof ApiAppVersionRoute
-  EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
   SCodeRoute: typeof SCodeRoute
   ShareTokenRoute: typeof ShareTokenRoute
   TCodeRoute: typeof TCodeRoute
-  EditorIndexRoute: typeof EditorIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
@@ -1009,6 +1018,13 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/import': {
@@ -1279,17 +1295,17 @@ declare module '@tanstack/react-router' {
     }
     '/editor/': {
       id: '/editor/'
-      path: '/editor'
+      path: '/'
       fullPath: '/editor/'
       preLoaderRoute: typeof EditorIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof EditorRoute
     }
     '/editor/$projectId': {
       id: '/editor/$projectId'
-      path: '/editor/$projectId'
+      path: '/$projectId'
       fullPath: '/editor/$projectId'
       preLoaderRoute: typeof EditorProjectIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof EditorRoute
     }
     '/payment/cancel': {
       id: '/payment/cancel'
@@ -1496,6 +1512,19 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface EditorRouteChildren {
+  EditorProjectIdRoute: typeof EditorProjectIdRoute
+  EditorIndexRoute: typeof EditorIndexRoute
+}
+
+const EditorRouteChildren: EditorRouteChildren = {
+  EditorProjectIdRoute: EditorProjectIdRoute,
+  EditorIndexRoute: EditorIndexRoute,
+}
+
+const EditorRouteWithChildren =
+  EditorRoute._addFileChildren(EditorRouteChildren)
+
 interface ProjectsRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
@@ -1550,6 +1579,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   CustomDesignRoute: CustomDesignRoute,
   DemoRoute: DemoRoute,
+  EditorRoute: EditorRouteWithChildren,
   ImportRoute: ImportRoute,
   LibraryRoute: LibraryRoute,
   LicenseRoute: LicenseRoute,
@@ -1570,13 +1600,11 @@ const rootRouteChildren: RootRouteChildren = {
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAppVersionRoute: ApiAppVersionRoute,
-  EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
   SCodeRoute: SCodeRoute,
   ShareTokenRoute: ShareTokenRoute,
   TCodeRoute: TCodeRoute,
-  EditorIndexRoute: EditorIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,

@@ -9,3 +9,8 @@
  * client and the SSR output.)
  */
 declare const __APP_BUILD_ID__: string;
+
+// Browser test hook: expose Zustand store for e2e verification
+interface Window {
+  __nsqStore: import("@/lib/editor/store").UseEditor | undefined;
+}
