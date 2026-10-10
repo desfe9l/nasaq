@@ -59,6 +59,32 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const personal = tier === "LICENSED" || tier === "ADMIN";
   const guest = authEnabled && !isPending && !user;
   const linked = open ? linkedFileName(projectId) : null;
+  const [freeExportCount, setFreeExportCount] = useState(3);
+  const [freeExportLoading, setFreeExportLoading] = useState(false);
+
+  // Fetch free export count on component mount and when user changes
+  useEffect(() => {
+    if (!user) {
+      setFreeExportCount(3); // Guest users get 3 free exports
+      return;
+    }
+
+    const fetchFreeExportCount = async () => {
+      try {
+        setFreeExportLoading(true);
+        const sql = await getSql();
+        const usage = await getFreeExportUsage(sql, user.id);
+        setFreeExportCount(3 - usage.totalUsed); // Remaining exports
+      } catch (error) {
+        console.error('Failed to fetch free export count:', error);
+        setFreeExportCount(0); // On error, show 0 to be safe
+      } finally {
+        setFreeExportLoading(false);
+      }
+    };
+
+    fetchFreeExportCount();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!open || !user) return;

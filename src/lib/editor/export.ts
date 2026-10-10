@@ -27,6 +27,7 @@ import {
   canUseDemoExport,
   effectiveExportScale,
 } from "@/lib/product/product";
+import { incrementFreeExportUsage, canUseFreeExport, getFreeExportUsage } from "@/lib/license/server";
 
 export type ExportFormat =
   "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "svg" | "json" | "nsq";
@@ -738,13 +739,28 @@ export async function runExport(
       toast.error("تعذر التقاط الصفحات — أعد المحاولة");
       return;
     }
-    if (notifyProjectAccessBlock(project, format)) return;
-    if (format === "pdf") await exportPdf(pages, name);
-    else if (format === "png") await exportImages(pages, name, "png");
-    else if (format === "jpg") await exportImages(pages, name, "jpg");
-    else throw new Error(`صيغة غير مدعومة: ${format}`);
-    if (notifyProjectAccessBlock(project, format)) return;
-    toast.success("تم التصدير بنجاح");
+    // Check free export allowance for PNG, JPG, and PDF
+    if (format === "png" || format === "jpg" || format === "pdf") {
+      const canExport = await canUseFreeExportFn();
+      if (!canExport.canUse) {
+        const usage = await getFreeExportUsageFn();
+        toast.error(
+          `لقد استهلكت جميع التصديرات المجانية الثلاث. لقد استخدمت ${usage.totalUsed}/3 تصديرات مجانية. قم بالترقية لتصدير المزيد.`
+        );
+        return;
+      }
+      // After successful export, we'll increment the usage
+      if (format === "pdf") await exportPdf(pages, name);
+      else if (format === "png") await exportImages(pages, name, "png");
+      else if (format === "jpg") await exportImages(pages, name, "jpg");
+      else throw new Error(`صيغة غير مدعومة: ${format}`);
+      
+      // Increment the usage counter after successful export
+      await incrementFreeExportUsageFn({ format });
+      toast.success("تم التصدير بنجاح");
+      return;
+    }
+     // Handle remaining formats (PPTX, DOCX, HTML, SVG, JSON, NSQ)     if (format === "pptx" || format === "docx") {       if (!selected.length) {         toast.error("لا توجد صفحات للتصدير");         return;       }       if (format === "pptx") assertUniformSlideSize(selected.map(pageSize));       if (!editableOffice) {         const snapshots =           pages?.length === selected.length && pages.every((p) => p.snapshot)             ? pages.map((p) => p.snapshot!)             : await captureSnapshots(selected);         const scenes = [];         for (const snapshot of snapshots) {           scenes.push(await snapshotLayers(snapshot, fidelityScale));         }         if (notifyProjectAccessBlock(project, format)) return;         const blob =           format === "pptx"             ? await (await import("./pptx-writer")).writePptx(scenes, name)             : await (                 await import("./docx-writer")               ).writeDocx({ scenes, title: name });         if (notifyProjectAccessBlock(project, format)) return;         downloadBlob(blob, `${name}.${format}`);         toast.success(           "تم التصدير بطبقات مستقلة مطابقة للتصميم؛ النصوص محفوظة بصريًا",         );         return;       }       if (editableOffice) {         if (format === "pptx")           await exportPptxEditable(selected, name, project.pages, project);         else await exportDocxEditable(selected, name, project.pages, project);         toast.success(           format === "pptx"             ? "تم تصدير عرض PowerPoint بنصوص وعناصر قابلة للتعديل"             : "تم تصدير مستند Word بنصوص وجداول قابلة للتعديل"         );         return;       }     } else if (format === "svg") {       if (!selected.length) {         toast.error("لا توجد صفحات للتصدير");         return;       }       const archive = new JSZip();       selected.forEach((page, i) => {         if (page.svg) {           archive.file(`${name}-${i + 1}.svg`, page.svg);         }       });       const archiveBlob = await archive.generateAsync({ type: "blob" });       if (notifyProjectAccessBlock(project, format)) return;       downloadBlob(archiveBlob, `${name}-svg.zip`);       toast.success("تم تصدير SVG للويب مع الخطوط والصور المضمنة");       return;     } else if (format === "html") {       if (!pages?.length) {         toast.error("تعذر التقاط الصفحات — أعد المحاولة");         return;       }       const html = await snapshotsHtml(selected);       if (notifyProjectAccessBlock(project, format)) return;       downloadBlob(html, `${name}.html`);       toast.success("تم تصدير المستند كصفحة ويب");       return;     } else if (format === "json") {       if (!pages?.length) {         toast.error("تعذر التقاط الصفحات — أعد المحاولة");         return;       }       const json = await exportJson(pages, name);       if (notifyProjectAccessBlock(project, format)) return;       downloadBlob(json, `${name}.json`);       toast.success("تم تصدير المستند كملف JSON");       return;     } else if (format === "nsq") {       if (!pages?.length) {         toast.error("تعذر التقاط الصفحات — أعد المحاولة");         return;       }       await exportNsq(pages, name);       if (notifyProjectAccessBlock(project, format)) return;       toast.success("تم تصدير المشروع كمشروع نَسَق");       return;     } else {       throw new Error(`صيغة غير مدعومة: ${format}`);     }
   } catch (err) {
     console.error(err);
     toast.error("فشل التصدير. جرّب جودة أقل أو قلّل عدد الصور.");

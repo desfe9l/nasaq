@@ -23,6 +23,9 @@ import {
   findLicenseById,
   findLicensesByUserId,
   LicenseOwnershipError,
+  incrementFreeExportUsage,
+  getFreeExportUsage,
+  canUseFreeExport,
 } from "./server";
 import {
   createKeygenLicense,
@@ -762,4 +765,36 @@ export const superAdminSetLicenseExpiryFn = createServerFn({ method: "POST" })
         license: null as License | null,
       };
     }
+  });
+
+/** Increment free export usage for the current user. */
+export const incrementFreeExportUsageFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { format: "png" | "jpg" | "pdf" }) => data)
+  .handler(async ({ data, context }): Promise<{ success: boolean; remaining: number }> => {
+    const sql = await getSql();
+    return incrementFreeExportUsage(sql, context.userId, data.format);
+  });
+
+/** Get free export usage for the current user. */
+export const getFreeExportUsageFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{
+    png: number;
+    jpg: number;
+    pdf: number;
+    totalUsed: number;
+    remaining: number;
+  }> => {
+    const sql = await getSql();
+    return getFreeExportUsage(sql, context.userId);
+  });
+
+/** Check if current user can use a free export. */
+export const canUseFreeExportFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ canUse: boolean }> => {
+    const sql = await getSql();
+    const canUse = await canUseFreeExport(sql, context.userId);
+    return { canUse };
   });

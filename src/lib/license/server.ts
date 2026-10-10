@@ -498,3 +498,101 @@ export async function unassignLicense(licenseId: string, userId: string): Promis
   );
   return findLicenseById(licenseId);
 }
+
+/** Free export usage tracking for the three-free-file plan. */
+// Increment the free export usage counter for a user and format.
+export async function incrementFreeExportUsage(
+  sql: Sql,
+  userId: string,
+  format: "png" | "jpg" | "pdf"
+): Promise<{ success: boolean; remaining: number }> {
+  // Validate format
+  if (!["png", "jpg", "pdf"].includes(format)) {
+    throw new Error(`Invalid format: ${format}`);
+  }
+
+  // Get current usage
+  const result = await sql<
+    { used_count: number }[]
+  >`
+    select used_count from free_export_usage
+    where user_id = ${userId} and format = ${format}
+  `;
+
+  const currentUsage = result[0]?.used_count ?? 0;
+  const newUsage = currentUsage + 1;
+
+  // Upsert the usage record
+  await sql`
+    insert into free_export_usage (user_id, format, used_count, updated_at)
+    values (${userId}, ${format}, ${newUsage}, now())
+    on conflict (user_id, format) do update set
+      used_count = ${newUsage},
+      updated_at = now()
+  `;
+
+  // Calculate total usage across all formats
+  const totalResult = await sql<
+    { total_used: number }[]
+  >`
+    select coalesce(sum(used_count), 0) as total_used
+    from free_export_usage
+    where user_id = ${userId}
+  `;
+
+  const totalUsed = totalResult[0]?.total_used ?? 0;
+  const remaining = Math.max(0, 3 - totalUsed);
+
+  return {
+    success: true,
+    remaining
+  };
+}
+
+/** Get the current free export usage for a user. */
+export async function getFreeExportUsage(
+  sql: Sql,
+  userId: string
+): Promise<{
+  png: number;
+  jpg: number;
+  pdf: number;
+  totalUsed: number;
+  remaining: number;
+}> {
+  const result = await sql<
+    { format: string; used_count: number }[]
+  >`
+    select format, used_count
+    from free_export_usage
+    where user_id = ${userId}
+  `;
+
+  const usage = { png: 0, jpg: 0, pdf: 0 };
+  let totalUsed = 0;
+
+  for (const row of result) {
+    if (row.format === "png") usage.png = row.used_count;
+    else if (row.format === "jpg") usage.jpg = row.used_count;
+    else if (row.format === "pdf") usage.pdf = row.used_count;
+    
+    totalUsed += row.used_count;
+  }
+
+  const remaining = Math.max(0, 3 - totalUsed);
+
+  return {
+    ...usage,
+    totalUsed,
+    remaining
+  };
+}
+
+/** Check if user can use a free export (has remaining allowance). */
+export async function canUseFreeExport(
+  sql: Sql,
+  userId: string
+): Promise<boolean> {
+  const usage = await getFreeExportUsage(sql, userId);
+  return usage.remaining > 0;
+}
