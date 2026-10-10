@@ -152,7 +152,7 @@ async function runJsdomFallback() {
     const dlg2 = host.querySelector('[role="dialog"]');
     assert.ok(dlg2);
     const saveBtn = Array.from(dlg2.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "حفظ ومتابعة",
+      (b) => b.textContent?.trim() === "حفظ وخروج",
     );
     assert.ok(saveBtn, "Save and Continue button must render");
     saveBtn.click();
@@ -173,7 +173,7 @@ async function runJsdomFallback() {
     const dlg3 = host.querySelector('[role="dialog"]');
     assert.ok(dlg3);
     const discardBtn = Array.from(dlg3.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "متابعة بدون حفظ",
+      (b) => b.textContent?.trim() === "الخروج بدون حفظ",
     );
     assert.ok(discardBtn, "Continue Without Saving button must render");
     discardBtn.click();
@@ -309,7 +309,7 @@ await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 10000 });
 assert.equal(await page.locator("#unsaved-leave-title").count(), 0);
 
-// 8 & 9. Edit project -> Leave -> Cancel (إلغاء) & Continue Without Saving (متابعة بدون حفظ).
+// 8 & 9. Edit project -> Leave -> Cancel (إلغاء) & Continue Without Saving (الخروج بدون حفظ).
 await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
 await page.evaluate(async () => {
@@ -322,9 +322,9 @@ await page.getByRole("button", { name: /حساب / }).click();
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
 assert.equal(await page.locator("#unsaved-leave-title").innerText(), "لديك تغييرات غير محفوظة");
-assert.match(await page.locator('[role="dialog"]').innerText(), /هل تريد حفظ المشروع قبل المغادرة؟/);
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).waitFor();
+assert.match(await page.locator('[role="dialog"]').innerText(), /هل تريد حفظ المشروع قبل الخروج من المحرر؟/);
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).waitFor();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).waitFor();
 await page.getByRole("button", { name: "إلغاء", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 assert.equal(new URL(page.url()).pathname, "/editor");
@@ -335,7 +335,7 @@ if (!(await page.getByRole("menuitem", { name: "مساحة العمل" }).isVisi
   await page.getByRole("button", { name: /حساب / }).click();
 }
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"));
 await page.goto(`${base}/editor?template=official`);
 await waitForEditorReady();
@@ -379,7 +379,7 @@ await page.reload({ waitUntil: "domcontentloaded" });
 assert.equal(unexpected, false);
 await waitForEditorReady();
 
-// 3 & 7. Edit project -> Browser Back -> confirmation appears -> Cancel -> Back -> Save and Continue (حفظ ومتابعة).
+// 3 & 7. Edit project -> Browser Back -> confirmation appears -> Cancel -> Back -> Save and Continue (حفظ وخروج).
 await page.evaluate(async () => {
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
   const store = window.__store.getState();
@@ -397,7 +397,7 @@ assert.equal(await page.evaluate(() => window.__store.getState().name), "محف�
 
 await page.evaluate(() => window.history.back());
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForURL((url) => !url.pathname.startsWith("/editor"), { timeout: 15000 });
 
 await page.goto(`${base}/editor?template=official`);
@@ -434,12 +434,12 @@ assert.equal(await page.evaluate(() => window.__openPromise), false);
 assert.equal(await page.evaluate(() => window.__store.getState().id), firstId);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "تعديل قبل تبديل المشروع");
 
-// Trigger openProject(secondId) -> Discard (متابعة بدون حفظ)
+// Trigger openProject(secondId) -> Discard (الخروج بدون حفظ)
 await page.evaluate((id) => {
   window.__openPromise = window.__store.getState().openProject(id);
 }, secondId);
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__openPromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().id), secondId);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "المشروع الثاني المستهدف");
@@ -449,7 +449,7 @@ assert.equal(
   "discarding when switching projects must not save discarded edits to the first project",
 );
 
-// Edit second project -> openProject(firstId) -> Save and Continue (حفظ ومتابعة)
+// Edit second project -> openProject(firstId) -> Save and Continue (حفظ وخروج)
 await page.evaluate(() => {
   const store = window.__store.getState();
   store.pauseScheduledSave();
@@ -459,7 +459,7 @@ await page.evaluate((id) => {
   window.__openPromise = window.__store.getState().openProject(id);
 }, firstId);
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__openPromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().id), firstId);
 assert.equal(
@@ -484,7 +484,7 @@ assert.equal(await page.evaluate(() => window.__store.getState().name), "تعد�
 await page.getByRole("button", { name: "ملف المشروع", exact: true }).click();
 await page.getByRole("menuitem", { name: "مشروع جديد" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 await page.getByRole("button", { name: "إنشاء المستند" }).click();
 await page.waitForFunction((prevId) => window.__store.getState().id !== prevId, firstId);
@@ -522,7 +522,7 @@ await page.evaluate(async () => {
   });
 });
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "متابعة بدون حفظ", exact: true }).click();
+await page.getByRole("button", { name: "الخروج بدون حفظ", exact: true }).click();
 assert.equal(await page.evaluate(() => window.__templatePromise), true);
 assert.equal(await page.evaluate(() => window.__store.getState().name), "قالب موجز تنفيذي");
 assert.notEqual(
@@ -566,7 +566,7 @@ await page.evaluate(async () => {
 await page.getByRole("button", { name: /حساب / }).click();
 await page.getByRole("menuitem", { name: "مساحة العمل" }).click();
 await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
-await page.getByRole("button", { name: "حفظ ومتابعة", exact: true }).click();
+await page.getByRole("button", { name: "حفظ وخروج", exact: true }).click();
 await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
 assert.equal(new URL(page.url()).pathname, "/editor", "save failure must keep user in editor");
 assert.equal(await page.evaluate(() => window.__store.getState().saveState), "error");
