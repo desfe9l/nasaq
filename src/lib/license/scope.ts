@@ -64,11 +64,19 @@ function markerNamesOwner(marker: string, ownerId: string, rebound: string[]): b
  * Mirrors the historical check (`userScopeVerified === userId`) with the one
  * addition: a scope marker that names an id the binding proved is this owner's
  * pre-migration id counts as this owner's scope.
+ *
+ * A Keygen row is only ever written by `persistKeygenLicense`, and only with a
+ * successful user-scoped provider validation, so it always carries
+ * `userScopeVerified`. Its absence therefore means the row was never verified
+ * for ANY account, and an absent marker is NOT proof of ownership — the
+ * historical `=== userId` refused it and so does this. (Turning the absence
+ * into a grant would let a locally re-pointed `user_id` unlock a key the
+ * provider never scoped to the caller.)
  */
 export function keygenScopeSatisfied(metadata: unknown, ownerUserId: string): boolean {
   const parsed = metadataOf(metadata);
   const scoped = parsed.userScopeVerified;
-  if (!scoped) return true;
+  if (!scoped) return false;
   return markerNamesOwner(scoped, ownerUserId, reboundFromIds(metadata));
 }
 
@@ -127,11 +135,19 @@ export function nextReboundFrom(
  * a local reassignment of `user_id` can never make someone else's Keygen key
  * usable by the new account.
  *
+ * The `userScopeVerified` marker is REQUIRED, matching
+ * {@link keygenScopeSatisfied}: a Keygen row is always written with it, so its
+ * absence is a row the provider never scoped to any account — refused, never
+ * treated as a grant. `nasaqUserId` stays optional because a provider copy may
+ * simply omit it.
+ *
  * `column` is always a module constant (`metadata` / `l.metadata`), never input.
  */
 export function keygenScopeSql(column: string): string {
   const rebound = `coalesce(string_to_array(coalesce(${column}->>'${OWNER_REBOUND_FROM}', ''), ','), '{}')`;
-  const marker = (key: string) =>
-    `(${column}->>'${key}' IS NULL OR ${column}->>'${key}' = $1 OR ${column}->>'${key}' = ANY(${rebound}))`;
-  return `(${marker("nasaqUserId")} AND ${marker("userScopeVerified")})`;
+  const namesOwner = (key: string) =>
+    `(${column}->>'${key}' = $1 OR ${column}->>'${key}' = ANY(${rebound}))`;
+  const optionalNamesOwner = (key: string) =>
+    `(${column}->>'${key}' IS NULL OR ${namesOwner(key)})`;
+  return `(${optionalNamesOwner("nasaqUserId")} AND ${namesOwner("userScopeVerified")})`;
 }

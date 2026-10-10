@@ -33,6 +33,16 @@ function normalizeDatabaseUrl(connectionString) {
 }
 
 const databaseUrl = normalizeDatabaseUrl(process.env.NASAQ_PRIMARY_DATABASE_URL);
+if (process.env.VERCEL_ENV === "preview") {
+  // Preview shares the Production schema, so it never runs deploy-time
+  // migrations. This is decided by the environment alone — a Preview build
+  // without NASAQ_PRIMARY_DATABASE_URL is still a Preview build, not a
+  // Production one missing its database.
+  console.log(
+    "[migrate] Vercel Preview — skipping deploy-time migrations; Preview shares the Production schema.",
+  );
+  process.exit(0);
+}
 if (!databaseUrl) {
   if (process.env.VERCEL === "1" || process.env.NASAQ_STRICT_ENV === "1") {
     console.error(
@@ -42,12 +52,6 @@ if (!databaseUrl) {
   }
   console.log(
     "[migrate] NASAQ_PRIMARY_DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
-  );
-  process.exit(0);
-}
-if (process.env.VERCEL_ENV === "preview") {
-  console.log(
-    "[migrate] Vercel Preview — skipping deploy-time migrations; Preview shares the Production schema.",
   );
   process.exit(0);
 }
