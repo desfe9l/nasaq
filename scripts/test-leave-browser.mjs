@@ -572,11 +572,15 @@ assert.equal(new URL(page.url()).pathname, "/editor", "save failure must keep us
 assert.equal(await page.evaluate(() => window.__store.getState().saveState), "error");
 assert.equal(await page.evaluate(() => window.__store.getState().name), "تعديل يفشل حفظه");
 
-// Restore PRO entitlements and save cleanly before testing mobile lifecycle.
+// Restore a clean, FREE-restorable document before testing mobile lifecycle.
+// The in-page PRO entitlements do NOT survive a reload (the mocked session
+// cannot cache a server entitlement), and hydrate() fail-closes the boot
+// restore of any premium-pack document under FREE — so the recovery document
+// must be the free "blank" pack for the draft restore to be permitted.
 await page.evaluate(async () => {
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
   const store = window.__store.getState();
-  window.__store.setState({ pack: "official" });
+  window.__store.setState({ pack: "blank" });
   store.setEntitlements(LICENSE_ENTITLEMENTS.PRO, store.sessionOwner ?? undefined);
   await store.saveNow();
 });
