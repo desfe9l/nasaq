@@ -20,6 +20,7 @@ import "fake-indexeddb/auto";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { officeSvgMarkup, svgDataUrlMarkup } from "./svg.ts";
+import { safeImageSrc } from "./images";
 
 const ART =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">' +
@@ -66,3 +67,10 @@ test("raster pictures and plain shapes yield nothing", () => {
   );
   assert.equal(officeSvgMarkup({ type: "shape" }), "");
 });
+  test("AI-generated SVG data URL is allowed by safeImageSrc and yields correct markup for preview", () => {
+    const src = BASE64_SRC; // or PERCENT_SRC
+    const safe = safeImageSrc(src);
+    assert.equal(safe, src, "safeImageSrc should return the SVG data URL unchanged");
+    const markup = svgDataUrlMarkup(safe);
+    assert.match(markup, /<circle/);
+  });
