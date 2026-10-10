@@ -3,19 +3,19 @@
 **Audit date:** 2026-10-10
 **Repository:** `desfe9l/nasaq`
 **Audited branch:** `main`
-**Baseline commit:** `29211729849f5ce03f223388a7734787b4a71097`
+**Released commit:** `79acc29d863ef07604a2119db8660c4984a72480`
 **Production:** https://nasaq-sa.vercel.app
-**Latest observed production build:** `2921172-mv1u35m7`
+**Latest observed production build:** `79acc29-mv1ukxcm`
 
 ## Executive summary
 
-The current `main` revision is deployed to Vercel and serves the public homepage, editor entry, templates, authentication health endpoint, and owner-vault route. The homepage and templates pages were rendered in the sandbox browser with no console errors; the editor route was reachable and rendered its protected start surface. The production `/api/app-version` response matches the deployed `main` SHA prefix.
+The current `main` revision is deployed to Vercel and serves the public homepage, editor entry, templates, authentication health endpoint, and owner-vault route. The homepage, templates, and about pages were rendered in the sandbox browser with no console errors; the editor route was reachable and rendered its protected start surface. The production `/api/app-version` response matches the released `main` SHA prefix.
 
 The repository contains a mature local-first editor, first-party authentication, PostgreSQL/PGLite data layer, R2-backed optional cloud storage, Gemini integration, editable Office/document exports, offline caches, licensing gates, and extensive automated coverage. The full `npm test` suite passed on the baseline checkout. `npm run typecheck`, `npm run build`, `npm run check:deploy`, `npm run check:auth` (with a running dev server), and `npm run env:audit` passed. Lint completed with **0 errors and 63 existing warnings**.
 
 One verified requirement defect was found and corrected in this audit: public attribution used `فريق نَسَق` / `NASAQ Team`, while the explicit requirement is `المصمم والمطور فيصل المضياني` and, where English is appropriate, `Developed by فيصل المضياني`. The correction is in `src/lib/brand.ts` with a regression test in `src/lib/brand.test.ts`. It is safe and does not alter authentication, storage, licensing, user data, or document behavior.
 
-**Current decision before the final push:** `PARTIALLY COMPLETED` — the attribution fix is implemented locally but not yet committed, deployed, or production-verified; several production-only workflows remain blocked by unavailable authenticated accounts and secret-backed external services.
+**Current decision:** `PARTIALLY COMPLETED` — the public release and explicit attribution requirement are complete and verified, while protected database, storage, authenticated editor, AI, and device-specific workflows remain unverified because authorized fixtures and credentials were not available.
 
 ## Requirements matrix
 
@@ -26,7 +26,7 @@ The attached master brief recovered fourteen durable requirement groups. Each gr
 | REQ-01 | Unified durable persistence; audit prior Neon/Aiven/PostgreSQL/PGLite decisions and protect data. | `src/lib/db.ts`, `migrations/`, `docs/primary-database-cutover.md`, `src/lib/auth/store/` | **PARTIALLY IMPLEMENTED** | P0 | Code and migration architecture are present. Actual production database identity, schema checksum, connection pool behavior, and data continuity require authorized database access; do not cut over or run destructive tests. |
 | REQ-02 | Sign-up/sign-in, sessions, Google OAuth, protected routes, logout, and cross-instance continuity. | `src/lib/auth/`, `/api/auth/*`, auth tests, `scripts/auth-e2e.mjs` | **DEPLOYED BUT NOT FULLY VERIFIED** | P0 | `/api/auth/ok` returned 200 and local real-auth E2E/invariant infrastructure passes. A permitted test account and provider-backed session are still needed for production sign-in, navigation to `/editor`, logout, and Google OAuth verification. |
 | REQ-03 | Tabs, navigation, RTL, responsive layout, touch targets, and state preservation. | `src/components/editor/`, `src/lib/editor/`, `docs/editor-focused-verification.md`, `scripts/test-editor-workspace.mjs` | **VERIFIED WORKING (AUTOMATED / BROWSER SIMULATION)** | P1 | Existing browser suite covers desktop and simulated iPad sizes, touch/pinch, keyboard, tabs, pages, zoom to 200%, and state preservation. Real iOS/iPadOS/Safari and Apple Pencil remain unverified. |
-| REQ-04 | NASAQ identity, palette, modes, editor/public consistency, and required developer attribution. | `src/lib/brand.ts`, `src/styles.css`, `src/components/site/SiteChrome.tsx`, `src/routes/__root.tsx` | **FIXED LOCALLY — NOT YET DEPLOYED** | P2 | Root cause was stale shared `BRAND.developer` / `developerEn` values. Changed to the exact required Arabic and English attribution and added `src/lib/brand.test.ts`; commit, deployment, and public re-check remain. |
+| REQ-04 | NASAQ identity, palette, modes, editor/public consistency, and required developer attribution. | `src/lib/brand.ts`, `src/styles.css`, `src/components/site/SiteChrome.tsx`, `src/routes/__root.tsx` | **VERIFIED WORKING (PRODUCTION)** | P2 | Root cause was stale shared `BRAND.developer` / `developerEn` values. Changed to the exact required Arabic and English attribution, added `src/lib/brand.test.ts`, and verified the deployed about page renders `Developed by فيصل المضياني`. |
 | REQ-05 | Homepage is a genuine marketing entry with working CTAs and a real mini-editor. | `src/components/site/HomePage.tsx`, `/` | **VERIFIED WORKING (PUBLIC RUNTIME)** | P1 | Browser render showed hero, CTAs, functional mini-editor controls, template discovery, pricing links, and responsive content. Production screenshot initially captured SSR skeleton, then hydration completed normally; no console errors. |
 | REQ-06 | Production-grade editor: selection, layers, transforms, grouping, crop/mask, save/reload, export, touch, leave protection. | `src/components/editor/`, `src/lib/editor/`, `docs/editor-focused-verification.md`, editor tests | **PARTIALLY VERIFIED** | P1 | Extensive unit and simulated-browser coverage passes. Real production authenticated save/reload, cloud recovery, and physical Apple Pencil/Safari behavior need an authorized account/device. |
 | REQ-07 | AI image generation → insertion → decode → save/reload → PNG/PDF/Office export. | `src/lib/ai/`, `src/lib/editor/images.ts`, `src/lib/editor/export.ts`, `src/lib/editor/image-frames.ts` | **PARTIALLY IMPLEMENTED / NOT PRODUCTION-VERIFIED** | P1 | AI image lifecycle and image/export contracts have regression tests. No configured production AI key or authorized generated-image run was available; cannot claim end-to-end production export fidelity. |
@@ -42,7 +42,7 @@ The attached master brief recovered fourteen durable requirement groups. Each gr
 
 | Requirement | Requested | Implemented | Tested | Committed | Pushed | Merged | Deployed | Verified working |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| REQ-04 attribution correction | yes | yes | yes (new regression test pending final gate) | no | no | no | no | no |
+| REQ-04 attribution correction | yes | yes | yes | yes | yes | yes (main) | yes (`dpl_J98pG7utYchgDrWeTXu9BSRE3MNP`) | yes (production about page) |
 | All other requirements | yes | see matrix | see matrix | historical evidence varies | historical evidence varies | historical evidence varies | baseline only | see matrix |
 
 ## Root-cause findings
@@ -77,23 +77,22 @@ The attached master brief recovered fourteen durable requirement groups. Each gr
 ## GitHub, deployment, and test evidence
 
 - **Baseline main SHA:** `29211729849f5ce03f223388a7734787b4a71097`.
-- **Baseline production deployment:** `dpl_9Q7eXGNaky2SXCLD8mrf59zvpGRi`, READY, production, Vercel URL `https://nasaq-nfwwvxjgb-ararcomksa-2423s-projects.vercel.app`.
-- **Production build API:** `GET /api/app-version` returned `{"buildId":"2921172-mv1u35m7"}`.
-- **Production probes:** `/`, `/editor`, `/templates`, `/create?start=raw`, `/ai`, `/login`, `/account`, `/api/app-version`, `/api/auth/ok`, and `/owner-vault` responded; protected pages correctly expose their sign-in boundary where applicable.
-- **Browser verification:** homepage and templates hydrated in Sandbox browser; editor route rendered the create/start surface; no console output/errors were observed on the homepage pass.
+- **Released production deployment:** `dpl_J98pG7utYchgDrWeTXu9BSRE3MNP`, READY, production, commit `79acc29d863ef07604a2119db8660c4984a72480`, aliases `nasaq-sa.vercel.app`, `nasaq.team`, and `www.nasaq.team`.
+- **Production build API:** `GET /api/app-version` returned `{"buildId":"79acc29-mv1ukxcm"}`.
+- **Production probes:** `/`, `/editor`, `/templates`, `/create?start=raw`, `/ai`, `/login`, `/account`, `/api/app-version`, `/api/auth/ok`, `/owner-vault`, and `/about` responded; protected pages correctly expose their sign-in boundary where applicable.
+- **Browser verification:** homepage, templates, and about pages hydrated in Sandbox browser; editor route rendered the create/start surface; about page visibly rendered `Developed by فيصل المضياني`; no console output/errors were observed on the public pass.
 - **Local gates:** `npm ci` completed with Node engine warnings from upstream packages; `npm run typecheck` passed; `npm run build` passed; `npm run check:deploy` passed; `npm run check:auth` passed with the dev server; `npm run env:audit` passed; full `npm test` passed; `npm run lint` had 0 errors and 63 warnings.
 - **Changed files for this audit:** `src/lib/brand.ts`, `src/lib/brand.test.ts`, and this report.
 
 ## Outstanding items and exact next actions
 
-1. **REQ-04:** run the new brand regression test and full gates, commit and push the attribution fix, wait for Vercel, then verify the new `/api/app-version` and hydrated footer/about metadata.
-2. **REQ-01/REQ-12:** run read-only owner/database and R2 verification from the authorized GitHub Environment or Owner Vault; publish only redacted counts/fingerprints. Never paste secret values.
-3. **REQ-02/REQ-06/REQ-09/REQ-11:** use a dedicated permitted test account to verify sign-in, session continuity, editor save/reload, template activation, and cloud/offline synchronization without touching customer data.
-4. **REQ-07/REQ-10:** run one representative Gemini-generated image and verify editor visibility, save/reload, PNG/PDF/Office exports in an authorized environment. Record provider model and result, not the API key.
-5. **REQ-08:** run representative PSD/PDF/DOCX/PPTX/SVG fixtures and record which elements remain editable versus intentionally flattened/unsupported.
-6. **REQ-14:** obtain Vercel runtime logs/metrics through an authorized project-scoped capability and repeat route smoke checks after the new deployment.
-7. Existing non-blocking lint warnings should be cleaned in a separate focused change; no unrelated refactor was introduced here.
+1. **REQ-01/REQ-12:** run read-only owner/database and R2 verification from the authorized GitHub Environment or Owner Vault; publish only redacted counts/fingerprints. Never paste secret values.
+2. **REQ-02/REQ-06/REQ-09/REQ-11:** use a dedicated permitted test account to verify sign-in, session continuity, editor save/reload, template activation, and cloud/offline synchronization without touching customer data.
+3. **REQ-07/REQ-10:** run one representative Gemini-generated image and verify editor visibility, save/reload, PNG/PDF/Office exports in an authorized environment. Record provider model and result, not the API key.
+4. **REQ-08:** run representative PSD/PDF/DOCX/PPTX/SVG fixtures and record which elements remain editable versus intentionally flattened/unsupported.
+5. **REQ-14:** obtain Vercel runtime logs/metrics through an authorized project-scoped capability; public route smoke verification is complete for the released deployment.
+6. Existing non-blocking lint warnings should be cleaned in a separate focused change; no unrelated refactor was introduced here.
 
 ## Final decision
 
-**PARTIALLY COMPLETED** — the baseline release is healthy for public routes and automated gates, one explicit branding defect is fixed locally, and no safe production data changes were made. The final release cannot be called verified until the attribution change is pushed/deployed and protected database, storage, authenticated editor, AI, and device-specific workflows are tested with authorized fixtures.
+**PARTIALLY COMPLETED** — the released commit is healthy for public routes and automated gates; the explicit branding defect is fixed, deployed, and verified live. No safe production data changes were made. The remaining partial status is limited to protected database, storage, authenticated editor, AI, import-fidelity, runtime-metrics, and device-specific workflows that require authorized fixtures or physical devices.
