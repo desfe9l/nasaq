@@ -159,7 +159,7 @@ try {
     page = await author.newPage();
   page.on('console', msg => console.log('BROWSER:', msg.text()));
   page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
-  await page.goto(`${base}/editor?template=official`);
+  await page.goto(`${base}/editor?template=official&showcase=1`);
   await ready(page);
   await page.waitForFunction(
     () => window.__nsqStore.getState().sessionOwner === "nsq-test-user",
