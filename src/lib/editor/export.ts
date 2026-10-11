@@ -27,7 +27,7 @@ import {
   canUseDemoExport,
   effectiveExportScale,
 } from "@/lib/product/product";
-import { incrementFreeExportUsage, canUseFreeExport, getFreeExportUsage } from "@/lib/license/server";
+import * as licenseFn from "@/lib/license/functions";
 
 export type ExportFormat =
   "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "svg" | "json" | "nsq";
@@ -741,9 +741,9 @@ export async function runExport(
     }
     // Check free export allowance for PNG, JPG, and PDF
     if (format === "png" || format === "jpg" || format === "pdf") {
-      const canExport = await canUseFreeExportFn();
+       const canExport = await licenseFn.canUseFreeExportFn();
       if (!canExport.canUse) {
-        const usage = await getFreeExportUsageFn();
+         const usage = await licenseFn.getFreeExportUsageFn();
         toast.error(
           `لقد استهلكت جميع التصديرات المجانية الثلاث. لقد استخدمت ${usage.totalUsed}/3 تصديرات مجانية. قم بالترقية لتصدير المزيد.`
         );
@@ -756,7 +756,7 @@ export async function runExport(
       else throw new Error(`صيغة غير مدعومة: ${format}`);
       
       // Increment the usage counter after successful export
-      await incrementFreeExportUsageFn({ format });
+         await licenseFn.incrementFreeExportUsageFn({ data: { format: format } });
       toast.success("تم التصدير بنجاح");
       return;
     }
