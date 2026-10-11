@@ -6,7 +6,7 @@
  * which use these operations after verifying the caller's identity.
  */
 
-import { getSql } from "@/lib/db";
+import { getSql, type Sql } from "@/lib/db";
 import { generateLicenseKey, hashLicenseKey, keyPrefix } from "./key";
 import { keygenScopeSql } from "./scope";
 import type {
