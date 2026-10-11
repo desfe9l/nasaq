@@ -142,11 +142,12 @@ jobs:
           npm run test:nsq:browser 2>&1 | tee /tmp/nsq-browser.log || status=1
           npm run test:leave:browser 2>&1 | tee /tmp/leave-browser.log || status=1
           npm run test:ai-image:browser 2>&1 | tee /tmp/ai-image-browser.log || status=1
+          npm run test:offline-sync:e2e 2>&1 | tee /tmp/offline-sync-browser.log || status=1
           if [ "$status" -ne 0 ]; then
             # Job logs and artifacts both live on a blob host that some networks
             # cannot reach; an annotation rides the checks API and is readable
             # from anywhere `gh` works. Newlines are folded so it stays one line.
-            detail=$(tail -c 1200 /tmp/nsq-browser.log /tmp/leave-browser.log /tmp/ai-image-browser.log | tr '\n' '~')
+            detail=$(tail -c 1200 /tmp/nsq-browser.log /tmp/leave-browser.log /tmp/ai-image-browser.log /tmp/offline-sync-browser.log | tr '\n' '~')
             echo "::error::browser suite failed: $detail"
           fi
           exit $status
@@ -159,6 +160,7 @@ jobs:
             /tmp/nsq-browser.log
             /tmp/leave-browser.log
             /tmp/ai-image-browser.log
+            /tmp/offline-sync-browser.log
             /tmp/dev-browser.log
           if-no-files-found: ignore
           retention-days: 3
