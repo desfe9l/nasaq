@@ -512,9 +512,7 @@ export async function incrementFreeExportUsage(
   }
 
   // Get current usage
-  const result = await sql<
-    { used_count: number }[]
-  >`
+  const result = await sql<{ used_count: number }>`
     select used_count from free_export_usage
     where user_id = ${userId} and format = ${format}
   `;
@@ -532,9 +530,7 @@ export async function incrementFreeExportUsage(
   `;
 
   // Calculate total usage across all formats
-  const totalResult = await sql<
-    { total_used: number }[]
-  >`
+  const totalResult = await sql<{ total_used: number }>`
     select coalesce(sum(used_count), 0) as total_used
     from free_export_usage
     where user_id = ${userId}
@@ -560,9 +556,7 @@ export async function getFreeExportUsage(
   totalUsed: number;
   remaining: number;
 }> {
-  const result = await sql<
-    { format: string; used_count: number }[]
-  >`
+  const result = await sql<{ format: string; used_count: number }>`
     select format, used_count
     from free_export_usage
     where user_id = ${userId}
