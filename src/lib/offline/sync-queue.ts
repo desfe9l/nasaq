@@ -10,6 +10,7 @@
 
 import { getStorageOwner, ANON_OWNER } from "@/lib/editor/storage-owner";
 import { uid } from "@/lib/utils";
+import { pushCloudProject } from "./cloud-sync";
 
 export type SyncOperationType =
   | "project:create"
@@ -484,10 +485,8 @@ async function attemptSyncEntry(entry: SyncQueueEntry): Promise<{
         if (decision === "remoteWins") {
           return { ok: false, conflict: true, remoteVersion: remoteVersion ?? undefined };
         }
-        // Attempt cloud sync if available, but don't fail queue on missing endpoint
-        const pushed = await pushProjectToCloud(entry);
-        // If cloud not configured, local is enough — dequeue.
-        if (pushed === "not_configured") return { ok: true };
+        // Attempt cloud sync if available. Only dequeue on confirmed success.
+        const pushed = await pushCloudProject(entry);
         return pushed ? { ok: true } : { ok: false, error: "cloud push failed" };
       }
       default:
@@ -519,53 +518,6 @@ async function fetchRemoteVersion(entry: SyncQueueEntry): Promise<number | null>
   }
 }
 
-async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not_configured"> {
-  try {
-    if (!isCurrentEntryOwner(entry)) return false;
-    const payload = entry.payload as Record<string, unknown> | null;
-    const id = typeof payload?.id === "string" ? (payload.id as string) : null;
-    if (entry.type === "project:delete") {
-      if (!id) return true;
-      const mod = await import("@/lib/offline/functions").catch(() => null);
-      if (!mod || typeof (mod as Record<string, unknown>).deleteCloudProject !== "function") return "not_configured";
-      if (!isCurrentEntryOwner(entry)) return false;
-      const response = await fetch(`/api/offline/deleteCloudProject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { id } }),
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        if (response.status === 404) return "not_configured";
-        return false;
-      }
-      const result = await response.json();
-      return result.ok ? true : false;
-    }
-    if (entry.type === "project:create" || entry.type === "project:update") {
-      const fullPayload = projectPayloadForCloudSave(entry);
-      if (!id || !fullPayload) return true;
-      const mod = await import("@/lib/offline/functions").catch(() => null);
-      if (!mod || typeof (mod as Record<string, unknown>).saveCloudProject !== "function") return "not_configured";
-      if (!isCurrentEntryOwner(entry)) return false;
-      const response = await fetch(`/api/offline/saveCloudProject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { id, payload: fullPayload, updatedAt: entry.version ?? Date.now(), version: entry.version } }),
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        if (response.status === 404) return "not_configured";
-        return false;
-      }
-      const result = await response.json();
-      return result.ok ? true : false;
-    }
-    return "not_configured";
-  } catch {
-    return "not_configured";
-  }
-}
 
 /**
  * `saveCloudProject` replaces the complete cloud document, so only a durable
