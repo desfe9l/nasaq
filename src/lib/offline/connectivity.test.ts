@@ -96,6 +96,10 @@ test("queued work: offline keeps it pending, reconnecting drains it once", async
   disposeConnectivity();
   setStorageOwner("sync-drain-user");
   setOnline(false);
+  // Mock fetch to simulate a working cloud server that confirms every push.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }))) as typeof fetch;
   initConnectivity();
 
   const project = await saveProject({
@@ -139,6 +143,7 @@ test("queued work: offline keeps it pending, reconnecting drains it once", async
   );
   assert.equal((await listPendingQueue("sync-drain-user")).length, 0);
   stop();
+  globalThis.fetch = originalFetch;
   setStorageOwner(ANON_OWNER);
 });
 
@@ -146,6 +151,10 @@ test("enqueueing announces pending work without a second drain", async () => {
   disposeConnectivity();
   setOnline(true);
   setStorageOwner("sync-notify-user");
+  // Mock fetch to simulate a working cloud server that confirms every push.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }))) as typeof fetch;
   initConnectivity();
   await whenSyncSettled();
 
@@ -169,5 +178,6 @@ test("enqueueing announces pending work without a second drain", async () => {
     "pending must be observable while work waits",
   );
   stop();
+  globalThis.fetch = originalFetch;
   setStorageOwner(ANON_OWNER);
 });
