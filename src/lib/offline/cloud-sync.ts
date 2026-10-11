@@ -15,7 +15,9 @@ export async function pushCloudProject(entry: SyncQueueEntry): Promise<boolean> 
     const payload = entry.payload as Record<string, unknown> | null;
     const id = typeof payload?.id === "string" ? (payload.id as string) : null;
     if (entry.type === "project:delete") {
-      if (!id) return true;
+      // A delete entry with no ID is malformed; keep it queued rather than
+      // silently acknowledging so the caller can inspect the corrupt entry.
+      if (!id) return false;
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).deleteCloudProject !== "function") return false;
       if (!isCurrentEntryOwner(entry)) return false;
@@ -48,7 +50,10 @@ export async function pushCloudProject(entry: SyncQueueEntry): Promise<boolean> 
     }
     if (entry.type === "project:create" || entry.type === "project:update") {
       const fullPayload = projectPayloadForCloudSave(entry);
-      if (!id || !fullPayload) return true;
+      // A create/update entry that lacks an id or full pages payload is
+      // malformed. Return false so it stays queued and the data-loss risk
+      // (acknowledging without actually persisting) is avoided.
+      if (!id || !fullPayload) return false;
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).saveCloudProject !== "function") return false;
       if (!isCurrentEntryOwner(entry)) return false;

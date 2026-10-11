@@ -111,16 +111,26 @@ test("offline-first critical UX: online -> offline edit -> reconnect sync", asyn
   const afterRestartList = await listProjects();
   assert.equal(afterRestartList.length, 2);
 
-  // Step 3: Internet returns → automatic sync completes
+  // Step 3: Internet returns → automatic sync attempts
   setOnline(true);
   await processSyncQueue();
-  // Since cloud not configured, queue should drain locally (considered success)
-  // Even without cloud, process should succeed and clear queue
-  // Our queue's cloud sync returns not_configured -> success
+  // Metadata-only operations (rename) are acknowledged immediately as local companions.
+  // Cloud-backed operations (delete, create, update) must NOT be acknowledged unless
+  // the server explicitly confirms persistence. In test (no real server), those
+  // entries remain queued — that is the correct, data-safe behaviour.
   const pendingAfterSync = await listPendingQueue("user-offline-test");
-  // After sync, deduplicated queue should be drained (or at least rename should be processed)
-  // In our implementation, project operations return not_configured -> ok -> removed
-  assert.ok(pendingAfterSync.length === 0 || pendingAfterSync.length < pendingOffline.length, "queue should drain after reconnect");
+  // rename is metadata-only → acknowledged; delete stays queued (no server confirmation).
+  const pendingKeys = pendingAfterSync.map((e) => e.dedupeKey);
+  assert.equal(
+    pendingKeys.includes("project:rename:proj-offline-1"),
+    false,
+    "rename metadata entry should be acknowledged immediately (no pages involved)",
+  );
+  // The delete entry must remain queued until a real server confirms the deletion.
+  assert.ok(
+    pendingKeys.includes("project:delete:proj-offline-new"),
+    "delete entry must stay queued until server confirms — never silently acknowledged",
+  );
 
   // Verify edited project still correct after sync (no remote overwrite)
   const finalProj = await getProject("proj-offline-1");
