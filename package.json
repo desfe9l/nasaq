@@ -44,6 +44,7 @@
     "test:nsq": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs --test src/lib/nsq/*.test.ts",
     "test:ai-image:browser": "node scripts/test-ai-image-export.mjs",
     "test:nsq:browser": "node scripts/test-nsq-browser.mjs",
+    "test:offline-sync:e2e": "node scripts/test-offline-sync-e2e.mjs",
     "test:leave:browser": "node scripts/test-leave-browser.mjs",
     "test:pricing:home": "node scripts/home-pricing-browser-check.mjs",
     "test:home:editor": "node scripts/home-editor-check.mjs",
