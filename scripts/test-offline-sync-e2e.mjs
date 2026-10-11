@@ -22,7 +22,7 @@ const checks = [];
 async function context() {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await ctx.addInitScript(() => {
-    try { localStorage.setItem("nasaq.onboarding.v1", "done"); } catch {}
+    try { localStorage.setItem("nasaq.onboarding.v1", "done"); } catch { /* ignore */ }
   });
   await ctx.route("**/api/auth/get-session**", (r) =>
     r.fulfill({ json: { user: { id: "e2e-test-user", email: "e2e@test", name: "E2E User", emailVerified: true, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" }, session: { id: "e2e-session", userId: "e2e-test-user", token: "test-only", expiresAt: "2099-01-01T00:00:00Z", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" } } })
@@ -35,7 +35,8 @@ async function context() {
 async function run() {
   const ctx = await context();
   const page = await ctx.newPage();
-console.log("🔄 Test 1: Sync queue enqueue/process");
+  try {
+    console.log("🔄 Test 1: Sync queue enqueue/process");
     const queueResult = await page.evaluate(async () => {
       const { enqueueSync, listPendingQueue, processSyncQueue } = await import("/src/lib/offline/sync-queue");
       const { setStorageOwner } = await import("/src/lib/editor/storage-owner");

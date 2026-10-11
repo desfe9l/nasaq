@@ -14,6 +14,7 @@ export default tseslint.config(
       ".vercel/**",
       ".nitro/**",
       "node_modules/**",
+      ".cline-home/**",
       "src/routeTree.gen.ts",
       "src/lib/og/share-raster-assets.generated.ts",
     ],
