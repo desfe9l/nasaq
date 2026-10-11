@@ -529,14 +529,18 @@ async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).deleteCloudProject !== "function") return "not_configured";
       if (!isCurrentEntryOwner(entry)) return false;
-      const fn = (mod as Record<string, unknown>).deleteCloudProject as (args: unknown) => Promise<{ ok: boolean }>;
-      const r = await fn({ data: { id } } as unknown).catch((e) => {
-        const msg = String(e);
-        if (/auth|unauthenticated|not.*signed.*in/i.test(msg)) return { ok: true } as unknown;
-        return null;
+      const response = await fetch(`/api/offline/deleteCloudProject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { id } }),
+        credentials: 'include',
       });
-      if (!r) return "not_configured";
-      return (r as { ok: boolean }).ok ? true : "not_configured";
+      if (!response.ok) {
+        if (response.status === 404) return "not_configured";
+        return false;
+      }
+      const result = await response.json();
+      return result.ok ? true : false;
     }
     if (entry.type === "project:create" || entry.type === "project:update") {
       const fullPayload = projectPayloadForCloudSave(entry);
@@ -544,15 +548,18 @@ async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).saveCloudProject !== "function") return "not_configured";
       if (!isCurrentEntryOwner(entry)) return false;
-      const fn = (mod as Record<string, unknown>).saveCloudProject as (args: unknown) => Promise<{ ok: boolean; conflict?: boolean }>;
-      const r = await fn({ data: { id, payload: fullPayload, updatedAt: entry.version ?? Date.now(), version: entry.version } } as unknown).catch((e) => {
-        const msg = String(e);
-        if (/auth|unauthenticated|not.*signed.*in|without.*session/i.test(msg)) return { ok: true } as unknown;
-        return null;
+      const response = await fetch(`/api/offline/saveCloudProject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { id, payload: fullPayload, updatedAt: entry.version ?? Date.now(), version: entry.version } }),
+        credentials: 'include',
       });
-      if (!r) return "not_configured";
-      if ((r as { conflict?: boolean }).conflict) return false;
-      return (r as { ok: boolean }).ok ? true : "not_configured";
+      if (!response.ok) {
+        if (response.status === 404) return "not_configured";
+        return false;
+      }
+      const result = await response.json();
+      return result.ok ? true : false;
     }
     return "not_configured";
   } catch {
