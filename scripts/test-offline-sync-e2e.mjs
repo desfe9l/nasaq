@@ -36,10 +36,19 @@ async function run() {
   const ctx = await context();
   const page = await ctx.newPage();
   try {
+    // Dynamic `import()` inside page.evaluate resolves against the PAGE's
+    // origin, and the specifiers must be the same URLs the app graph loads:
+    // on about:blank a root-relative specifier cannot resolve at all (that is
+    // the "Failed to resolve module specifier" failure), and an extensionless
+    // URL would be a SECOND copy of the module — the app imports
+    // "/src/…/x.ts" after Vite's import analysis, so setStorageOwner state
+    // would split across two instances and the isolation assertions would
+    // test nothing.
+    await page.goto(base);
     console.log("🔄 Test 1: Sync queue enqueue/process");
     const queueResult = await page.evaluate(async () => {
-      const { enqueueSync, listPendingQueue, processSyncQueue } = await import("/src/lib/offline/sync-queue");
-      const { setStorageOwner } = await import("/src/lib/editor/storage-owner");
+      const { enqueueSync, listPendingQueue, processSyncQueue } = await import("/src/lib/offline/sync-queue.ts");
+      const { setStorageOwner } = await import("/src/lib/editor/storage-owner.ts");
       setStorageOwner("e2e-queue-test");
       await enqueueSync("project:create", { id: "q-1", name: "Queue Test", pages: [] }, { dedupeKey: "q-1" });
       await enqueueSync("project:update", { id: "q-2", name: "Queue Update", pages: [] }, { dedupeKey: "q-2" });
@@ -54,9 +63,9 @@ async function run() {
 
     console.log("✏️ Test 2: Offline edit persistence");
     const offlineResult = await page.evaluate(async () => {
-      const { saveProject, getProject } = await import("/src/lib/editor/storage");
-      const { createProject } = await import("/src/lib/editor/templates");
-      const { setStorageOwner } = await import("/src/lib/editor/storage-owner");
+      const { saveProject, getProject } = await import("/src/lib/editor/storage.ts");
+      const { createProject } = await import("/src/lib/editor/templates.ts");
+      const { setStorageOwner } = await import("/src/lib/editor/storage-owner.ts");
       setStorageOwner("e2e-offline-test");
       await saveProject({ ...createProject("official"), id: "offline-e2e-1", name: "E2E Offline" });
       const retrieved = await getProject("offline-e2e-1");
@@ -71,9 +80,9 @@ async function run() {
 
     console.log("🔒 Test 3: Account isolation");
     const isolationResult = await page.evaluate(async () => {
-      const { saveProject, listProjects } = await import("/src/lib/editor/storage");
-      const { createProject } = await import("/src/lib/editor/templates");
-      const { setStorageOwner } = await import("/src/lib/editor/storage-owner");
+      const { saveProject, listProjects } = await import("/src/lib/editor/storage.ts");
+      const { createProject } = await import("/src/lib/editor/templates.ts");
+      const { setStorageOwner } = await import("/src/lib/editor/storage-owner.ts");
       setStorageOwner("e2e-user-a"); await saveProject({ ...createProject("official"), id: "iso-a", name: "User A" });
       setStorageOwner("e2e-user-b"); await saveProject({ ...createProject("official"), id: "iso-b", name: "User B" });
       setStorageOwner("e2e-user-a"); const aList = await listProjects();
@@ -86,7 +95,7 @@ async function run() {
 
     console.log("⚔️ Test 4: Conflict resolution");
     const conflictResult = await page.evaluate(async () => {
-      const { resolveConflict } = await import("/src/lib/offline/sync-queue");
+      const { resolveConflict } = await import("/src/lib/offline/sync-queue.ts");
       return {
         localWins: resolveConflict(Date.now(), Date.now() - 10000) === "localWins",
         remoteWins: resolveConflict(Date.now() - 10000, Date.now()) === "remoteWins",
@@ -99,8 +108,8 @@ async function run() {
 
     console.log("🔑 Test 5: Deduplication");
     const dedupeResult = await page.evaluate(async () => {
-      const { enqueueSync, listPendingQueue } = await import("/src/lib/offline/sync-queue");
-      const { setStorageOwner } = await import("/src/lib/editor/storage-owner");
+      const { enqueueSync, listPendingQueue } = await import("/src/lib/offline/sync-queue.ts");
+      const { setStorageOwner } = await import("/src/lib/editor/storage-owner.ts");
       setStorageOwner("e2e-dedupe-test");
       await enqueueSync("project:create", { id: "dup-1", name: "First" }, { dedupeKey: "dup-key" });
       await enqueueSync("project:create", { id: "dup-1", name: "Second (should replace)" }, { dedupeKey: "dup-key" });
