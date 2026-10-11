@@ -147,6 +147,65 @@ test("queued work: offline keeps it pending, reconnecting drains it once", async
   setStorageOwner(ANON_OWNER);
 });
 
+test("cloud endpoint failure: project:update stays queued and is never acknowledged", async () => {
+  // Regression: the old code returned true for missing/failed cloud endpoint,
+  // silently removing queue entries without server confirmation.
+  // This test proves that when the server is unavailable or returns an error,
+  // the project:update entry remains pending and is NOT removed from the queue.
+  disposeConnectivity();
+  setOnline(true);
+  setStorageOwner("sync-fail-user");
+  // Simulate a cloud endpoint that is unavailable (network error).
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.reject(new TypeError("Failed to fetch"))) as typeof fetch;
+  initConnectivity();
+  await whenSyncSettled();
+
+  const project = await saveProject({
+    ...createProject("official"),
+    id: "sync-fail-1",
+    name: "مشروع فاشل",
+  });
+  await enqueueSync("project:update", project, {
+    dedupeKey: `project:update:${project.id}`,
+    version: project.updatedAt,
+  });
+  assert.equal(await listPendingQueue("sync-fail-user").then((q) => q.length), 1, "entry must be queued before sync");
+
+  requestSync(0);
+  await whenSyncSettled();
+
+  // After a failed sync attempt, the entry must still be queued.
+  // A missing server must NEVER be treated as successful persistence.
+  const remaining = await listPendingQueue("sync-fail-user");
+  assert.equal(remaining.length, 1, "cloud failure must leave entry queued — not acknowledged");
+  // The deduplication logic promotes project:update → project:create for a new
+  // document (no prior remote record), so the dedupeKey will be project:create:…
+  assert.ok(
+    remaining[0]!.dedupeKey.includes(project.id!),
+    "the correct project's entry must remain queued",
+  );
+
+  // Also verify with a 500 server error.
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(JSON.stringify({ error: "internal" }), { status: 500 }))) as typeof fetch;
+  requestSync(0);
+  await whenSyncSettled();
+  const remainingAfter500 = await listPendingQueue("sync-fail-user");
+  assert.equal(remainingAfter500.length, 1, "server 500 must leave entry queued — not acknowledged");
+
+  // Also verify with ok:false (conflict or rejection from server).
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(JSON.stringify({ ok: false, reason: "conflict" }), { status: 200 }))) as typeof fetch;
+  requestSync(0);
+  await whenSyncSettled();
+  const remainingAfterConflict = await listPendingQueue("sync-fail-user");
+  assert.equal(remainingAfterConflict.length, 1, "server ok:false must leave entry queued — not acknowledged");
+
+  globalThis.fetch = originalFetch;
+  setStorageOwner(ANON_OWNER);
+});
+
 test("enqueueing announces pending work without a second drain", async () => {
   disposeConnectivity();
   setOnline(true);
