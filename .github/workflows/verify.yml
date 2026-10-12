@@ -69,6 +69,14 @@ jobs:
       # semantics, resize precision, cost under load. Deterministic and ~10 s.
       - name: Editor interaction (pointer gestures)
         run: npm run test:editor:interaction
+
+      # Accessibility audit of the real chrome (jsdom + Vite): every rendered
+      # interactive control carries an accessible name, ids are unique, no
+      # positive tabindex, no nested buttons, no unnamed icon. ~5 s. Contrast is
+      # verified visually — jsdom cannot compute colours, and a claim from here
+      # would be a fabrication.
+      - name: Editor accessibility (labels and structure)
+        run: npm run test:editor:a11y
       - name: Environment audit (no undocumented variable, no VITE_ secret)
         run: npm run env:audit
 
