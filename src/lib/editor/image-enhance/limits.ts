@@ -16,14 +16,6 @@ export const BACKGROUND_MAX_PIXELS = 16_000_000;
 export const DENOISE_MAX_EDGE = 6144;
 export const DENOISE_MAX_PIXELS = 24_000_000;
 
-/** Upscale: the model is a fixed ×4, so input is bounded by the output cap. */
-export const UPSCALE_FACTOR = 4;
-export const UPSCALE_MAX_OUTPUT_EDGE = 8192;
-export const UPSCALE_MAX_OUTPUT_PIXELS = 40_000_000;
-export const UPSCALE_MAX_INPUT_EDGE = Math.floor(
-  UPSCALE_MAX_OUTPUT_EDGE / UPSCALE_FACTOR,
-);
-
 export const SUPPORTED_ENHANCE_MIMES: readonly EnhanceMime[] = [
   "image/png",
   "image/jpeg",
@@ -74,38 +66,7 @@ export function checkEnhanceInput(
           `الصورة أكبر من حد إزالة الضجيج (${DENOISE_MAX_EDGE} بكسل للضلع الأطول)`,
         );
       return null;
-    case "upscale": {
-      if (edge > UPSCALE_MAX_INPUT_EDGE)
-        return new EnhanceError(
-          "too_large",
-          `الترقية ×${UPSCALE_FACTOR} تدعم صورًا حتى ${UPSCALE_MAX_INPUT_EDGE} بكسل للضلع الأطول`,
-        );
-      const plan = planUpscale(width, height);
-      if (!plan)
-        return new EnhanceError(
-          "too_large",
-          "أبعاد الناتج تتجاوز حد الترقية المسموح",
-        );
-      return null;
-    }
   }
-}
-
-/** Output size of the ×4 upscale, or null when it would breach the caps. */
-export function planUpscale(
-  width: number,
-  height: number,
-): { width: number; height: number } | null {
-  if (!dimsOk(width, height)) return null;
-  const outW = width * UPSCALE_FACTOR;
-  const outH = height * UPSCALE_FACTOR;
-  if (
-    outW > UPSCALE_MAX_OUTPUT_EDGE ||
-    outH > UPSCALE_MAX_OUTPUT_EDGE ||
-    outW * outH > UPSCALE_MAX_OUTPUT_PIXELS
-  )
-    return null;
-  return { width: outW, height: outH };
 }
 
 /**

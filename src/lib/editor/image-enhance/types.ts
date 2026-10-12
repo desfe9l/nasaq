@@ -1,21 +1,23 @@
 /**
  * Image enhancement contract — the stable boundary between the editor and the
- * replaceable processing providers (background removal, denoise, upscaling).
+ * replaceable processing providers (background removal, denoise).
  *
  * The editor never depends on a specific engine or vendor: it talks to a
  * provider through these types only, so the implementation can move between
  * in-browser engines and server-side services without touching editor code.
  * All shipping engines run fully in the user's browser — the image itself is
  * never uploaded anywhere.
+ *
+ * There is deliberately no "upscale" op: the ×4 super-resolution engine (and
+ * its TensorFlow.js runtime) was removed at the product owner's direction, and
+ * an op with no provider would be a control that cannot act. If a hosted
+ * upscaler is ever offered again it returns as a provider registration plus
+ * this union member — not as a dormant code path.
  */
 
-export type EnhanceOp = "background" | "denoise" | "upscale";
+export type EnhanceOp = "background" | "denoise";
 
-export const ENHANCE_OPS: readonly EnhanceOp[] = [
-  "background",
-  "denoise",
-  "upscale",
-];
+export const ENHANCE_OPS: readonly EnhanceOp[] = ["background", "denoise"];
 
 /** Coarse pipeline stage, surfaced in the UI progress row. */
 export type EnhanceStage =

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eraser, Loader2, Maximize2, RotateCcw, Sparkles, Waves } from "lucide-react";
+import { Eraser, Loader2, RotateCcw, Sparkles, Waves } from "lucide-react";
 import { toast } from "sonner";
 import type { CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -31,13 +31,6 @@ const TOOLS: ToolDef[] = [
     hint: "تنعيم الحبيبات مع الحفاظ على التفاصيل",
     done: "أُزيل الضجيج من الصورة",
     Icon: Waves,
-  },
-  {
-    op: "upscale",
-    label: "ترقية الدقة ×4",
-    hint: "مضاعفة أبعاد الصورة الفعلية أربع مرات",
-    done: "رُقيت دقة الصورة",
-    Icon: Maximize2,
   },
 ];
 

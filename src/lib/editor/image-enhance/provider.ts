@@ -16,18 +16,16 @@ import type {
 } from "./types.ts";
 import { EnhanceError } from "./types.ts";
 import { runInWorker } from "./worker-bridge.ts";
-import { upscaleImage } from "./upscale.ts";
 import { checkEnhanceInput, outputMimeFor } from "./limits.ts";
 
 /**
- * The in-browser provider: background removal and denoise run in the
- * processing worker; upscaling runs through the TF.js engine. Everything
- * stays on the user's device.
+ * The in-browser provider: background removal and denoise both run in the
+ * processing worker. Everything stays on the user's device.
  */
 export const localEnhanceProvider: EnhanceProvider = {
   id: "local",
   supports(op: EnhanceOp): boolean {
-    return op === "background" || op === "denoise" || op === "upscale";
+    return op === "background" || op === "denoise";
   },
   async run(
     op: EnhanceOp,
@@ -37,47 +35,18 @@ export const localEnhanceProvider: EnhanceProvider = {
     const limitError = checkEnhanceInput(op, input.width, input.height);
     if (limitError) throw limitError;
 
-    if (op === "background" || op === "denoise") {
-      const result = await runInWorker(op, input, onProgress);
-      return {
-        blob: result.blob,
-        width: result.width,
-        height: result.height,
-        mime: outputMimeFor(op, input.mime),
-      };
-    }
-
-    // op === "upscale"
-    onProgress({ stage: "prepare", value: 0.02 });
-    const bitmap = await createImageBitmap(input.blob);
-    try {
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) throw new EnhanceError("decode_failed", "تعذر إنشاء سياق الرسم");
-      ctx.drawImage(bitmap, 0, 0);
-      const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-      const result = await upscaleImage({ imageData, sourceBitmap: bitmap }, onProgress);
-      const outCanvas = new OffscreenCanvas(
-        result.imageData.width,
-        result.imageData.height,
-      );
-      const outCtx = outCanvas.getContext("2d");
-      if (!outCtx) throw new EnhanceError("engine_failed", "تعذر إنشاء سياق الرسم");
-      outCtx.putImageData(result.imageData, 0, 0);
-      const mime = outputMimeFor(op, input.mime);
-      const blob = await outCanvas.convertToBlob({
-        type: mime,
-        quality: mime === "image/png" ? undefined : 0.92,
-      });
-      return {
-        blob,
-        width: result.imageData.width,
-        height: result.imageData.height,
-        mime,
-      };
-    } finally {
-      bitmap.close();
-    }
+    /*
+     * Both remaining ops are worker jobs: the contract is one call, and the
+     * worker owns decode → process → encode. There is no in-page fallback
+     * engine left to fall through to.
+     */
+    const result = await runInWorker(op, input, onProgress);
+    return {
+      blob: result.blob,
+      width: result.width,
+      height: result.height,
+      mime: outputMimeFor(op, input.mime),
+    };
   },
 };
 

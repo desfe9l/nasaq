@@ -27,34 +27,34 @@ function stubProvider(id: string, ops: EnhanceOp[]): EnhanceProvider {
   };
 }
 
-test("the local provider covers all three enhancement ops", () => {
+test("the local provider covers the two shipped enhancement ops", () => {
   assert.ok(localEnhanceProvider.supports("background"));
   assert.ok(localEnhanceProvider.supports("denoise"));
-  assert.ok(localEnhanceProvider.supports("upscale"));
 });
 
 test("resolveProvider returns the local provider by default", () => {
   resetEnhanceProviders();
-  const provider = resolveProvider("upscale");
-  assert.ok(provider);
-  assert.equal(provider.id, "local");
+  for (const op of ["background", "denoise"] as const) {
+    const provider = resolveProvider(op);
+    assert.ok(provider, op);
+    assert.equal(provider.id, "local", op);
+  }
 });
 
 test("a newly registered provider takes priority for the ops it supports", () => {
   resetEnhanceProviders();
-  registerEnhanceProvider(stubProvider("server", ["upscale"]));
-  assert.equal(resolveProvider("upscale")?.id, "server");
+  registerEnhanceProvider(stubProvider("server", ["denoise"]));
+  assert.equal(resolveProvider("denoise")?.id, "server");
   // Ops the new provider does not support still fall through to local.
-  assert.equal(resolveProvider("denoise")?.id, "local");
   assert.equal(resolveProvider("background")?.id, "local");
   resetEnhanceProviders();
 });
 
 test("pickProvider is pure and does not touch the global registry", () => {
   const a = stubProvider("a", ["denoise"]);
-  const b = stubProvider("b", ["denoise", "upscale"]);
+  const b = stubProvider("b", ["denoise", "background"]);
   assert.equal(pickProvider([a, b], "denoise")?.id, "a");
-  assert.equal(pickProvider([a, b], "upscale")?.id, "b");
+  assert.equal(pickProvider([a, b], "background")?.id, "b");
   assert.equal(pickProvider([a], "background"), undefined);
   assert.equal(pickProvider([], "denoise"), undefined);
 });
