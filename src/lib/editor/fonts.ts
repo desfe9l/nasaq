@@ -195,16 +195,20 @@ export function detectDeviceFonts(): DetectedFont[] {
 export function detectPlatform(): string {
   if (typeof navigator === "undefined") return "غير معروف";
   const ua = navigator.userAgent;
-  // iPad reports as Macintosh, so check touch support before declaring macOS.
+  // iPadOS 13+ reports as Macintosh, so check touch support before declaring macOS.
   const iPad =
     /Macintosh/.test(ua) &&
     typeof navigator.maxTouchPoints === "number" &&
     navigator.maxTouchPoints > 1;
   if (/Windows/i.test(ua)) return "ويندوز";
   if (iPad) return "آيباد";
+  // Every iPhone/iPod (and the legacy iPad) UA contains "like Mac OS X", so
+  // the explicit iOS tokens must win before the macOS test — otherwise an
+  // iPhone is reported as a Mac.
+  if (/iPhone|iPod/i.test(ua)) return "آيفون";
+  if (/iPad/i.test(ua)) return "آيباد";
   if (/Mac OS X|Macintosh/i.test(ua)) return "ماك";
   if (/Android/i.test(ua)) return "أندرويد";
-  if (/iPhone|iPad|iPod/i.test(ua)) return "آيفون/آيباد";
   if (/CrOS/i.test(ua)) return "كروم بوك";
   if (/Linux/i.test(ua)) return "لينكس";
   return "غير معروف";
