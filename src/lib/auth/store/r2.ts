@@ -48,6 +48,7 @@ const USERS_PREFIX = `${AUTH_OBJECT_PREFIX}/users/`;
 const EMAILS_PREFIX = `${AUTH_OBJECT_PREFIX}/emails/`;
 const SESSIONS_PREFIX = `${AUTH_OBJECT_PREFIX}/sessions/`;
 const THROTTLE_PREFIX = `${AUTH_OBJECT_PREFIX}/throttle/`;
+const HANDOFFS_PREFIX = `${AUTH_OBJECT_PREFIX}/handoffs/`;
 
 /** SHA-256 hex of a value, as used for every hashed key segment. */
 export function authKeyHash(value: string): string {
@@ -59,6 +60,7 @@ const emailKey = (email: string) =>
   `${EMAILS_PREFIX}${authKeyHash(normalizeEmail(email))}.json`;
 const sessionKey = (tokenHash: string) => `${SESSIONS_PREFIX}${tokenHash}.json`;
 const throttleKey = (key: string) => `${THROTTLE_PREFIX}${authKeyHash(key)}.json`;
+const handoffKey = (codeHash: string) => `${HANDOFFS_PREFIX}${codeHash}.json`;
 
 /** Addresses are compared lower-cased; the local part is never rewritten. */
 export function normalizeEmail(email: string): string {
@@ -312,6 +314,24 @@ export function createR2AuthStore(provider: ObjectStorageProvider): AuthStore {
     deleteSession: (tokenHash) => provider.delete(sessionKey(tokenHash)),
 
     deleteUserSessions,
+
+    createSessionHandoff: (record) => put(handoffKey(record.codeHash), record),
+
+    async consumeSessionHandoff(codeHash) {
+      const row = await readJson<Record<string, unknown>>(
+        provider,
+        handoffKey(codeHash),
+      );
+      if (!row) return null;
+      // Delete FIRST, then validate: the code is single-use even if the expiry
+      // check below rejects it, and a second exchange finds no object at all.
+      await provider.delete(handoffKey(codeHash)).catch(() => undefined);
+      const expiresAt = String(row.expiresAt ?? "");
+      const expiresMs = Date.parse(expiresAt);
+      if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) return null;
+      const userId = String(row.userId ?? "");
+      return userId ? { userId, expiresAt } : null;
+    },
 
     async readThrottle(key) {
       const row = await readJson<Record<string, unknown>>(provider, throttleKey(key));

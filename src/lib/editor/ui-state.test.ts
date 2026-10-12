@@ -22,6 +22,8 @@ import {
   fitSideDockWidths,
   workspaceFitInsets,
   workspaceFitZoom,
+  layoutShiftSignificant,
+  WORKSPACE_OPEN_ZOOM_CAP,
   tipPlacement,
   type ScreenBox,
 } from "./ui-state.ts";
@@ -735,5 +737,90 @@ describe("workspaceFitZoom — device-adaptive opening camera", () => {
     );
     assert.ok(Number.isFinite(fallback));
     assert.ok(fallback >= 0.01 && fallback <= 16);
+  });
+});
+
+describe("workspaceFitZoom — smaller, practical opening camera", () => {
+  const a4 = { width: (210 * 96) / 25.4, height: (297 * 96) / 25.4 };
+
+  it("opens a desktop/iPad page visibly smaller than an edge-to-edge fit", () => {
+    for (const [surface, viewport] of [
+      ["desktop", { width: 1440, height: 900 }],
+      ["tablet-landscape", { width: 1180, height: 820 }],
+      ["tablet-portrait", { width: 820, height: 1024 }],
+    ] as const) {
+      const full = workspaceFitZoom(viewport, a4, surface, { fill: 1, cap: 16 });
+      const opening = workspaceFitZoom(viewport, a4, surface);
+      assert.ok(
+        opening < full,
+        `${surface}: opening zoom (${opening}) must be smaller than the old full fit (${full})`,
+      );
+      // Still big enough to be a real working view, never a sliver.
+      assert.ok(opening >= 0.2, `${surface}: opening zoom ${opening} too small`);
+      // The whole page remains inside the lane at the opening zoom.
+      const inset = workspaceFitInsets(surface);
+      assert.ok(a4.width * opening <= viewport.width - inset.inline * 2 + 0.2);
+      assert.ok(
+        a4.height * opening + inset.caption <= viewport.height - inset.block * 2 + 0.2,
+      );
+    }
+  });
+
+  it("never opens zoomed past the document's natural size on large screens", () => {
+    assert.equal(WORKSPACE_OPEN_ZOOM_CAP, 1);
+    // A huge monitor would "contain" an A4 at >100%; the opening camera caps it.
+    const zoom = workspaceFitZoom({ width: 3800, height: 2000 }, a4, "desktop");
+    assert.ok(zoom <= WORKSPACE_OPEN_ZOOM_CAP + 1e-9, `capped at 100%, got ${zoom}`);
+    // The explicit full fit is still reachable for the author command.
+    const full = workspaceFitZoom({ width: 3800, height: 2000 }, a4, "desktop", {
+      fill: 1,
+      cap: 16,
+    });
+    assert.ok(full > WORKSPACE_OPEN_ZOOM_CAP, "full fit may exceed 100% when asked");
+  });
+
+  it("keeps phone pages using the narrow lane (no room to shrink there)", () => {
+    const viewport = { width: 390, height: 650 };
+    const opening = workspaceFitZoom(viewport, a4, "mobile-portrait");
+    const full = workspaceFitZoom(viewport, a4, "mobile-portrait", { fill: 1, cap: 16 });
+    assert.ok(
+      Math.abs(opening - full) < 1e-9,
+      "phones keep the full-width fit for the opening camera",
+    );
+  });
+});
+
+describe("layoutShiftSignificant — when a resize may re-fit the camera", () => {
+  const base = { width: 1440, height: 900, orientation: "landscape" as const };
+
+  it("ignores small window resizes and panel-driven layout churn", () => {
+    assert.equal(
+      layoutShiftSignificant(base, { ...base, width: 1400 }),
+      false,
+      "a 40px window resize must not reset the author's zoom",
+    );
+    assert.equal(
+      layoutShiftSignificant(base, { ...base, height: 860 }),
+      false,
+    );
+    assert.equal(layoutShiftSignificant(base, base), false);
+  });
+
+  it("re-fits on rotation or a substantially different viewport", () => {
+    assert.equal(
+      layoutShiftSignificant(base, { width: 900, height: 1440, orientation: "portrait" }),
+      true,
+      "orientation change always re-fits",
+    );
+    assert.equal(
+      layoutShiftSignificant(base, { ...base, width: 900 }),
+      true,
+      "a ≥25% width change re-fits",
+    );
+    assert.equal(
+      layoutShiftSignificant(base, { ...base, height: 600 }),
+      true,
+      "a ≥25% height change re-fits",
+    );
   });
 });

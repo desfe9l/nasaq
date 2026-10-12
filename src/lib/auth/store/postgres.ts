@@ -231,6 +231,32 @@ export function createPostgresAuthStore(resolveSql: () => Promise<Sql>): AuthSto
       return Number(rows[0]?.count ?? 0);
     },
 
+    async createSessionHandoff(record) {
+      const db = await sql();
+      await db`
+        insert into auth_handoffs (code_hash, user_id, expires_at)
+        values (${record.codeHash}, ${record.userId}, ${record.expiresAt})
+        on conflict (code_hash) do update set
+          user_id = excluded.user_id,
+          expires_at = excluded.expires_at
+      `;
+    },
+
+    async consumeSessionHandoff(codeHash) {
+      const db = await sql();
+      // One atomic statement: the row is gone whether the exchange succeeds,
+      // the code was expired, or two clients race on the same code — exactly
+      // one of them can ever receive the user id.
+      const rows = await db<{ user_id: string; expires_at: string }>`
+        delete from auth_handoffs
+        where code_hash = ${codeHash} and expires_at > now()
+        returning user_id, expires_at
+      `;
+      const row = rows[0];
+      if (!row) return null;
+      return { userId: String(row.user_id), expiresAt: iso(row.expires_at) };
+    },
+
     async readThrottle(key) {
       const db = await sql();
       const rows = await db<Row>`

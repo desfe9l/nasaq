@@ -269,6 +269,7 @@ import {
   clampDockSize,
   fitSideDockWidths,
   workspaceFitZoom,
+  layoutShiftSignificant,
   PAGES_RAIL_COLLAPSED,
   type DockSide,
   type EditorSurface,
@@ -2626,11 +2627,37 @@ function Studio({
    * refits. `fitRef` carries the latest callback, so the effect does not re-run
    * (and re-fit) just because the active page changed underneath it.
    */
+  /*
+   * Last layout the opening camera was established for. The fit below must NOT
+   * run on every panel drag or small window resize — that kept resetting the
+   * author's manually chosen zoom while they worked ("the zoom keeps jumping
+   * back"). Only a genuinely different viewport (orientation change, or a
+   * ≥25% size change) re-establishes the camera; everything else keeps the
+   * zoom exactly where the author left it.
+   */
+  const lastFitLayoutRef = useRef<{
+    width: number;
+    height: number;
+    orientation: "landscape" | "portrait";
+  } | null>(null);
+
   useEffect(() => {
     if (!hydrated) return;
-    // Always establish the designed opening camera. Persisted zoom is useful
-    // while staying in a document, but is not a safe default for a different
-    // page shape, device, orientation or newly available canvas lane.
+    const next = {
+      width: vp.layoutW,
+      height: vp.layoutH,
+      orientation: (vp.layoutW >= vp.layoutH
+        ? "landscape"
+        : "portrait") as "landscape" | "portrait",
+    };
+    const prev = lastFitLayoutRef.current;
+    const firstFit = prev === null;
+    const significant = prev !== null && layoutShiftSignificant(prev, next);
+    lastFitLayoutRef.current = next;
+    if (!firstFit && !significant) return;
+    // Establish the designed opening camera after the layout settles. A
+    // persisted zoom is restored by the store while staying in a document;
+    // this camera is the DEFAULT for a new viewport, not a live override.
     const timer = window.setTimeout(() => fitRef.current(), 70);
     return () => window.clearTimeout(timer);
   }, [

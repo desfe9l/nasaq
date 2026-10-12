@@ -29,6 +29,8 @@ import {
   clearedGateMarkerCookie,
   clearedSessionCookie,
   gateMarkerCookie,
+  hashSessionToken,
+  isSessionUsable,
   readCookieValue,
   sessionCookie,
   sessionTokenFromAuthorization,
@@ -43,6 +45,52 @@ function tokenFromHeaders(headers: Headers): string | null {
     sessionTokenFromAuthorization(headers.get("authorization")) ??
     sessionTokenFromCookieHeader(headers.get("cookie"))
   );
+}
+
+/*
+ * Bounded in-process cache for READ-ONLY session resolution.
+ *
+ * A page load fans out a burst of server functions, and each one resolved the
+ * session from durable storage (2 reads per request; on the Postgres identity
+ * backend that was 2 queries per request, which under serverless concurrency
+ * fed the connection-pool exhaustion this deployment has seen). The cache is:
+ *
+ *   · keyed by the SHA-256 of the token — the token itself is never a key;
+ *   · 10-second TTL — a sign-out or revocation propagates within that window,
+ *     which is the same order as any stateless session cache; the cookie is
+ *     cleared on sign-out anyway, so the next request has no token to hit it;
+ *   · used ONLY for the read-only path (`emitCookies: false`, no rotation);
+ *     the HTTP session endpoint always resolves fresh;
+ *   · capped, evicting the oldest entry — identity must never become a leak.
+ */
+const SESSION_CACHE_TTL_MS = 10_000;
+const SESSION_CACHE_MAX = 512;
+
+type SessionCacheEntry = {
+  user: { id: string; email: string; name: string | null; emailVerified: boolean; image: string | null; createdAt: string; updatedAt: string };
+  session: { id: string; userId: string; createdAt: string; expiresAt: string; rotated: boolean };
+  token: string;
+  cachedAt: number;
+};
+
+const sessionCache = new Map<string, SessionCacheEntry>();
+
+function sessionCacheGet(tokenHash: string): SessionCacheEntry | null {
+  const hit = sessionCache.get(tokenHash);
+  if (!hit) return null;
+  if (Date.now() - hit.cachedAt > SESSION_CACHE_TTL_MS) {
+    sessionCache.delete(tokenHash);
+    return null;
+  }
+  return hit;
+}
+
+function sessionCacheSet(tokenHash: string, entry: SessionCacheEntry): void {
+  if (sessionCache.size >= SESSION_CACHE_MAX) {
+    const oldest = sessionCache.keys().next().value;
+    if (oldest !== undefined) sessionCache.delete(oldest);
+  }
+  sessionCache.set(tokenHash, entry);
 }
 
 /**
@@ -64,6 +112,15 @@ export async function resolveRequestSession(
 
   const token = tokenFromHeaders(headers);
   if (store && token) {
+    // Read-only requests (server functions, SSR loaders) may reuse a fresh
+    // resolution; anything that would set a cookie must resolve live.
+    if (!emit) {
+      const tokenHash = hashSessionToken(token);
+      const cached = sessionCacheGet(tokenHash);
+      if (cached && isSessionUsable(cached.session)) {
+        return { user: cached.user, session: cached.session, token: cached.token, cookies };
+      }
+    }
     const resolved = await resolveSession(store, token, new Date(), { allowRotation: emit });
     if (resolved.ok && resolved.value) {
       const { user, session } = resolved.value;
@@ -74,6 +131,13 @@ export async function resolveRequestSession(
         } else if (markerPresent) {
           cookies.push(clearedGateMarkerCookie(secureCookie));
         }
+      } else {
+        sessionCacheSet(hashSessionToken(token), {
+          user,
+          session,
+          token: resolved.value.token,
+          cachedAt: Date.now(),
+        });
       }
       return { user, session, token: resolved.value.token, cookies };
     }

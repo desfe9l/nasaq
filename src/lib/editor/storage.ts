@@ -494,6 +494,43 @@ export async function saveProject(project: Project): Promise<Project> {
   return stamped;
 }
 
+/**
+ * Write a project pulled from the cloud mirror straight into the local library
+ * WITHOUT touching `updatedAt` and WITHOUT enqueueing a sync push.
+ *
+ * `saveProject` would re-stamp the timestamp and echo the row back to the sync
+ * queue — an infinite push/pull loop for a document this device only received.
+ * The caller has already decided the remote copy is newer (or the only copy);
+ * this just lands it locally. Owner scoping still applies: the row is stamped
+ * with the current owner, and a foreign-owned id is refused.
+ */
+export async function putLocalProject(project: Project): Promise<boolean> {
+  const ownerId = getStorageOwner();
+  if (!project?.id) return false;
+  const db = await openDb();
+  if (!db) {
+    const existing = fallback.raw().find((row) => row.id === project.id);
+    if (existing && !canRead(existing)) return false;
+    fallback.put(project);
+    return true;
+  }
+  let written = false;
+  await tx(db, PROJECTS, "readwrite", async (t) => {
+    const store = t.objectStore(PROJECTS);
+    const existing = (await request(store.get(project.id!))) as OwnedRow<Project> | undefined;
+    if (existing && !canRead(existing)) return;
+    if (ownerId !== getStorageOwner()) return;
+    await request(store.put({ ...clone(project), ownerId }));
+    written = true;
+  }).catch(() => undefined);
+  if (written) {
+    void import("@/lib/offline/workspace-cache")
+      .then((m) => m.refreshWorkspaceCache().catch(() => {}))
+      .catch(() => {});
+  }
+  return written;
+}
+
 export async function deleteProject(id: string): Promise<void> {
   const db = await openDb();
   if (!db) {

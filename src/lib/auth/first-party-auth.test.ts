@@ -198,6 +198,7 @@ function memoryStore(): AuthStore & { users: Map<string, StoredUser>; sessions: 
   const users = new Map<string, StoredUser>();
   const byEmail = new Map<string, string>();
   const sessions = new Map<string, StoredSession>();
+  const handoffs = new Map<string, { userId: string; expiresAt: string }>();
   const throttle = new Map<string, { windowStartedAt: string; attempts: number; blockedUntil: string | null }>();
   const now = () => new Date().toISOString();
   return {
@@ -266,6 +267,16 @@ function memoryStore(): AuthStore & { users: Map<string, StoredUser>; sessions: 
         }
       }
       return removed;
+    },
+    async createSessionHandoff(record) {
+      handoffs.set(record.codeHash, { userId: record.userId, expiresAt: record.expiresAt });
+    },
+    async consumeSessionHandoff(codeHash) {
+      const record = handoffs.get(codeHash);
+      if (!record) return null;
+      handoffs.delete(codeHash);
+      if (Date.parse(record.expiresAt) <= Date.now()) return null;
+      return record;
     },
     async readThrottle(key) {
       return throttle.get(key) ?? null;
@@ -363,5 +374,60 @@ describe("sign-up / sign-in / sign-out", () => {
     if (after.ok) assert.equal(after.value, null);
     // Signing out twice is not an error.
     await signOutSession(store, token);
+  });
+});
+
+describe("session rotation grace window", () => {
+  it("keeps the retired token usable briefly so parallel requests never sign the visitor out", async () => {
+    const store = memoryStore();
+    const created = await signUpWithPassword(store, {
+      email: "grace@example.com",
+      password: "q7#vN2!pxWz",
+    });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    const oldToken = created.value.token;
+
+    // Age the session past the rotation threshold (its created/rotated anchor
+    // moves back 25 hours) so the next resolution rotates it.
+    const oldHash = hashSessionToken(oldToken);
+    const row = store.sessions.get(oldHash);
+    assert.ok(row, "session row exists");
+    const aged = new Date(Date.parse(row!.createdAt) - (SESSION_ROTATION_SECONDS + 3600) * 1000);
+    row!.createdAt = aged.toISOString();
+    row!.rotatedAt = null;
+    // Keep the expiry in the future so the session is still usable.
+    row!.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+
+    const rotated = await resolveSession(store, oldToken, new Date(), { allowRotation: true });
+    assert.equal(rotated.ok, true);
+    if (!rotated.ok || !rotated.value) return;
+    assert.equal(rotated.value.session.rotated, true);
+    const newToken = rotated.value.token;
+    assert.notEqual(newToken, oldToken);
+
+    // THE REGRESSION THIS PINS: the old token is NOT revoked on the spot.
+    // A parallel request still carrying it must resolve (grace window), and
+    // must not rotate again (its rotatedAt anchor is now fresh).
+    const parallel = await resolveSession(store, oldToken, new Date(), { allowRotation: true });
+    assert.equal(parallel.ok, true);
+    if (parallel.ok) {
+      assert.ok(parallel.value, "retired token still resolves inside the grace window");
+      assert.equal(parallel.value?.session.rotated, false, "grace token does not cascade rotations");
+      assert.equal(parallel.value?.user.email, "grace@example.com");
+    }
+
+    // The fresh token resolves too, of course.
+    const fresh = await resolveSession(store, newToken, new Date(), { allowRotation: false });
+    assert.equal(fresh.ok, true);
+    if (fresh.ok) assert.equal(fresh.value?.user.email, "grace@example.com");
+
+    // After the grace window lapses, the retired token finally dies.
+    const retired = store.sessions.get(oldHash);
+    assert.ok(retired, "retired row still tracked until it lapses");
+    retired!.expiresAt = new Date(Date.now() - 1000).toISOString();
+    const after = await resolveSession(store, oldToken, new Date(), { allowRotation: false });
+    assert.equal(after.ok, true);
+    if (after.ok) assert.equal(after.value, null, "grace token is unusable once lapsed");
   });
 });

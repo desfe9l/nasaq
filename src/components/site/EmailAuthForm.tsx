@@ -84,8 +84,12 @@ export function EmailAuthForm({
       return;
     }
     /* Success: hand over to a full navigation so the new session cookie is live
-       for the next request (and every guard re-resolves from the server). */
-    window.location.assign(isSignUp && !redirect ? "/workspace" : destination);
+       for the next request (and every guard re-resolves from the server).
+       When the server returned a cross-domain SSO relay (nasaq.team ↔
+       nasaq.work), route through it so the sibling domain also receives its
+       session cookie; it lands on the same destination either way. */
+    const landing = isSignUp && !redirect ? "/workspace" : destination;
+    window.location.assign(result.ssoURL ?? landing);
   };
 
   const startGoogle = async () => {

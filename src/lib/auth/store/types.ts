@@ -102,6 +102,24 @@ export type ThrottleRecord = {
 };
 
 /**
+ * A one-time cross-domain session handoff code (see `../handoff.server.ts`).
+ *
+ * `.team` and `.work` are different registrable domains, so a `__Host-` session
+ * cookie cannot cover both. When a signed-in visitor moves between them, the
+ * departure host stores this record and redirects through the arrival host's
+ * `/api/auth/handoff`, which exchanges the code for a fresh local session.
+ * Only the SHA-256 of the code is stored; the code itself lives in the URL for
+ * at most a minute.
+ */
+export type SessionHandoffRecord = {
+  /** SHA-256 (hex) of the opaque handoff code. The only copy that is stored. */
+  codeHash: string;
+  userId: string;
+  /** ISO time after which the code is worthless. */
+  expiresAt: string;
+};
+
+/**
  * The store could not be reached or is not configured. The service translates
  * this into a 503 with an actionable operator message (variable NAMES only) —
  * never into a silent "wrong password".
@@ -143,6 +161,16 @@ export interface AuthStore {
   deleteSession(tokenHash: string): Promise<void>;
   /** Revoke every session of an account (password change, "sign out all"). */
   deleteUserSessions(userId: string): Promise<number>;
+
+  /** Store a one-time cross-domain handoff code (see `SessionHandoffRecord`). */
+  createSessionHandoff(record: SessionHandoffRecord): Promise<void>;
+  /**
+   * Exchange a handoff code, deleting it. Returns the record (without the
+   * hash) or `null` when the code is unknown, already consumed, or expired.
+   */
+  consumeSessionHandoff(
+    codeHash: string,
+  ): Promise<{ userId: string; expiresAt: string } | null>;
 
   readThrottle(key: string): Promise<ThrottleRecord | null>;
   writeThrottle(key: string, record: ThrottleRecord): Promise<void>;
