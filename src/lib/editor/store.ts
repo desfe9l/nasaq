@@ -886,7 +886,6 @@ interface EditorStore extends Project, Ui, History {
    * (copy → switch page → paste), but that loses the current selection and the
    * source page context, so the layers panel offers a direct action.
    */
-  copyElementToPage: (elId: string, pageId: string) => void;
   addPage: (request?: NewPageRequest) => void;
   addTemplatePage: (id: string) => void;
   duplicatePage: (id?: string) => void;
@@ -908,7 +907,6 @@ interface EditorStore extends Project, Ui, History {
     w: number;
     h: number;
   }) => boolean;
-  movePage: (dir: -1 | 1) => void;
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
   renamePage: (id: string, name: string) => void;
@@ -5826,27 +5824,6 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
     },
 
-    copyElementToPage: (elId, pageId) => {
-      const s = get();
-      const source = s.pages.find((p) => Boolean(locate(p, elId)));
-      const target = s.pages.find((p) => p.id === pageId);
-      const el = source ? locate(source, elId)?.el : undefined;
-      if (!source || !target || !el) return;
-      const copy = cloneWithFreshIds(el);
-      copy.z = nextZ(target);
-      constrainElement(copy, pageSize(target));
-      set({
-        pages: s.pages.map((p) =>
-          p.id === target.id ? { ...p, elements: [...p.elements, copy] } : p,
-        ),
-        activePageId: target.id,
-        selectedId: copy.id,
-        selectedIds: [copy.id],
-      });
-      pushHistory();
-      toast.success(`تم نقل العنصر إلى «${target.name}»`);
-    },
-
     addPage: (request) => {
       if (!requireEditorAccess()) return;
       const s = get();
@@ -6091,18 +6068,6 @@ export const useEditor = create<EditorStore>((set, get) => {
             }
           : {}),
       });
-      pushHistory();
-    },
-
-    movePage: (dir) => {
-      const s = get();
-      const idx = s.pages.findIndex((p) => p.id === s.activePageId);
-      const next = idx + dir;
-      if (idx < 0 || next < 0 || next >= s.pages.length) return;
-      const pages = [...s.pages];
-      const [item] = pages.splice(idx, 1);
-      pages.splice(next, 0, item);
-      set({ pages });
       pushHistory();
     },
 
