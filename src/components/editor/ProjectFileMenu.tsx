@@ -22,7 +22,6 @@ import { requestLeave } from "@/lib/editor/leave-controller";
 import { templatesFilterPathFor } from "@/lib/site-routes";
 import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
 import { SaveAsTemplateDialog } from "@/components/editor/SaveAsTemplateDialog";
-import { getFreeExportUsageFn } from "@/lib/license/functions";
 
 const SignInRequiredModalLazy = lazy(() =>
   import("@/components/site/SignInRequiredModal").then((m) => ({
@@ -60,32 +59,6 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const personal = tier === "LICENSED" || tier === "ADMIN";
   const guest = authEnabled && !isPending && !user;
   const linked = open ? linkedFileName(projectId) : null;
-  const [freeExportCount, setFreeExportCount] = useState(3);
-  const [freeExportLoading, setFreeExportLoading] = useState(false);
-
-  // Fetch free export count on component mount and when user changes
-  useEffect(() => {
-    if (!user) {
-      setFreeExportCount(3); // Guest users get 3 free exports
-      return;
-    }
-
-    const fetchFreeExportCount = async () => {
-      try {
-        setFreeExportLoading(true);
-        const usage = await getFreeExportUsageFn();
-        setFreeExportCount(usage.remaining); // Remaining exports
-      } catch (error) {
-        console.error('Failed to get free export count:', error);
-        setFreeExportCount(0); // On error, show 0 to be safe
-      } finally {
-        setFreeExportLoading(false);
-      }
-    };
-
-    fetchFreeExportCount();
-  }, [user?.id]);
-
   useEffect(() => {
     if (!open || !user) return;
     let alive = true;
