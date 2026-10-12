@@ -604,6 +604,35 @@ await check(
   },
 );
 
+await check(
+  "dragging one linked element carries its partner",
+  {
+    elements: [
+      { type: "shape", id: "link-1", x: 20, y: 30, w: 40, h: 30, linkId: "L1" },
+      { type: "shape", id: "link-2", x: 90, y: 30, w: 40, h: 30, linkId: "L1" },
+      { type: "shape", id: "free-1", x: 160, y: 30, w: 40, h: 30 },
+    ],
+  },
+  async () => {
+    const before = { one: boxOf("link-1"), two: boxOf("link-2"), free: boxOf("free-1") };
+    await gesture(nodeOf("link-1"), [30, 40], [[50, 70]]);
+    const after = { one: boxOf("link-1"), two: boxOf("link-2"), free: boxOf("free-1") };
+    near(after.one.x, before.one.x + 20, 0.05, "the dragged element moved");
+    near(after.one.y, before.one.y + 30, 0.05, "the dragged element moved");
+    /* A link is NOT a group: the partner keeps its own layer, its own style and
+     * its own id, but moves with the element it is linked to. */
+    near(after.two.x, before.two.x + 20, 0.05, "the linked partner followed on x");
+    near(after.two.y, before.two.y + 30, 0.05, "the linked partner followed on y");
+    equalBox(after.two, { ...before.two, x: before.two.x + 20, y: before.two.y + 30 }, "partner box");
+    near(after.two.w, before.two.w, 0.02, "the partner kept its size");
+    equalBox(after.free, before.free, "an unlinked neighbour");
+    if (useEditor.getState().pages[0].elements.length !== 3)
+      throw new Error("linking must not merge elements into a group");
+    if (elementOf("link-2").linkId !== "L1")
+      throw new Error("the link id must survive the drag");
+  },
+);
+
 await check("a zoom change keeps the document's millimetres", {}, async () => {
   await gesture(nodeOf(), [40, 50], [[60, 70]]);
   const committed = boxOf();
