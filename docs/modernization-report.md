@@ -31,9 +31,10 @@ repository `desfe9l/nasaq`. Anything not run here is listed under
 | 10 | `893169a` | fix(editor): restore the link controls the toolbar lost | **PR #206 — open, not merged** |
 | 11 | `8584ca9` | refactor(store): drop the two unreachable page helpers | **PR #206 — open, not merged** |
 
-**All nine reported commits are already in `main`.** Nothing from that branch
-needed recovery; the two remaining commits are in open PR #206, which is clean
-and green and was left for its owner to merge (no duplicate PR was created).
+**All nine reported commits were already in `main`.** Nothing from that branch
+needed recovery. The two remaining commits (PR #206) were merged in this
+session on the owner's authorisation — merge commit `e83d8a1` — so the whole
+branch is now in `main`. No duplicate PR was created.
 
 ### Work that was reported but never pushed
 
@@ -79,17 +80,20 @@ chains after `test:editor:products`. This was done deliberately instead of
 appending to the single-line `test:src` list, because open PR #206 edits that
 same line and the two PRs would otherwise conflict textually.
 
-## 4. Verification on the reconciled tree (`main` + this branch)
+## 4. Verification on the reconciled tree (`main` @ `e83d8a1` + this branch)
+
+Run twice: once on `2ca9f28` + this branch, and again after merging the new
+`main` (with #206) into the branch. Figures below are from the second run.
 
 | Command | Result | Warnings (not failures) |
 | --- | --- | --- |
 | `npm run typecheck` | clean | — |
 | `npm run lint` | **0 errors**, 19 warnings | 19 pre-existing `react-refresh/only-export-components` warnings — identical count to PR #206 |
-| `npm test` | **pass** — `test:src` 1308/1308 (165 suites), plus 3/3, 37/37, 32/32, 7/7 in the earlier `test:src` groups; `test:editor:tools` 52/52; `test:editor:products` 24/24; `test:editor:render` 67/67 | — |
+| `npm test` | **pass** — `test:src` 1244/1244 (1221 on `main` + 23 from #206's `link-selection` suite), plus 3/3, 37/37, 32/32, 7/7 in the earlier `test:src` groups; `test:editor:tools` 52/52; `test:editor:products` 24/24; `test:editor:render` 67/67 | — |
 | `npm run test:auth` | 109/109 | — |
 | `npm run test:admin` | 191/191 | — |
 | `npm run test:scripts` | 245/245 | — |
-| `npm run test:editor:interaction` | 26/26 (`main` harness; PR #206 adds the 27th) | — |
+| `npm run test:editor:interaction` | 27/27 (incl. #206's linked-drag check) | — |
 | `npm run test:editor:a11y` | PASS — 503 controls named, no structural findings | jsdom prints `Not implemented: HTMLCanvasElement's getContext()` — pre-existing, harmless |
 | `npm run test:editor:windows` | PASS(1) + PASS(2) | — |
 | `npm run env:audit` | pass | — |
@@ -110,5 +114,7 @@ No regressions were found; no failing check needed a rerun.
   `test:leave:browser`, `test:editor:browser`) need a Playwright Chromium
   download, which the sandbox cannot fetch. They run in the `browser` CI job,
   which is green on `main` and on PR #206, and will run on this PR.
-- **Merge of PR #206 and of this PR.** Both are left open for an authorised
-  reviewer; nothing was merged or force-pushed.
+- **Nothing was force-pushed.** PR #206 was merged on the owner's explicit
+  authorisation; this branch then took a normal merge of `main` to resolve an
+  adjacent-line conflict in `package.json` (both PRs added a line next to the
+  `test` scripts).
