@@ -963,6 +963,17 @@ export function CanvasStage({
     onCanvasTap?.();
     setLayerPicker(null);
     if (el.locked) {
+      /*
+       * Locked artwork at the point BUT nothing editable under it: the press
+       * selects the lock so the author can unlock it, and stops there.
+       *
+       * Nothing locked ever moves. When an UNLOCKED element does sit under the
+       * pointer, the capture-phase hit-test above has already claimed this
+       * press for that element (`elementsAtPoint` skips locked artwork), so a
+       * locked overlay — a full-page background, a section band, a header
+       * block — never blocks editing what it covers. This branch is the
+       * remaining case: the locked element is the only thing there.
+       */
       e.stopPropagation();
       select(el.id);
       return;
@@ -1037,6 +1048,20 @@ export function CanvasStage({
       (POINTER_SLOP * size.w) / Math.max(1, rect.width),
     );
     let maxDist = 0;
+    /**
+     * Has the pointer travelled far enough to mean a transform?
+     *
+     * A press selects immediately (no waiting on a touch), but NO pointer —
+     * mouse, pen or finger — may move, resize or rotate the artwork until it
+     * has travelled more than {@link POINTER_SLOP} screen pixels. Without this
+     * gate a click that wobbles by one pixel nudged the element by a fraction
+     * of a millimetre and pushed a history entry, which is exactly the
+     * "selection jitter / accidental drag" an author reads as the editor being
+     * unstable. The threshold is in SCREEN pixels, so the feel is the same at
+     * every zoom, and the drag itself still starts from the press point (the
+     * element never jumps away from the cursor by the slop distance).
+     */
+    let dragging = false;
 
     const enteredGroup = enteredGroupForPage
       ? findElement(page.elements, enteredGroupForPage)?.el || null
@@ -1415,6 +1440,7 @@ export function CanvasStage({
         );
         if (dist < slopMm && screenDist < POINTER_SLOP) return;
         decided = true;
+        dragging = true;
         longPressHandle?.cancel();
         longPressHandle = null;
         input.current!.lock(e.pointerId);
@@ -1433,6 +1459,22 @@ export function CanvasStage({
         maxDist = dist;
       }
       if (heldLong) return;
+      /*
+       * The travel gate. A press that has not moved beyond the slop publishes
+       * no frame — so no override, no commit, no history entry, no autosave —
+       * and the very first frame after it crosses the threshold still measures
+       * its delta from the press point, leaving the element under the pointer.
+       */
+      if (!dragging) {
+        const screenDist = Math.hypot(
+          ev.clientX - e.clientX,
+          ev.clientY - e.clientY,
+        );
+        if (screenDist <= POINTER_SLOP) return;
+        dragging = true;
+        const cur = toMm(ev);
+        maxDist = Math.max(maxDist, Math.hypot(cur.x - start.x, cur.y - start.y));
+      }
       lastMoveEv = ev;
       if (!framePending) {
         framePending = true;

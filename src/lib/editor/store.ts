@@ -1355,9 +1355,54 @@ export const useEditor = create<EditorStore>((set, get) => {
 
   const HISTORY_LIMIT = 60;
 
-  /** Document content equality (ignores UI-only activePageId/id metadata). */
+  /**
+   * Structural equality for the plain data a document is made of.
+   *
+   * Written for the history dedupe below, not as a general deep-equal: own
+   * enumerable keys only, no allocation, a depth cap so a malformed/cyclic
+   * value can never hang a commit, and `NaN` treated as equal to itself (an
+   * unchanged `NaN` is the same garbage, and flagging it as a change would
+   * push a history entry for it).
+   */
+  const sameData = (a: unknown, b: unknown, depth = 0): boolean => {
+    if (a === b) return true;
+    if (depth > 12) return false;
+    if (typeof a === "number" && typeof b === "number")
+      return Number.isNaN(a) && Number.isNaN(b);
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const key of aKeys) {
+      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+      if (
+        !sameData(
+          (a as Record<string, unknown>)[key],
+          (b as Record<string, unknown>)[key],
+          depth + 1,
+        )
+      )
+        return false;
+    }
+    return true;
+  };
+
+  /**
+   * Document content equality (ignores UI-only activePageId/id metadata).
+   *
+   * Every commit rebuilds the page objects it touched, so the ARRAY identity
+   * alone cannot answer "did anything change?": a gesture that returns to its
+   * starting point, a re-applied style, a `commit()` after a live edit that
+   * already landed — all arrive as fresh objects carrying the same values.
+   * Comparing only references made each one push a history entry and schedule
+   * a save for a document nobody had edited, which is why Undo appeared to do
+   * nothing (it restored the state already on screen). The scalar comparison
+   * still short-circuits the common case; the structural one runs only when
+   * the pages differ by reference, and only on a commit — never per frame.
+   */
   const sameDocumentContent = (a: ProjectSnapshot, b: ProjectSnapshot) =>
-    a.pages === b.pages &&
+    (a.pages === b.pages || sameData(a.pages, b.pages)) &&
     a.name === b.name &&
     a.theme === b.theme &&
     a.orgName === b.orgName &&

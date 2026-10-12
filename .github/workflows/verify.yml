@@ -63,6 +63,12 @@ jobs:
         run: npm run test:scripts
       - name: Unit tests — application, editor tools and product templates
         run: npm test
+
+      # Real pointer gestures against the real canvas component (jsdom + Vite):
+      # accidental drags, exact deltas at three zooms, one undo step, locked
+      # semantics, resize precision, cost under load. Deterministic and ~10 s.
+      - name: Editor interaction (pointer gestures)
+        run: npm run test:editor:interaction
       - name: Environment audit (no undocumented variable, no VITE_ secret)
         run: npm run env:audit
 
