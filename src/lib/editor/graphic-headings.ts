@@ -84,6 +84,7 @@ function txt(theme: Theme, over: Partial<CanvasEl>, style: Partial<CanvasEl["sty
         lineHeight: 1.45,
         textFit: "shrink" as const,
         ...style,
+        ...(over.style || {}),
       },
     },
     theme,
@@ -101,6 +102,7 @@ function boxEl(theme: Theme, over: Partial<CanvasEl>, style: Partial<CanvasEl["s
         radius: 3,
         padding: 3,
         ...style,
+        ...(over.style || {}),
       },
     },
     theme,
@@ -115,6 +117,7 @@ function lineEl(theme: Theme, over: Partial<CanvasEl>, style: Partial<CanvasEl["
         color: theme.accent,
         stroke: 0.6,
         ...style,
+        ...(over.style || {}),
       },
     },
     theme,
@@ -128,11 +131,20 @@ function shapeEl(theme: Theme, over: Partial<CanvasEl>, style: Partial<CanvasEl[
       style: {
         fill: theme.primary,
         ...style,
+        ...(over.style || {}),
       },
     },
     theme,
   );
 }
+
+/**
+ * The four primitive builders, exported for tests only: they pin the style
+ * merge order (type defaults → heading defaults → builder style → per-instance
+ * `over.style`) so a future heading cannot silently lose a style it passed
+ * inside `over`.
+ */
+export const headingPrimitives = { txt, boxEl, lineEl, shapeEl, imgEl: (...a: Parameters<typeof imgEl>) => imgEl(...a) };
 
 function makeGroup(els: CanvasEl[], name: string): CanvasEl {
   const g = createGroupFrom(els, name);
@@ -246,7 +258,7 @@ function imgEl(
       src: placeholderImage("image"),
       name: "صورة العنوان",
       ...over,
-      style: { objectFit: "cover", objectX: 50, objectY: 50, ...style },
+      style: { objectFit: "cover", objectX: 50, objectY: 50, ...style, ...(over.style || {}) },
     },
     theme,
   );
