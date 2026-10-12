@@ -23,7 +23,9 @@ import {
   Sparkles,
   Sun,
   Group,
+  Link2,
   Ungroup,
+  Unlink2,
   ArrowUp,
   ArrowDown,
   ChevronsUp,
@@ -654,6 +656,9 @@ export function FloatingToolbar({
   const style = el.style || {};
   const isText = TEXT_TYPES.has(el.type);
   const count = selectedIds.length;
+  /* «فك الربط» is offered exactly when the selection actually holds a link, so
+   * the button never appears to be an action it cannot take. */
+  const linked = useEditor((s) => s.selectedElements().some((item) => Boolean(item.linkId)));
   const isImage = el.type === "image" || el.type === "logo";
   const supportsFill = [
     "shape",
@@ -1457,7 +1462,7 @@ export function FloatingToolbar({
             onSelect={() => useEditor.getState().bring("bottom")}
           />
         </MenuGrid>
-        <MenuGrid columns={2} label="التجميع">
+        <MenuGrid columns={2} label="التجميع والربط">
           <MenuCell
             icon={<Group />}
             label="تجميع"
@@ -1469,6 +1474,26 @@ export function FloatingToolbar({
             label="فك التجميع"
             disabled={el.type !== "group"}
             onSelect={() => useEditor.getState().ungroup()}
+          />
+          {/*
+            «ربط» — the middle ground between independent elements and a group:
+            linked objects stay separate layers (their own fills, text and
+            order) but move together, and the layer list marks them. The store
+            actions have existed since links did, but the toolbar lost the
+            buttons with an earlier panel rewrite, which left the link marker
+            visible on old documents with no way to create or clear one.
+          */}
+          <MenuCell
+            icon={<Link2 />}
+            label="ربط — تبقى مستقلة وتتحرك معاً"
+            disabled={count < 2}
+            onSelect={() => useEditor.getState().linkSelected()}
+          />
+          <MenuCell
+            icon={<Unlink2 />}
+            label="فك الربط — إلغاء حركة العناصر المرتبطة"
+            disabled={!linked}
+            onSelect={() => useEditor.getState().unlinkSelected()}
           />
         </MenuGrid>
         {count > 1 && el.id === selectedId && (
