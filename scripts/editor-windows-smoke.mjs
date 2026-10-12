@@ -1,21 +1,23 @@
 /**
- * Runtime smoke test for the six-window workspace — NO browser required.
+ * Runtime smoke test for the window workspace — NO browser required.
  *
- * Loads the REAL store module through Vite (TS + aliases, exactly as the dev
- * server serves it) on top of a jsdom DOM, then exercises the window-system
- * state machine the UI renders:
+ * Loads the REAL modules through Vite (TS + aliases, exactly as the dev server
+ * serves them) on top of a jsdom DOM, then exercises both the window-system
+ * state machine and the real shell rendered through the real router:
  *
- *   1. The six windows (library / tools / elements / properties / layers /
- *      report) are INDEPENDENT — opening one never closes another, and all
- *      six can be open at the same time.
- *   2. closeFloatingPanels() dismisses all six.
- *   3. The pages-rail visibility state persists into the UI slot that
- *      hydrate() reads back (the hide/show toggle survives a reload).
- *   4. The pages rail is compact by default (96px) with an 84px floor.
+ *   1. The six panels (library / tools / elements / properties / layers /
+ *      report) are INDEPENDENT — opening one never closes another, and all six
+ *      can be open at the same time; closeFloatingPanels() dismisses them all.
+ *   2. The pages-rail visibility state persists into the UI slot that hydrate()
+ *      reads back, and the rail is compact by default (96px) with an 84px floor.
+ *   3. EditorApp client-renders the SHIPPED layout — two windows hosting the
+ *      six panels as tabs, both docked with the canvas in the middle column,
+ *      docked windows offering no floating grips — and an author's ungrouped
+ *      six-window layout, with a right dock reserving a 340px column.
  *
  * Run:  npm run test:editor:windows
  *       (node scripts/editor-windows-smoke.mjs)
- * Dev dependencies: jsdom, fake-indexeddb (installed by npm ci).
+ * Dev dependencies: jsdom, fake-indexeddb, vite (installed by npm ci).
  */
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
@@ -233,11 +235,46 @@ try {
   const { createRoot } = await import("react-dom/client");
   const editorAppModule = await vite.ssrLoadModule("/src/components/editor/EditorApp.tsx");
 
+  /*
+   * The editor shell is a ROUTE component in production: it reads
+   * `useNavigate`, and `LeaveGuard` blocks navigation. Mounting it bare left
+   * those hooks without a router, so this smoke test could not render the real
+   * workspace at all (`useRouter must be used inside a <RouterProvider>` and
+   * zero panels in the DOM). Mount the REAL router with a memory history
+   * instead of stubbing the hooks — the shell then runs exactly the code path
+   * a browser gives it, and the leave guard is exercised rather than bypassed.
+   */
+  const {
+    createMemoryHistory,
+    createRootRoute,
+    createRoute,
+    createRouter,
+    RouterProvider,
+  } = await import("@tanstack/react-router");
+  const shell = () => React.createElement(editorAppModule.EditorApp);
+  const rootRoute = createRootRoute();
+  const routeTree = rootRoute.addChildren([
+    createRoute({ getParentRoute: () => rootRoute, path: "/", component: shell }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/editor", component: shell }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/editor/$projectId",
+      component: shell,
+    }),
+    createRoute({ getParentRoute: () => rootRoute, path: "/workspace", component: shell }),
+  ]);
+  const makeRouter = () =>
+    createRouter({
+      routeTree,
+      history: createMemoryHistory({ initialEntries: ["/editor"] }),
+      defaultPendingMinMs: 0,
+    });
+
   const project = createProject("blank", "official", "اختبار");
   const settle = (ms = 150) => new Promise((r) => setTimeout(r, ms));
   let root = null;
   let host = null;
-  const mount = (extra = {}) => {
+  const mount = async (extra = {}) => {
     if (root) {
       root.unmount();
       host.remove();
@@ -247,6 +284,10 @@ try {
        * itself, so the real loader (IndexedDB + fonts + UI slot) is skipped. */
       hydrate: async () => {},
       hydrated: true,
+      /* The shell latches its opening placeholder until the DOCUMENT reports
+       * ready; a smoke test that seeds the document itself must say so, or it
+       * measures the placeholder instead of the workspace. */
+      documentPhase: "ready",
       id: project.id ?? "smoke",
       name: project.name,
       pages: project.pages,
@@ -262,91 +303,177 @@ try {
     host = window.document.createElement("div");
     window.document.body.appendChild(host);
     root = createRoot(host);
-    root.render(React.createElement(editorAppModule.EditorApp));
+    const router = makeRouter();
+    /*
+     * TanStack Start's client entry renders `Transitioner` (which creates the
+     * router's render-acknowledgement slot and subscribes history) above the
+     * provider; the harness has no Start entry, so it does the one thing that
+     * component does that the provider needs: an acknowledgement array. The
+     * first match is resolved before rendering because jsdom will not navigate
+     * on its own.
+     */
+    router._rendered ??= [];
+    await router.load();
+    root.render(React.createElement(RouterProvider, { router }));
     return host;
   };
   /* jsdom has no layout engine, so the assertions read the GRID STYLES the
    * component computes — the inline grid areas are the source of truth that a
    * real browser turns into pixels. */
 
-  /* Undocked: all six windows present, single canvas track. */
-  mount();
+  /* ── 2a · The SHIPPED layout ────────────────────────────────────────────
+   * Two windows, each hosting three panels as tabs: لوحة العناصر (content) on
+   * the right, الخصائص (inspector) on the left, both docked, with the canvas
+   * as its own grid column. `nasaq.panel.groups.v3` / `nasaq.panel.docks.v3`
+   * are cleared first so the assertion describes the DEFAULT an author gets on
+   * a fresh device, not leftovers from a previous section. */
+  window.localStorage.removeItem("nasaq.panel.groups.v3");
+  window.localStorage.removeItem("nasaq.panel.docks.v3");
+  window.localStorage.removeItem("nasaq.panel.dock-sizes.v2");
+  await mount();
   await settle();
-  assert.equal(host.querySelectorAll(".editor-floating-panel").length, 6, "six windows in the DOM");
+  const windows = [...host.querySelectorAll(".editor-floating-panel")];
+  assert.equal(windows.length, 2, "the shipped workspace is TWO windows, not six loose panels");
+  for (const label of ["لوحة العناصر", "الخصائص"]) {
+    assert.ok(
+      host.querySelector(`.editor-floating-panel[aria-label="${label}"]`),
+      `the ${label} window is rendered`,
+    );
+  }
+  assert.equal(host.querySelectorAll(".editor-floating-panel.is-docked").length, 2, "both windows are docked by default");
+  const strips = [...host.querySelectorAll(".panel-tab-strip")];
+  assert.equal(strips.length, 2, "each window carries a tab strip (also the drop zone for the first drag)");
+  const tabLabels = strips.flatMap((strip) =>
+    [...strip.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim()),
+  );
+  for (const label of ["المكتبة", "أدوات العناصر", "لوحة العناصر", "الخصائص", "الطبقات", "أدوات التقرير"]) {
+    assert.ok(
+      tabLabels.includes(label),
+      `panel «${label}» is reachable as a tab (found: ${tabLabels.join(" / ")})`,
+    );
+  }
+  const rowShipped = host.querySelector(".editor-workspace-row");
+  assert.ok(rowShipped, "workspace row rendered");
+  assert.match(
+    rowShipped.style.gridTemplateColumns,
+    /^\d+(px)? minmax\(0, 1fr\)( \d+px)?$/,
+    `a docked workspace reserves column tracks around the canvas (${rowShipped.style.gridTemplateColumns})`,
+  );
+  const canvasCenter = host.querySelector(".editor-canvas-workspace");
+  assert.equal(canvasCenter.style.gridColumn, "2", "the canvas owns the middle column");
+  /* A DOCKED window is sized by its grid track (the dock strip is the resize
+   * face), so it must NOT offer floating grips — offering them would let the
+   * author resize it into the layout it no longer owns. */
+  for (const label of ["الخصائص", "لوحة العناصر"]) {
+    const panel = host.querySelector(`.editor-floating-panel[aria-label="${label}"]`);
+    assert.equal(
+      panel.querySelectorAll(".floating-panel-resize").length,
+      0,
+      `${label} is docked: no floating resize grips`,
+    );
+    assert.ok(
+      host.querySelector('.editor-dock-strip[role="separator"]'),
+      "a dock strip is the resize affordance instead",
+    );
+  }
+
+  /* ── 2b · All six panels SEPARATE (the author's own layout) ─────────────
+   * Write the grouping an author creates by dragging every tab out, then
+   * assert the shell renders six independent windows over the canvas. */
+  /* An EMPTY dock map is the author's "I undocked everything" — distinct from
+   * the key being absent, which means "first visit, use the shipped layout". */
+  window.localStorage.setItem("nasaq.panel.docks.v3", "{}");
+  window.localStorage.setItem(
+    "nasaq.panel.groups.v3",
+    JSON.stringify({
+      groups: {
+        elements: ["elements"],
+        tools: ["tools"],
+        library: ["library"],
+        properties: ["properties"],
+        layers: ["layers"],
+        report: ["report"],
+      },
+      tabs: {
+        elements: "elements",
+        tools: "tools",
+        library: "library",
+        properties: "properties",
+        layers: "layers",
+        report: "report",
+      },
+    }),
+  );
+  await mount();
+  await settle();
+  assert.equal(
+    host.querySelectorAll(".editor-floating-panel").length,
+    6,
+    "an ungrouped layout renders six windows",
+  );
   for (const label of ["المكتبة", "أدوات العناصر", "لوحة العناصر", "الخصائص", "الطبقات", "أدوات التقرير"]) {
     assert.ok(
       host.querySelector(`.editor-floating-panel[aria-label="${label}"]`),
-      `window "${label}" rendered`,
+      `window «${label}» rendered`,
     );
   }
   const rowFree = host.querySelector(".editor-workspace-row");
-  assert.ok(rowFree, "workspace row rendered");
   assert.equal(
     rowFree.style.gridTemplateColumns,
     "minmax(0, 1fr)",
-    "undocked workspace is a single full-width canvas track",
+    "with nothing docked the canvas owns the whole row",
   );
-  assert.equal(host.querySelectorAll(".is-docked").length, 0, "nothing docked by default");
+  assert.equal(host.querySelectorAll(".is-docked").length, 0, "nothing is docked in that layout");
   const propsFree = host.querySelector('.editor-floating-panel[aria-label="الخصائص"]');
-  assert.equal(propsFree.querySelectorAll(".floating-panel-resize").length, 8, "eight resize grips");
-  assert.ok(propsFree.querySelector(".fp-dock-menu") === null, "dock menu closed by default");
+  assert.ok(propsFree.querySelector(".fp-dock-menu") === null, "the dock menu starts closed");
+  assert.equal(
+    propsFree.querySelectorAll(".floating-panel-resize").length,
+    8,
+    "a floating window offers all eight resize grips",
+  );
 
-  /* Dock the properties window to the RIGHT: the grid grows a 340px column
-   * (column 1 — the physical right edge in this RTL grid) and the canvas
-   * moves to column 2. */
-  window.localStorage.setItem("nasaq.panel.docks.v2", JSON.stringify({ properties: "right" }));
+  /* ── 2c · Docking ───────────────────────────────────────────────────────
+   * Pin the properties window to the right: the grid must grow a 340px column
+   * and the canvas must move to the next one. */
+  window.localStorage.setItem("nasaq.panel.docks.v3", JSON.stringify({ properties: "right" }));
   window.localStorage.setItem("nasaq.panel.dock-sizes.v2", JSON.stringify({ properties: { w: 340, h: 0 } }));
-  mount();
+  await mount();
   await settle();
   const rowDocked = host.querySelector(".editor-workspace-row");
-  assert.equal(
+  assert.match(
     rowDocked.style.gridTemplateColumns,
-    "340px minmax(0, 1fr)",
-    "right dock reserves a 340px column before the canvas",
+    /^340px minmax\(0, 1fr\)/,
+    `a 340px docked column precedes the canvas (${rowDocked.style.gridTemplateColumns})`,
   );
   const dockedProps = host.querySelector('.editor-floating-panel[aria-label="الخصائص"]');
   assert.ok(
     dockedProps.classList.contains("is-docked") && dockedProps.classList.contains("is-docked-right"),
-    "window carries the docked-right class",
+    "the window carries the docked-right class",
   );
-  assert.equal(dockedProps.getAttribute("data-dock-side"), "right", "dock side exposed");
+  assert.equal(dockedProps.getAttribute("data-dock-side"), "right", "the dock side is exposed");
   const dockCell = host.querySelector(".editor-dock-cell");
-  assert.equal(dockCell.style.gridColumn, "1", "docked cell owns column 1 (physical right in RTL)");
+  assert.equal(dockCell.style.gridColumn, "1", "the docked cell owns column 1 (physical right in RTL)");
   const center = host.querySelector(".editor-canvas-workspace");
-  assert.equal(center.style.gridColumn, "2", "canvas moved to column 2");
-  assert.equal(center.style.gridRow, "1", "canvas stays in the main row");
+  assert.equal(center.style.gridColumn, "2", "the canvas moved to column 2");
+  assert.equal(center.style.gridRow, "1", "the canvas stays in the main row");
 
-  /* A TOP docked window becomes a full-width 220px row track. */
-  window.localStorage.setItem("nasaq.panel.docks.v2", JSON.stringify({ layers: "top" }));
-  window.localStorage.setItem("nasaq.panel.dock-sizes.v2", JSON.stringify({ layers: { w: 0, h: 220 } }));
-  mount();
-  await settle();
-  const rowTop = host.querySelector(".editor-workspace-row");
-  assert.equal(
-    rowTop.style.gridTemplateRows,
-    "220px minmax(0, 1fr)",
-    "top dock reserves a 220px row above the canvas",
-  );
-  const topLayers = host.querySelector('.editor-floating-panel[aria-label="الطبقات"]');
-  assert.ok(topLayers.classList.contains("is-docked-top"), "layers window docked-top");
-  assert.equal(topLayers.getAttribute("data-dock-side"), "top", "top dock side exposed");
-
-  /* The pages rail hides completely when the store flag flips. */
-  assert.ok(host.querySelector(".editor-page-rail"), "rail renders by default");
+  /* ── 2d · The pages rail ────────────────────────────────────────────────
+   * Hiding it is a STORE change; the shell must react without a remount. */
+  assert.ok(host.querySelector(".editor-page-rail"), "the rail renders by default");
   useEditor.setState({ pagesRailHidden: true });
-  root.render(React.createElement(editorAppModule.EditorApp));
   await settle();
   assert.equal(host.querySelector(".editor-page-rail"), null, "hiding the rail removes it from the DOM");
   useEditor.setState({ pagesRailHidden: false });
-  root.render(React.createElement(editorAppModule.EditorApp));
   await settle();
   assert.ok(host.querySelector(".editor-page-rail"), "restoring the rail brings it back");
+  window.localStorage.removeItem("nasaq.panel.groups.v3");
+  window.localStorage.removeItem("nasaq.panel.docks.v3");
 
   root.unmount();
   host.remove();
 
   console.log(
-    "PASS(2): EditorApp client-renders the six windows (8 grips each); right dock = 340px column (col 1) with the canvas in col 2, top dock = 220px row, rail hide/show.",
+    "PASS(2): EditorApp client-renders the shipped two-window layout (six panels reachable as tabs), an ungrouped six-window layout, right dock = 340px column (col 1) with the canvas in col 2, and rail hide/show.",
   );
 } finally {
   await vite.close();
