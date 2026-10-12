@@ -134,17 +134,56 @@ export function workspaceFitInsets(surface: EditorSurface): WorkspaceFitInsets {
 }
 
 /**
+ * The OPENING camera never zooms past the document's natural size (100%).
+ * Large screens used to "contain-fit" a portrait A4 to ~107% and more — the
+ * page opened bigger than life, which read as the workspace being too large.
+ */
+export const WORKSPACE_OPEN_ZOOM_CAP = 1;
+
+/**
+ * How much of the contain-fit the opening camera actually uses, per surface.
+ *
+ * Desktops and tablets open with visible breathing room around the sheet
+ * (82%): the whole page is comfortably inside the lane without touching the
+ * chrome. Phones keep almost the full width — on a 390px lane there is no
+ * room to spend on pasteboard. `fitToScreen` (the explicit author command)
+ * still uses the full contain calculation (fill 1, cap 16).
+ */
+export const WORKSPACE_OPEN_FILL: Record<EditorSurface, number> = {
+  desktop: 0.82,
+  "tablet-landscape": 0.82,
+  "tablet-portrait": 0.82,
+  fullscreen: 0.9,
+  // Phones have no lane to spare: the page keeps using (almost) the full width.
+  "mobile-landscape": 1,
+  "mobile-portrait": 1,
+};
+
+export interface WorkspaceFitOptions {
+  /**
+   * Fraction of the largest contain zoom to use (default: the surface's
+   * opening fill). `1` reproduces the classic edge-to-edge fit.
+   */
+  fill?: number;
+  /** Never open the camera past this zoom (default: 100%). */
+  cap?: number;
+}
+
+/**
  * Initial camera zoom for one real page inside the unobscured canvas lane.
  *
  * The same contain calculation serves every document shape: no width/height is
- * written back to the model and no axis gets a different scale. Returning the
- * largest zoom that keeps the whole artboard cell visible prevents both the
- * old tiny saved-zoom opening state and accidental clipping behind chrome.
+ * written back to the model and no axis gets a different scale. The contain
+ * zoom keeps the whole artboard cell visible; the `fill` factor then decides
+ * how much of the lane the page actually occupies (the opening view keeps
+ * breathing room instead of stretching to the edges), and `cap` stops a large
+ * screen from zooming a small page past 100%.
  */
 export function workspaceFitZoom(
   viewport: { width: number; height: number },
   pagePx: { width: number; height: number },
   surface: EditorSurface,
+  options: WorkspaceFitOptions = {},
 ): number {
   const width = Number.isFinite(viewport.width) ? Math.max(1, viewport.width) : 1;
   const height = Number.isFinite(viewport.height) ? Math.max(1, viewport.height) : 1;
@@ -156,17 +195,42 @@ export function workspaceFitZoom(
     1,
     height - inset.block * 2 - inset.caption,
   );
+  const fill = Number.isFinite(options.fill)
+    ? Math.min(1, Math.max(0.01, options.fill as number))
+    : WORKSPACE_OPEN_FILL[surface];
+  const cap = Number.isFinite(options.cap)
+    ? Math.min(16, Math.max(0.01, options.cap as number))
+    : WORKSPACE_OPEN_ZOOM_CAP;
+  const contain = Math.min(availableWidth / pageWidth, availableHeight / pageHeight);
   // Match document-space's practical camera limits without importing the
   // browser-facing store into this pure geometry module.
   return Math.min(
     16,
     Math.max(
       0.01,
-      Math.round(
-        Math.min(availableWidth / pageWidth, availableHeight / pageHeight) *
-          10000,
-      ) / 10000,
+      Math.round(Math.min(contain * fill, cap) * 10000) / 10000,
     ),
+  );
+}
+
+/**
+ * Whether a shell resize is large enough to justify re-fitting the camera.
+ *
+ * Panel drags, dock toggles and small window resizes must NOT reset the
+ * author's zoom — that was the "zoom keeps resetting while I work" complaint.
+ * A genuine viewport change (rotation, a substantially different window)
+ * still re-fits, because there the old zoom is usually wrong (a portrait page
+ * turned landscape no longer fits at the old scale).
+ */
+export function layoutShiftSignificant(
+  prev: { width: number; height: number; orientation: "landscape" | "portrait" },
+  next: { width: number; height: number; orientation: "landscape" | "portrait" },
+): boolean {
+  if (prev.orientation !== next.orientation) return true;
+  const ratio = (a: number, b: number) =>
+    Math.abs(a - b) / Math.max(1, Math.min(a, b));
+  return (
+    ratio(prev.width, next.width) >= 0.25 || ratio(prev.height, next.height) >= 0.25
   );
 }
 

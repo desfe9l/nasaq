@@ -1919,6 +1919,26 @@ export const useEditor = create<EditorStore>((set, get) => {
             ...(ui.printGuides ?? {}),
           },
         });
+        /*
+         * Cloud → local pull (the other half of sync): bring documents edited
+         * in another session/device down from the mirror. Fire-and-forget —
+         * the local library above is already on screen, and only the project
+         * LIST is refreshed when something new arrives; the open document is
+         * never swapped out from under the author.
+         */
+        if (hasSignedInOwner()) {
+          void import("@/lib/offline/cloud-pull")
+            .then(async ({ pullCloudProjects }) => {
+              const result = await pullCloudProjects();
+              if (!result.changed) return;
+              if (getStorageOwner() !== owner || get().sessionOwner !== owner) return;
+              const merged = await listProjects();
+              if (getStorageOwner() !== owner || get().sessionOwner !== owner) return;
+              set({ projects: merged });
+            })
+            .catch(() => undefined);
+        }
+
         if (active) {
           await restoreFonts(active);
           if (getStorageOwner() === owner && get().sessionOwner === owner)
@@ -2253,6 +2273,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       const owner = getStorageOwner();
       const sessionOwner = get().sessionOwner;
       set({ projectsLoading: true });
+      /*
+       * Signed-in refresh first merges the cloud mirror down (other sessions'
+       * edits become visible here), then reads the local library — one list,
+       * no flicker. The pull is bounded and best-effort: a failed merge still
+       * yields the local list.
+       */
+      if (owner !== ANON_OWNER) {
+        await import("@/lib/offline/cloud-pull")
+          .then(({ pullCloudProjects }) => pullCloudProjects())
+          .catch(() => undefined);
+        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+          return;
+      }
       const list = await listProjects();
       // An auth transition can finish while IndexedDB is resolving. Never let
       // the previous owner's response repopulate the newly active session.

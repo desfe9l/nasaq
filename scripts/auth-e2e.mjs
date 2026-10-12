@@ -167,6 +167,52 @@ async function main() {
     assert.equal(response.status, 401);
   });
 
+  // ── Cross-domain session handoff (`/api/auth/handoff`) ──────────────────
+  // On this host (localhost) there is no sibling product domain, so no code is
+  // ever minted; the arrival endpoint must therefore degrade to a harmless
+  // signed-out redirect — and it must never become an open redirect.
+  await step("handoff with no code redirects safely without a session", async () => {
+    const response = await fetch(`${base}/api/auth/handoff?return=/workspace`, {
+      redirect: "manual",
+    });
+    assert.equal(response.status, 302, `expected a redirect, got ${response.status}`);
+    assert.equal(new URL(response.headers.get("location"), base).pathname, "/workspace");
+    const setCookie = response.headers.get("set-cookie");
+    assert.ok(
+      !setCookie || !setCookie.includes("session_token=") || setCookie.includes("Max-Age=0"),
+      "no live session cookie may be minted without a valid code",
+    );
+  });
+
+  await step("handoff never redirects to a foreign origin (open-redirect guard)", async () => {
+    const response = await fetch(
+      `${base}/api/auth/handoff?return=${encodeURIComponent("https://evil.example.com/steal")}`,
+      { redirect: "manual" },
+    );
+    assert.equal(response.status, 302);
+    const location = response.headers.get("location") ?? "";
+    assert.ok(
+      !location.includes("evil.example.com"),
+      `foreign return target must be dropped, got: ${location}`,
+    );
+    // The redirect must stay on this app's own origin.
+    assert.equal(new URL(location, base).origin, origin);
+  });
+
+  await step("handoff rejects a bogus code without minting a session", async () => {
+    const response = await fetch(
+      `${base}/api/auth/handoff?code=not-a-real-code&return=/editor`,
+      { redirect: "manual" },
+    );
+    assert.equal(response.status, 302);
+    assert.equal(new URL(response.headers.get("location"), base).pathname, "/editor");
+    const setCookie = response.headers.get("set-cookie");
+    assert.ok(
+      !setCookie || !setCookie.includes("session_token=") || setCookie.includes("Max-Age=0"),
+      "a bogus code must not mint a session",
+    );
+  });
+
   await step("sign-out ends the session server-side", async () => {
     assert.ok(cookie, "no session cookie to sign out with");
     const { response } = await postAuth("sign-out", {}, { cookie });

@@ -29,11 +29,64 @@ export function normalizeDatabaseUrl(
   return trimmed;
 }
 
+/**
+ * Prefer the Supabase TRANSACTION pooler over the SESSION pooler.
+ *
+ * THE FAILURE THIS PREVENTS: the session-mode pooler (`*.pooler.supabase.com`
+ * port 5432) caps the WHOLE PROJECT at `pool_size` concurrent clients
+ * (production has 15) and answers overflow with
+ * `(EMAXCONNSESSION) max clients reached in session mode`. Every serverless
+ * instance holds its client connection for as long as it lives — frozen
+ * instances included — so a handful of warm instances exhaust the cap for
+ * everyone, and sign-in (and everything else that queries) starts failing.
+ * The transaction pooler (port 6543) multiplexes many clients over a small
+ * number of server connections and does not cap client count that way.
+ *
+ * The rewrite is conservative and never guesses credentials:
+ *   · only `*.pooler.supabase.com` hosts are touched;
+ *   · only the session-pooler port (5432) is moved to the transaction port;
+ *   · only when the username already carries the project ref
+ *     (`postgres.<ref>`) — the form both pooler modes accept. A bare
+ *     `postgres` user cannot be rewritten safely, so such URLs are returned
+ *     unchanged (the pool-size caps below remain the protection);
+ *   · `NASAQ_DB_POOLER_REWRITE=0` opts out entirely.
+ */
+export function preferTransactionPooler(
+  connectionString: string | undefined,
+  env: Record<string, string | undefined> = typeof process !== "undefined"
+    ? process.env
+    : {},
+): string | undefined {
+  if (!connectionString) return connectionString;
+  if (String(env.NASAQ_DB_POOLER_REWRITE ?? "").trim() === "0") {
+    return connectionString;
+  }
+  try {
+    const url = new URL(connectionString);
+    const host = url.hostname.toLowerCase();
+    if (!host.endsWith(".pooler.supabase.com")) return connectionString;
+    if (url.port !== "5432") return connectionString;
+    const username = decodeURIComponent(url.username || "");
+    if (!/^postgres\.[a-z0-9]+$/i.test(username)) return connectionString;
+    url.port = "6543";
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
 // An empty/whitespace NASAQ_PRIMARY_DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
 const rawDatabaseUrl =
   typeof process !== "undefined" ? process.env.NASAQ_PRIMARY_DATABASE_URL : undefined;
 const databaseUrl = normalizeDatabaseUrl(rawDatabaseUrl);
+/*
+ * Runtime connection string — the session pooler is rewritten to the
+ * transaction pooler when safe (see `preferTransactionPooler`). Kept separate
+ * from `databaseUrl` so diagnostics and the build-time migrator keep talking
+ * about exactly what the operator configured.
+ */
+const runtimeDatabaseUrl = preferTransactionPooler(databaseUrl);
 
 /**
  * Active backend: real **PostgreSQL** when `NASAQ_PRIMARY_DATABASE_URL` is set, otherwise local
@@ -153,6 +206,20 @@ function createDatabasePool(connectionString: string): Pool {
     console.error("[db] Idle pool client error:", (err as Error)?.message ?? err);
   });
 
+  if (isServerless) {
+    /*
+     * Frozen Vercel instances stop running timers, so an idle connection would
+     * otherwise sit in the pool until the SERVER gives up on it — while still
+     * counting against the pooler's client cap (the EMAXCONNSESSION outage).
+     * `attachDatabasePool` keeps the instance alive just long enough after a
+     * request for the 5s idle timeout to actually close the socket.
+     * Best-effort: an older runtime without the hook simply does nothing.
+     */
+    import("@vercel/functions")
+      .then(({ attachDatabasePool }) => attachDatabasePool(pool))
+      .catch(() => undefined);
+  }
+
   return pool;
 }
 
@@ -162,8 +229,8 @@ function createDatabasePool(connectionString: string): Pool {
  * eliminating duplicate pools and halving connection consumption per serverless instance.
  */
 export function getSharedPgPool(): Pool | undefined {
-  if (!databaseUrl) return undefined;
-  globalRef.__sharedPgPool__ ??= createDatabasePool(databaseUrl);
+  if (!runtimeDatabaseUrl) return undefined;
+  globalRef.__sharedPgPool__ ??= createDatabasePool(runtimeDatabaseUrl);
   return globalRef.__sharedPgPool__;
 }
 

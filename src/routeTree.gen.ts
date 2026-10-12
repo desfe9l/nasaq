@@ -73,6 +73,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
+import { Route as ApiOfflineSplatRouteImport } from './routes/api/offline/$'
 import { Route as ApiOpsOwnerRecoveryRouteImport } from './routes/api/ops/owner-recovery'
 import { Route as ApiOpsServiceStatusRouteImport } from './routes/api/ops/service-status'
 import { Route as ApiTemplatesThumbnailRouteImport } from './routes/api/templates/thumbnail'
@@ -404,6 +405,11 @@ const ApiLicenseValidateRoute = ApiLicenseValidateRouteImport.update({
   path: '/api/license/validate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOfflineSplatRoute = ApiOfflineSplatRouteImport.update({
+  id: '/api/offline/$',
+  path: '/api/offline/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiOpsOwnerRecoveryRoute = ApiOpsOwnerRecoveryRouteImport.update({
   id: '/api/ops/owner-recovery',
   path: '/api/ops/owner-recovery',
@@ -517,6 +523,7 @@ export interface FileRoutesByFullPath {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/offline/$': typeof ApiOfflineSplatRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
@@ -589,6 +596,7 @@ export interface FileRoutesByTo {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/offline/$': typeof ApiOfflineSplatRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
@@ -665,6 +673,7 @@ export interface FileRoutesById {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/offline/$': typeof ApiOfflineSplatRoute
   '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
@@ -742,6 +751,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/offline/$'
     | '/api/ops/owner-recovery'
     | '/api/ops/service-status'
     | '/api/templates/thumbnail'
@@ -814,6 +824,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/offline/$'
     | '/api/ops/owner-recovery'
     | '/api/ops/service-status'
     | '/api/templates/thumbnail'
@@ -889,6 +900,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/offline/$'
     | '/api/ops/owner-recovery'
     | '/api/ops/service-status'
     | '/api/templates/thumbnail'
@@ -941,6 +953,7 @@ export interface RootRouteChildren {
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
+  ApiOfflineSplatRoute: typeof ApiOfflineSplatRoute
   ApiOpsOwnerRecoveryRoute: typeof ApiOpsOwnerRecoveryRoute
   ApiOpsServiceStatusRoute: typeof ApiOpsServiceStatusRoute
   ApiTemplatesThumbnailRoute: typeof ApiTemplatesThumbnailRoute
@@ -1398,6 +1411,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLicenseValidateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/offline/$': {
+      id: '/api/offline/$'
+      path: '/api/offline/$'
+      fullPath: '/api/offline/$'
+      preLoaderRoute: typeof ApiOfflineSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/ops/owner-recovery': {
       id: '/api/ops/owner-recovery'
       path: '/api/ops/owner-recovery'
@@ -1609,6 +1629,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
+  ApiOfflineSplatRoute: ApiOfflineSplatRoute,
   ApiOpsOwnerRecoveryRoute: ApiOpsOwnerRecoveryRoute,
   ApiOpsServiceStatusRoute: ApiOpsServiceStatusRoute,
   ApiTemplatesThumbnailRoute: ApiTemplatesThumbnailRoute,

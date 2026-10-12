@@ -1,41 +1,31 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
-
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-type JsonObject = { [key: string]: JsonValue };
+import {
+  deleteCloudProjectRow,
+  getCloudProjectRow,
+  getCloudProjectVersionInfo,
+  listCloudProjects,
+  saveCloudProjectRow,
+  classifyAndNoteDatabaseFailure,
+  type JsonObject,
+} from "./cloud-projects.server";
 
 /**
- * Cloud project mirror — local IndexedDB stays source of truth, server is
- * best-effort with version conflict guard. Never silently overwrites newer remote.
+ * Cloud project mirror — server functions. Local IndexedDB stays the source of
+ * truth on the device; the mirror is best-effort with a version-conflict guard
+ * and never silently overwrites a newer remote document.
+ *
+ * The business logic lives in `./cloud-projects.server.ts` and is shared with
+ * the plain HTTP endpoints at `/api/offline/*`, which the offline sync queue
+ * pushes through (see the module comment there for why both surfaces exist).
  */
-
-type CloudRow = {
-  id: string;
-  user_id: string;
-  payload: JsonObject;
-  version: number;
-  updated_at: string;
-  created_at: string;
-};
-
-function toIso(d: Date | string): string {
-  return d instanceof Date ? d.toISOString() : new Date(d).toISOString();
-}
 
 export const getCloudProjects = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ projects: Array<{ id: string; payload: JsonObject; version: number; updatedAt: string }> }> => {
     const sql = await getSql();
-    const rows = await sql<CloudRow>`select id, payload, version, updated_at from cloud_projects where user_id = ${context.userId} order by updated_at desc`;
-    return {
-      projects: rows.map((r) => ({
-        id: r.id,
-        payload: r.payload,
-        version: Number(r.version),
-        updatedAt: toIso(r.updated_at),
-      })),
-    };
+    return { projects: await listCloudProjects(sql, context.userId) };
   });
 
 export const getCloudProject = createServerFn({ method: "GET" })
@@ -45,12 +35,10 @@ export const getCloudProject = createServerFn({ method: "GET" })
     if (!id) throw new Error("id required");
     return { id };
   })
-  .handler(async ({ context, data }): Promise<any> => {
+  .handler(async ({ context, data }): Promise<{ project: { id: string; payload: JsonObject; version: number; updatedAt: string } | null }> => {
     const sql = await getSql();
-    const rows = await sql<CloudRow>`select id, payload, version, updated_at from cloud_projects where id = ${data.id} and user_id = ${context.userId} limit 1`;
-    const row = rows[0];
-    if (!row) return { project: null };
-    return { project: { id: row.id, payload: row.payload, version: Number(row.version), updatedAt: toIso(row.updated_at) } };
+    const row = await getCloudProjectRow(sql, context.userId, data.id);
+    return { project: row };
   });
 
 export const getCloudProjectVersion = createServerFn({ method: "GET" })
@@ -60,11 +48,9 @@ export const getCloudProjectVersion = createServerFn({ method: "GET" })
     if (!id) throw new Error("id required");
     return { id };
   })
-  .handler(async ({ context, data }): Promise<any> => {
+  .handler(async ({ context, data }): Promise<{ updatedAt: number | null; version: number | null }> => {
     const sql = await getSql();
-    const rows = await sql<{ updated_at: string; version: number }>`select updated_at, version from cloud_projects where id = ${data.id} and user_id = ${context.userId} limit 1`;
-    if (!rows[0]) return { updatedAt: null, version: null };
-    return { updatedAt: new Date(rows[0].updated_at).getTime(), version: Number(rows[0].version) };
+    return getCloudProjectVersionInfo(sql, context.userId, data.id);
   });
 
 export const saveCloudProject = createServerFn({ method: "POST" })
@@ -79,7 +65,7 @@ export const saveCloudProject = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<any> => {
     const { refreshControlPlane } = await import("@/lib/control-plane/store.server");
     const { gateService } = await import("@/lib/control-plane/decisions");
-    const { enforcementPlane, noteProviderSignal } = await import("@/lib/control-plane/snapshot");
+    const { enforcementPlane } = await import("@/lib/control-plane/snapshot");
     const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
     await refreshControlPlane();
     const access = await getAuthorizationContext({
@@ -90,43 +76,17 @@ export const saveCloudProject = createServerFn({ method: "POST" })
     const gate = gateService(enforcementPlane(), "documents", { privileged: access.isOwner || access.isAdmin });
     if (!gate.allowed) return { ok: false, reason: gate.code, service: "documents" };
     try {
-    const sql = await getSql();
-    // Conflict check: fetch existing version
-    const existing = await sql<{ version: number; updated_at: string }>`select version, updated_at from cloud_projects where id = ${data.id} and user_id = ${context.userId} limit 1`;
-    const remote = existing[0];
-    const incomingVersion = data.updatedAt ?? Date.now();
-    if (remote) {
-      const remoteTs = new Date(remote.updated_at).getTime();
-      // If remote is newer than incoming by >2s, don't overwrite
-      if (remoteTs - incomingVersion > 2000) {
-        return { ok: false, conflict: true, remoteVersion: Number(remote.version), remoteUpdatedAt: remoteTs };
-      }
-      // Check strict version if supplied
-      if (typeof data.version === "number" && data.version < Number(remote.version)) {
-        return { ok: false, conflict: true, remoteVersion: Number(remote.version), remoteUpdatedAt: remoteTs };
-      }
-    }
-    const payloadJson = JSON.stringify(data.payload);
-    // Upsert with version bump
-    await sql`
-      insert into cloud_projects (id, user_id, payload, version, updated_at, created_at)
-      values (${data.id}, ${context.userId}, ${payloadJson}::jsonb, ${remote ? Number(remote.version) + 1 : 1}, to_timestamp(${incomingVersion} / 1000.0), now())
-      on conflict (id) do update set
-        payload = excluded.payload,
-        version = cloud_projects.version + 1,
-        updated_at = excluded.updated_at
-      where cloud_projects.user_id = ${context.userId}
-    `;
-    return { ok: true };
+      const sql = await getSql();
+      const result = await saveCloudProjectRow(sql, context.userId, {
+        id: data.id,
+        payload: data.payload,
+        updatedAt: data.updatedAt ?? Date.now(),
+        version: data.version,
+      });
+      return result;
     } catch (error) {
-      const { classifyDatabaseFailure } = await import("@/lib/control-plane/decisions");
-      const kind = classifyDatabaseFailure(error);
-      noteProviderSignal("database", kind);
-      return {
-        ok: false,
-        reason: kind === "quota" ? "provider_limited" : "database_unavailable",
-        service: "database",
-      };
+      const { reason } = await classifyAndNoteDatabaseFailure(error);
+      return { ok: false, reason, service: "database" };
     }
   });
 
@@ -139,7 +99,5 @@ export const deleteCloudProject = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean }> => {
     const sql = await getSql();
-    // Conflict: don't delete if remote newer than local delete timestamp? For now allow.
-    await sql`delete from cloud_projects where id = ${data.id} and user_id = ${context.userId}`;
-    return { ok: true };
+    return deleteCloudProjectRow(sql, context.userId, data.id);
   });

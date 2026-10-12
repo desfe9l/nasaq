@@ -54,6 +54,13 @@ import {
   type LegacyAccountSource,
 } from "./legacy-accounts.server";
 
+/**
+ * How long a token retired by rotation stays usable (see `resolveSession`).
+ * Long enough to absorb in-flight parallel requests of the same visit, short
+ * enough that a copied token loses almost all of its remaining life at once.
+ */
+export const ROTATION_GRACE_SECONDS = 15 * 60;
+
 /** What a caller gets back: a stable code plus the sentence the UI shows. */
 export type AuthFailure = {
   code: string;
@@ -718,7 +725,23 @@ export async function resolveSession(
 
   if (rotate && !absoluteLimit) {
     const fresh = await issueSession(store, user, { ip: session.ip, userAgent: session.userAgent }, now);
-    await store.updateSession(tokenHash, { revokedAt: now.toISOString() });
+    /*
+     * Grace window instead of instant revocation. Rotation happens while the
+     * visitor is ACTIVE, so other in-flight requests (parallel server
+     * functions, a refresh racing the session fetch) still carry the OLD
+     * token. Revoking it immediately made those requests resolve as signed
+     * out and — on any endpoint that can set cookies — actively CLEAR the
+     * browser's cookie, logging the visitor out although a perfectly valid
+     * replacement session existed. The retired token stays usable for a
+     * short, bounded window (it never rotates again: its `rotatedAt` is now),
+     * then lapses on its own.
+     */
+    await store
+      .updateSession(tokenHash, {
+        rotatedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + ROTATION_GRACE_SECONDS * 1000).toISOString(),
+      })
+      .catch(() => undefined);
     liveToken = fresh.token;
     rotated = true;
     return {
@@ -784,7 +807,15 @@ export async function rotateSession(
     return { ok: true, value: null };
   }
   const fresh = await issueSession(store, user, { ip: session.ip, userAgent: session.userAgent }, now);
-  await store.updateSession(tokenHash, { revokedAt: now.toISOString() });
+  // Same grace window as the automatic rotation in `resolveSession`: the
+  // replacement cookie rides THIS response, but requests already in flight on
+  // the old token must not be signed out mid-air.
+  await store
+    .updateSession(tokenHash, {
+      rotatedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + ROTATION_GRACE_SECONDS * 1000).toISOString(),
+    })
+    .catch(() => undefined);
   return {
     ok: true,
     value: {
@@ -814,6 +845,37 @@ export async function signOutSession(store: AuthStore, token: string): Promise<v
 /** Revoke every session of one account (password change, suspension). */
 export async function revokeUserSessions(store: AuthStore, userId: string): Promise<number> {
   return store.deleteUserSessions(userId);
+}
+
+/**
+ * Mint a first-party session for an ALREADY-VERIFIED account id — the arrival
+ * side of a cross-domain handoff (`./handoff.server.ts`). The caller has
+ * already proven possession of a valid session on a sibling domain and burned
+ * a one-time code to say so; this only re-issues the local cookie equivalent.
+ *
+ * Returns `null` when the account no longer exists (deleted between mint and
+ * exchange) — the handoff then completes as a harmless signed-out redirect.
+ */
+export async function startSessionForUser(
+  store: AuthStore,
+  userId: string,
+  context: AuthRequestContext,
+  now: Date = new Date(),
+): Promise<SessionResult | null> {
+  const user = await store.findUserById(userId);
+  if (!user) return null;
+  const issued = await issueSession(store, user, context, now);
+  return {
+    user: publicUser(user),
+    session: {
+      id: issued.session.id,
+      userId: user.id,
+      createdAt: issued.session.createdAt,
+      expiresAt: issued.session.expiresAt,
+      rotated: false,
+    },
+    token: issued.token,
+  };
 }
 
 // ── Gate identity (preview "Sign in with Grok") ──────────────────────────────

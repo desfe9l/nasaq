@@ -19,6 +19,7 @@ import {
   DuplicateEmailError,
   type AuthStore,
   type NewStoredUser,
+  type SessionHandoffRecord,
   type SessionPatch,
   type StoredSession,
   type StoredUser,
@@ -33,11 +34,12 @@ export function createFileAuthStore(rootDir: string): AuthStore {
   const emailsDir = join(rootDir, "emails");
   const sessionsDir = join(rootDir, "sessions");
   const throttleDir = join(rootDir, "throttle");
+  const handoffsDir = join(rootDir, "handoffs");
   let prepared: Promise<void> | null = null;
 
   const ensureDirs = (): Promise<void> => {
     prepared ??= (async () => {
-      for (const dir of [usersDir, emailsDir, sessionsDir, throttleDir]) {
+      for (const dir of [usersDir, emailsDir, sessionsDir, throttleDir, handoffsDir]) {
         await mkdir(dir, { recursive: true });
       }
     })();
@@ -48,6 +50,7 @@ export function createFileAuthStore(rootDir: string): AuthStore {
   const emailPath = (email: string) => join(emailsDir, `${authKeyHash(normalizeEmail(email))}.json`);
   const sessionPath = (tokenHash: string) => join(sessionsDir, `${safeSegment(tokenHash)}.json`);
   const throttlePath = (key: string) => join(throttleDir, `${authKeyHash(key)}.json`);
+  const handoffPath = (codeHash: string) => join(handoffsDir, `${safeSegment(codeHash)}.json`);
 
   const readJson = async <T>(path: string): Promise<T | null> => {
     try {
@@ -218,6 +221,24 @@ export function createFileAuthStore(rootDir: string): AuthStore {
       const hashes = await userSessions(userId);
       for (const tokenHash of hashes) await rm(sessionPath(tokenHash), { force: true });
       return hashes.length;
+    },
+
+    async createSessionHandoff(record: SessionHandoffRecord) {
+      await writeJson(handoffPath(record.codeHash), record);
+    },
+
+    async consumeSessionHandoff(codeHash) {
+      // Single-use: the whole read-validate-delete runs under the record's
+      // lock, so two simultaneous exchanges cannot both succeed.
+      return withLock(`handoff:${codeHash}`, async () => {
+        const row = await readJson<SessionHandoffRecord>(handoffPath(codeHash));
+        if (!row) return null;
+        await rm(handoffPath(codeHash), { force: true });
+        const expiresMs = Date.parse(row.expiresAt);
+        if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) return null;
+        const userId = String(row.userId ?? "");
+        return userId ? { userId, expiresAt: row.expiresAt } : null;
+      });
     },
 
     readThrottle: (key) => readJson<ThrottleRecord>(throttlePath(key)),

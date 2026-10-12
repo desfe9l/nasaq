@@ -28,6 +28,12 @@
 import { authBaseURL, authTrustedOrigins } from "./config";
 import { resolveCredentialOrigin } from "../host-routing";
 import {
+  consumeHandoffCode,
+  createHandoffCode,
+  handoffReturnTarget,
+  siblingOriginFor,
+} from "./handoff.server";
+import {
   clearedOAuthStateCookie,
   createOAuthState,
   decodeOAuthState,
@@ -50,6 +56,7 @@ import {
   signInWithPassword,
   signOutSession,
   signUpWithPassword,
+  startSessionForUser,
   storeFailure,
   type AuthFailure,
   type PublicSession,
@@ -250,7 +257,11 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
         legacy: defaultLegacyAccountSource(),
       });
       if (!result.ok) return failureResponse(result.failure);
-      return json(sessionBody(result.value), 200, [sessionCookie(result.value.token)]);
+      return json(
+        { ...sessionBody(result.value), ...(await ssoRelayBody(request, store, result.value.user.id, body)) },
+        200,
+        [sessionCookie(result.value.token)],
+      );
     }
 
     if (path === "/sign-in/email" && method === "POST") {
@@ -260,7 +271,15 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
         legacy: defaultLegacyAccountSource(),
       });
       if (!result.ok) return failureResponse(result.failure);
-      return json(sessionBody(result.value), 200, [sessionCookie(result.value.token)]);
+      return json(
+        { ...sessionBody(result.value), ...(await ssoRelayBody(request, store, result.value.user.id, body)) },
+        200,
+        [sessionCookie(result.value.token)],
+      );
+    }
+
+    if (path === "/handoff" && method === "GET") {
+      return handleHandoff(request, url);
     }
 
     if (path === "/sign-out" && method === "POST") {
@@ -382,7 +401,16 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
         console.error("[auth] Google sign-in could not start a session:", result.failure.code);
         return redirectWith(errorTarget, [clearedOAuthStateCookie()]);
       }
-      return redirectWith(internalPath(state.callbackURL, "/"), [
+      /*
+       * Sibling SSO relay: a Google sign-in completed on one product domain
+       * must also establish a session on the OTHER one (.team ↔ .work), or
+       * the very next cross-domain hop signs the visitor out. Relay through
+       * the sibling's /api/auth/handoff with a one-time code and come back to
+       * the original callbackURL. Failures in the relay degrade to the plain
+       * redirect — never block sign-in itself.
+       */
+      const relay = await siblingRelayUrl(request, store, result.value.user.id, internalPath(state.callbackURL, "/"));
+      return redirectWith(relay ?? internalPath(state.callbackURL, "/"), [
         clearedOAuthStateCookie(),
         sessionCookie(result.value.token),
       ]);
@@ -403,4 +431,71 @@ function redirectWith(location: string, cookies: string[]): Response {
   const headers = new Headers({ location, "cache-control": "no-store" });
   for (const cookie of cookies) headers.append("set-cookie", cookie);
   return new Response(null, { status: 302, headers });
+}
+
+/* ── Cross-domain SSO handoff ───────────────────────────────────────────── */
+
+/**
+ * Absolute handoff URL into `siblingOrigin` carrying a fresh one-time code for
+ * `userId`, with `return` pointing back to this host's `callbackPath`. Returns
+ * `null` when this host has no sibling, the store cannot mint a code, or the
+ * caller is a preview/local host — the caller then skips the relay.
+ */
+async function siblingRelayUrl(
+  request: Request,
+  store: Awaited<ReturnType<typeof requireStore>>,
+  userId: string,
+  callbackPath: string,
+): Promise<string | null> {
+  const requestHost = new URL(request.url).host;
+  const sibling = siblingOriginFor(requestHost);
+  if (!sibling) return null;
+  const code = await createHandoffCode(store, userId);
+  if (!code) return null;
+  const here = new URL(request.url).origin;
+  const back = `${here}${callbackPath.startsWith("/") ? callbackPath : `/${callbackPath}`}`;
+  const target = new URL("/api/auth/handoff", sibling);
+  target.searchParams.set("code", code);
+  target.searchParams.set("return", back);
+  return target.toString();
+}
+
+/**
+ * The optional `sso` field added to a successful email sign-in/sign-up body:
+ * a relay URL the client navigates to so the sibling product domain gets its
+ * own session cookie too. Absent (not an error) when there is no sibling or
+ * the code cannot be minted.
+ */
+async function ssoRelayBody(
+  request: Request,
+  store: Awaited<ReturnType<typeof requireStore>>,
+  userId: string,
+  body: JsonBody,
+): Promise<{ sso?: { url: string } }> {
+  const callbackPath = internalPath(body.callbackURL, "/");
+  const url = await siblingRelayUrl(request, store, userId, callbackPath);
+  return url ? { sso: { url } } : {};
+}
+
+/**
+ * GET /api/auth/handoff?code=…&return=… — the ARRIVAL side of the cross-domain
+ * relay. Exchanges a one-time code for a brand-new first-party session on this
+ * host, then continues to `return`. Every failure mode answers as a plain
+ * signed-out redirect to `return`: the visitor is never stranded on an error
+ * page because a 60-second code lapsed.
+ */
+async function handleHandoff(request: Request, url: URL): Promise<Response> {
+  const origin = new URL(request.url).origin;
+  const returnTarget = handoffReturnTarget(url.searchParams.get("return"), origin);
+  const code = url.searchParams.get("code");
+
+  const store = await getAuthStore().catch(() => null);
+  if (!store || !code) return redirectWith(returnTarget, []);
+
+  const userId = await consumeHandoffCode(store, code);
+  if (!userId) return redirectWith(returnTarget, []);
+
+  const started = await startSessionForUser(store, userId, contextOf(request)).catch(() => null);
+  if (!started) return redirectWith(returnTarget, []);
+  return redirectWith(returnTarget, [sessionCookie(started.token)]);
 }

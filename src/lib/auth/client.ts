@@ -503,7 +503,16 @@ export async function signOut(redirectTo = "/"): Promise<void> {
 
 /** Result of an email/password attempt. Failures always carry readable Arabic. */
 export type EmailAuthResult =
-  | { ok: true }
+  | {
+      ok: true;
+      /**
+       * Cross-domain SSO relay (nasaq.team ↔ nasaq.work): when present, the
+       * caller navigates HERE instead of straight to the destination — the
+       * relay mints the sibling domain's session cookie and then lands on the
+       * same destination. Absent on hosts without a sibling (previews, local).
+       */
+      ssoURL?: string;
+    }
   | { ok: false; message: string; fieldErrors: Record<string, string> };
 
 export type EmailAuthInput = CredentialInput & {
@@ -533,7 +542,13 @@ async function submitCredentials(
     }
     adoptSessionToken(data);
     await applyNewSessionToClientState();
-    return { ok: true };
+    // The live preview authenticates by bearer token (partitioned cookies);
+    // the cross-domain cookie relay is meaningless there and would only add a
+    // hop, so it is honoured only on a deployed host.
+    const sso = (data as { sso?: { url?: unknown } } | null)?.sso;
+    const ssoURL =
+      !inLivePreview() && typeof sso?.url === "string" && sso.url ? sso.url : undefined;
+    return { ok: true, ...(ssoURL ? { ssoURL } : {}) };
   } catch (err) {
     return {
       ok: false,
