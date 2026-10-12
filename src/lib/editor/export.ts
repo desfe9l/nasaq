@@ -301,10 +301,21 @@ function jpegData(canvas: HTMLCanvasElement, quality = 0.94) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
-export async function exportPdf(pages: CapturedPage[], name: string) {
-  if (notifyExportFormatBlock("pdf")) return;
+/**
+ * Write the PDF and return whether a file was actually saved.
+ *
+ * `false` means the export was refused mid-flight (the caller already showed
+ * the refusal toast); a real encoding/writing failure throws so the caller can
+ * surface it. A PDF must never be reported as saved when nothing was written.
+ */
+export async function exportPdf(
+  pages: CapturedPage[],
+  name: string,
+): Promise<boolean> {
+  if (notifyExportFormatBlock("pdf")) return false;
   const { jsPDF } = await import("jspdf");
-  if (notifyExportFormatBlock("pdf")) return;
+  if (notifyExportFormatBlock("pdf")) return false;
+  if (!pages.length) throw new Error("لا توجد صفحات للتصدير");
   const pdf = new jsPDF({
     orientation: pages[0].w > pages[0].h ? "landscape" : "portrait",
     unit: "mm",
@@ -317,6 +328,7 @@ export async function exportPdf(pages: CapturedPage[], name: string) {
     pdf.addImage(jpegData(p.canvas), "JPEG", 0, 0, p.w, p.h, undefined, "FAST");
   });
   pdf.save(`${name}.pdf`);
+  return true;
 }
 
 /**
@@ -510,12 +522,20 @@ function clampCapturedPagesToScale(
   });
 }
 
+/**
+ * Encode and download PNG/JPG pages; `true` only once a file was downloaded.
+ *
+ * `false` means the export was refused mid-flight (the refusal toast is already
+ * shown). An encoder that returns no bytes — or drops a page — is a FAILED
+ * export, never a silent success: the author must never be told the file was
+ * saved when no file exists. Such failures throw so the caller reports them.
+ */
 export async function exportImages(
   pages: CapturedPage[],
   name: string,
   type: "png" | "jpg",
-) {
-  if (notifyExportFormatBlock(type)) return;
+): Promise<boolean> {
+  if (notifyExportFormatBlock(type)) return false;
   const advanced = useEditor.getState().entitlements.advanced_export === true;
   const outputPages = advanced
     ? pages
@@ -526,6 +546,12 @@ export async function exportImages(
   const sourceCanvases = new Set(pages.map((page) => page.canvas));
   const mime = type === "png" ? "image/png" : "image/jpeg";
   const ext = type === "png" ? "png" : "jpg";
+  const encodeFailure = () =>
+    new Error(
+      type === "png"
+        ? "تعذر ترميز الصورة — أعد المحاولة أو اختر جودة أقل"
+        : "تعذر ترميز الصورة كـ JPEG — أعد المحاولة أو اختر جودة أقل",
+    );
   try {
     if (outputPages.length === 1) {
       const blob = await canvasToBlob(
@@ -533,9 +559,10 @@ export async function exportImages(
         mime,
         type === "jpg" ? 0.95 : undefined,
       );
-      if (blob && !notifyExportFormatBlock(type))
-        downloadBlob(blob, `${name}.${ext}`);
-      return;
+      if (!blob) throw encodeFailure();
+      if (notifyExportFormatBlock(type)) return false;
+      downloadBlob(blob, `${name}.${ext}`);
+      return true;
     }
     const JSZip = (await import("jszip")).default;
     const zip = new JSZip();
@@ -545,12 +572,15 @@ export async function exportImages(
         mime,
         type === "jpg" ? 0.95 : undefined,
       );
-      if (blob)
-        zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
+      // A dropped page is a corrupt archive; fail the export instead of
+      // quietly shipping a document with pages missing.
+      if (!blob) throw encodeFailure();
+      zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
     }
     const out = await zip.generateAsync({ type: "blob" });
-    if (!notifyExportFormatBlock(type))
-      downloadBlob(out, `${name}-pages.zip`);
+    if (notifyExportFormatBlock(type)) return false;
+    downloadBlob(out, `${name}-pages.zip`);
+    return true;
   } finally {
     for (const page of outputPages) {
       if (!sourceCanvases.has(page.canvas)) {
@@ -741,11 +771,17 @@ export async function runExport(
     // Export authorization is the resolved licence entitlement, checked at the
     // start and again by each raster writer before download. The persisted
     // three-free-export counter is NOT a limit on paid basic/advanced licences.
-    if (format === "pdf") await exportPdf(pages, name);
-    else if (format === "png" || format === "jpg")
-      await exportImages(pages, name, format);
-    else throw new Error(`صيغة غير مدعومة: ${format}`);
-    toast.success("تم التصدير بنجاح");
+    // The writers report whether a file was actually written: "تم التصدير
+    // بنجاح" is only shown when the author holds the file.
+    const written =
+      format === "pdf"
+        ? await exportPdf(pages, name)
+        : format === "png" || format === "jpg"
+          ? await exportImages(pages, name, format)
+          : (() => {
+              throw new Error(`صيغة غير مدعومة: ${format}`);
+            })();
+    if (written) toast.success("تم التصدير بنجاح");
   } catch (err) {
     console.error(err);
     toast.error("فشل التصدير. جرّب جودة أقل أو قلّل عدد الصور.");
