@@ -17,16 +17,16 @@ test("double-run of the same element is rejected while busy", () => {
   assert.equal(guard.begin("el1", "background"), true);
   // Second press — same or different op — must not start a parallel job.
   assert.equal(guard.begin("el1", "background"), false);
-  assert.equal(guard.begin("el1", "upscale"), false);
+  assert.equal(guard.begin("el1", "denoise"), false);
   assert.equal(guard.activeOp("el1"), "background");
 });
 
 test("different elements process independently", () => {
   const guard = createEnhanceJobGuard();
   assert.equal(guard.begin("el1", "denoise"), true);
-  assert.equal(guard.begin("el2", "upscale"), true);
+  assert.equal(guard.begin("el2", "denoise"), true);
   assert.equal(guard.activeOp("el1"), "denoise");
-  assert.equal(guard.activeOp("el2"), "upscale");
+  assert.equal(guard.activeOp("el2"), "denoise");
 });
 
 test("end is idempotent", () => {
@@ -43,6 +43,6 @@ test("a released slot can be claimed again", () => {
   const guard = createEnhanceJobGuard();
   assert.equal(guard.begin("el1", "denoise"), true);
   guard.end("el1");
-  assert.equal(guard.begin("el1", "upscale"), true);
-  assert.equal(guard.activeOp("el1"), "upscale");
+  assert.equal(guard.begin("el1", "denoise"), true);
+  assert.equal(guard.activeOp("el1"), "denoise");
 });
