@@ -247,6 +247,33 @@ function pointer(type, x, y, extra = {}) {
   });
 }
 
+/** A two-finger tap (the iPad undo/redo gesture) on the canvas. */
+async function twoFingerTap(target, point) {
+  const contact = (id, x, y) => ({
+    pointerId: id,
+    pointerType: "touch",
+    isPrimary: id === 1,
+    buttons: 1,
+    ...mmToClient(x, y),
+  });
+  target.dispatchEvent(pointer("pointerdown", point[0], point[1], contact(1, point[0], point[1])));
+  await wait(24);
+  target.dispatchEvent(
+    pointer("pointerdown", point[0], point[1], contact(2, point[0] + 30 / ppm, point[1])),
+  );
+  await wait(40);
+  window.dispatchEvent(
+    pointer("pointerup", point[0], point[1], { ...contact(1, point[0], point[1]), buttons: 0 }),
+  );
+  window.dispatchEvent(
+    pointer("pointerup", point[0], point[1], {
+      ...contact(2, point[0] + 30 / ppm, point[1]),
+      buttons: 0,
+    }),
+  );
+  await wait(48);
+}
+
 /** Full press · move · release gesture, waypoints in document millimetres. */
 async function gesture(target, from, waypoints, options = {}) {
   if (!target) throw new Error("the gesture target is not rendered");
@@ -507,6 +534,73 @@ await check(
     equalBox(boxOf("box-2"), second, "marquee must not move box-2");
     if (selected().length < 2)
       throw new Error(`the marquee selected ${selected().length} element(s), expected both`);
+  },
+);
+
+await check("a touch tap with sub-slop travel does not drag", {}, async () => {
+  const before = boxOf();
+  /* A finger is never a pointer-until-proven-otherwise: the gesture stays
+   * undecided until it travels, so a tap that rolls a few pixels must not move
+   * the artwork. */
+  await gesture(nodeOf(), [40, 50], [[41.6, 51.2]], { pointerType: "touch" });
+  equalBox(boxOf(), before, "touch tap");
+});
+
+await check("a touch drag past the slop moves by the pointer delta", {}, async () => {
+  await gesture(nodeOf(), [40, 50], [[60, 70]], { pointerType: "touch" });
+  near(boxOf().x, 40, 0.02, "x after a +20mm finger drag");
+  near(boxOf().y, 50, 0.02, "y after a +20mm finger drag");
+});
+
+await check("an Apple Pencil drag behaves exactly like a mouse drag", {}, async () => {
+  await gesture(nodeOf(), [40, 50], [[60, 70]], { pointerType: "pen" });
+  near(boxOf().x, 40, 0.02, "x after a +20mm Pencil drag");
+  near(boxOf().y, 50, 0.02, "y after a +20mm Pencil drag");
+});
+
+await check("a two-finger tap undoes the last edit", {}, async () => {
+  await gesture(nodeOf(), [40, 50], [[60, 70]]);
+  const moved = boxOf();
+  near(moved.x, 40, 0.02, "the drag landed first");
+  await twoFingerTap(pageNode(), [150, 250]);
+  if (Math.abs(boxOf().x - moved.x) < 0.01)
+    throw new Error("the two-finger tap did not undo the drag");
+  near(boxOf().x, 20, 0.02, "the two-finger tap restored the previous state");
+});
+
+await check(
+  "dragging a group frame moves the whole group",
+  {
+    elements: [
+      {
+        type: "group",
+        id: "group-1",
+        x: 40,
+        y: 60,
+        w: 80,
+        h: 60,
+        children: [
+          { type: "shape", id: "g-child-1", x: 0, y: 0, w: 30, h: 20 },
+          { type: "shape", id: "g-child-2", x: 40, y: 30, w: 30, h: 20 },
+        ],
+      },
+    ],
+  },
+  async () => {
+  const before = boxOf("group-1");
+  await gesture(nodeOf("group-1"), [45, 65], [[65, 85]]);
+  const after = boxOf("group-1");
+  near(after.x, before.x + 20, 0.05, "the group frame moved");
+  near(after.y, before.y + 20, 0.05, "the group frame moved");
+  near(after.w, before.w, 0.02, "the group kept its size");
+  /* Children live in parent-relative millimetres: moving the frame must NOT
+   * translate them a second time. */
+  const children = elementOf("group-1").children ?? [];
+  const first = children.find((child) => child.id === "g-child-1");
+  const second = children.find((child) => child.id === "g-child-2");
+  near(first?.x ?? -1, 0, 0.001, "child 1 stayed relative to the group");
+  near(second?.x ?? -1, 40, 0.001, "child 2 stayed relative to the group");
+  near(second?.y ?? -1, 30, 0.001, "child 2 stayed relative to the group");
   },
 );
 
