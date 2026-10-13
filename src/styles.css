@@ -7521,3 +7521,13 @@ html.dark .nsq-card:hover {
     scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 1rem);
   }
 }
+/* Movable, pointer-friendly artboard magnifier. */
+.magnifier-instruction{position:fixed;z-index:75;top:max(68px,calc(var(--safe-top,0px) + 60px));left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);padding:8px 12px;border:1px solid var(--color-brand);border-radius:999px;background:var(--color-surface);color:var(--color-ink);box-shadow:0 12px 35px rgb(0 0 0/.22);font-size:11px;font-weight:800}
+.magnifier-instruction button,.magnifier-window header button{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;color:inherit}
+.magnifier-selection{position:fixed;z-index:74;pointer-events:none;border:2px solid var(--color-brand);background:color-mix(in srgb,var(--color-brand) 12%,transparent);box-shadow:0 0 0 9999px rgb(3 9 20/.16)}
+.magnifier-window{position:fixed;z-index:76;display:grid;grid-template-rows:36px minmax(0,1fr);min-width:220px;min-height:160px;overflow:hidden;border:1px solid var(--color-line);border-radius:12px;background:var(--color-surface);box-shadow:0 20px 60px rgb(0 0 0/.35);color:var(--color-ink)}
+.magnifier-window header{display:flex;align-items:center;gap:7px;padding:0 7px 0 4px;border-bottom:1px solid var(--color-line);background:var(--color-surface-2);font-size:11px;font-weight:900;cursor:move;touch-action:none;user-select:none}
+.magnifier-window header span{flex:1}.magnifier-content{position:relative;overflow:hidden;pointer-events:none;background:var(--editor-canvas,#e8ebef);direction:ltr}
+.magnifier-content .artboard-header,.magnifier-content [data-selection-frame],.magnifier-content .selection-frame{display:none!important}
+.magnifier-resize{position:absolute;z-index:2;left:0;bottom:0;display:grid;place-items:center;width:36px;height:36px;border-start-end-radius:10px;background:color-mix(in srgb,var(--color-surface) 88%,transparent);color:var(--color-ink);cursor:nwse-resize;touch-action:none}
+.editor-dark .magnifier-window,.editor-dim .magnifier-window{border-color:color-mix(in srgb,var(--color-brand) 35%,var(--color-line));box-shadow:0 20px 60px rgb(0 0 0/.65)}

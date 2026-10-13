@@ -734,9 +734,16 @@ export function FloatingPanel({
           }}
           {...holdGestureEvents}
           onKeyDown={(event) => { if (!drawer) nudge(event, "move"); }}
+          onClick={() => {
+            if (collapsed && !dragging) onToggleCollapsed?.();
+          }}
         >
-          <GripHorizontal size={16} aria-hidden="true" />
-          <span>{title}</span>
+          {collapsed ? (
+            side === "left" ? <PanelLeft size={18} aria-hidden="true" /> : <PanelRight size={18} aria-hidden="true" />
+          ) : (
+            <GripHorizontal size={16} aria-hidden="true" />
+          )}
+          <span className={collapsed ? "sr-only" : undefined}>{title}</span>
         </button>
         {!drawer && onDockSideChange && (
           <div className="fp-dock-cluster relative shrink-0 flex items-center">

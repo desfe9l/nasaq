@@ -97,9 +97,9 @@ export const EDITOR_SURFACE_NAV: readonly SurfaceNavItem[] = [
   },
   {
     id: "shapes",
-    label: "الأشكال",
-    shortLabel: "الأشكال",
-    title: "الأشكال والرموز",
+    label: "المستند والتخطيط",
+    shortLabel: "التخطيط",
+    title: "المستند والتخطيط — المقاسات والأشكال وعناصر البناء",
   },
   {
     id: "templates",

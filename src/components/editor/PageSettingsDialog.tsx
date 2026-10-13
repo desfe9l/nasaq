@@ -36,6 +36,16 @@ function PageSettingsDialog({
   const setPageSize = useEditor((s) => s.setPageSize);
   const clipExport = useEditor((s) => s.clipExport);
   const setClipExport = useEditor((s) => s.setClipExport);
+  const [unit, setUnit] = useState<"mm" | "cm" | "in">("mm");
+  const [customW, setCustomW] = useState("210");
+  const [customH, setCustomH] = useState("297");
+  const factor = unit === "mm" ? 1 : unit === "cm" ? 10 : 25.4;
+  useEffect(() => {
+    if (!page) return;
+    const size = pageSize(page);
+    setCustomW(String(Math.round((size.w / factor) * 100) / 100));
+    setCustomH(String(Math.round((size.h / factor) * 100) / 100));
+  }, [page?.id, unit]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -101,6 +111,24 @@ function PageSettingsDialog({
           <p className="text-[10px] tabular-nums text-muted">
             {Math.round(size.w)} × {Math.round(size.h)} مم · {landscape ? "أفقي" : "عمودي"}
           </p>
+          <div className="grid gap-2 rounded-[9px] border border-line bg-surface-2 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-[11px]">مقاس مخصص</strong>
+              <select value={unit} onChange={(event) => setUnit(event.target.value as "mm" | "cm" | "in")} className="h-7 rounded-[6px] border border-line bg-surface px-2 text-[10px]" aria-label="وحدة قياس الصفحة">
+                <option value="mm">مم</option><option value="cm">سم</option><option value="in">بوصة</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1 text-[10px] font-bold">العرض<input type="number" min={20 / factor} max={2000 / factor} step="0.01" value={customW} onChange={(event) => setCustomW(event.target.value)} className="h-8 rounded-[6px] border border-line bg-surface px-2 tabular-nums" /></label>
+              <label className="grid gap-1 text-[10px] font-bold">الارتفاع<input type="number" min={20 / factor} max={2000 / factor} step="0.01" value={customH} onChange={(event) => setCustomH(event.target.value)} className="h-8 rounded-[6px] border border-line bg-surface px-2 tabular-nums" /></label>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button type="button" className="h-8 rounded-[7px] border border-line text-[10px] font-bold" onClick={() => { const w = Number(customW), h = Number(customH); if (w > h) { setCustomW(String(h)); setCustomH(String(w)); } }}>عمودي</button>
+              <button type="button" className="h-8 rounded-[7px] border border-line text-[10px] font-bold" onClick={() => { const w = Number(customW), h = Number(customH); if (h > w) { setCustomW(String(h)); setCustomH(String(w)); } }}>أفقي</button>
+            </div>
+            <button type="button" className="h-8 rounded-[7px] bg-navy text-[10px] font-extrabold text-white disabled:opacity-40" disabled={!Number.isFinite(Number(customW)) || !Number.isFinite(Number(customH)) || Number(customW) * factor < 20 || Number(customH) * factor < 20 || Number(customW) * factor > 2000 || Number(customH) * factor > 2000} onClick={() => setPageSize(page.id, "custom", { w: Number(customW) * factor, h: Number(customH) * factor })}>تطبيق الأبعاد على الصفحة</button>
+            <span className="text-[9px] leading-4 text-muted">20–2000 مم لكل بُعد. تبقى العناصر والطبقات قابلة للتحرير ويُسجّل التغيير في التراجع.</span>
+          </div>
         </div>
         <PageBackground page={page} />
         <label className="flex items-start gap-2 text-[11px] font-bold">
