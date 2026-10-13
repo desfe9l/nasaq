@@ -69,9 +69,14 @@ export const listInstitutionalBackgroundsFn = createServerFn({ method: "GET" })
 
 type Mutation =
   | { op: "create"; name: string; src: string; w: number; h: number; published?: boolean }
+  | {
+      op: "createMany";
+      items: { name: string; src: string; w: number; h: number; published?: boolean }[];
+    }
   | { op: "replace"; id: string; src: string; w: number; h: number }
   | { op: "rename"; id: string; name: string }
   | { op: "delete"; id: string }
+  | { op: "deleteMany"; ids: string[] }
   | { op: "reorder"; ids: string[] }
   | { op: "publish"; id: string; published: boolean };
 
@@ -100,6 +105,40 @@ export const mutateInstitutionalBackgroundFn = createServerFn({ method: "POST" }
       if (draft.items.length !== items.length + 1) return { ok: false as const, error: "الصورة غير مقبولة أو أكبر من الحد." };
       await writeCatalog({ updatedAt: now, items: draft.items });
       return { ok: true as const, items: draft.items };
+    }
+    if (data.op === "createMany") {
+      // ONE write for the whole selection: multi-file upload lands atomically
+      // in the persistent library instead of N interleaved catalog writes.
+      const accepted = data.items.slice(0, 40);
+      const draft = normalizeInstitutionalCatalog({
+        items: [
+          ...items,
+          ...accepted.map((item, offset) => ({
+            id: `ibg-${now.toString(36)}-${offset.toString(36)}`,
+            name: item.name,
+            src: item.src,
+            w: item.w,
+            h: item.h,
+            sortOrder: items.length + offset,
+            published: item.published !== false,
+            updatedAt: now,
+          })),
+        ],
+      });
+      if (draft.items.length < items.length + 1) return { ok: false as const, error: "الصور غير مقبولة أو أكبر من الحد." };
+      await writeCatalog({ updatedAt: now, items: draft.items });
+      return {
+        ok: true as const,
+        items: draft.items,
+        added: draft.items.length - items.length,
+        rejected: accepted.length - (draft.items.length - items.length),
+      };
+    }
+    if (data.op === "deleteMany") {
+      const doomed = new Set(data.ids);
+      const next = items.filter((item) => !doomed.has(item.id));
+      await writeCatalog({ updatedAt: now, items: next.map((item, order) => ({ ...item, sortOrder: order })) });
+      return { ok: true as const, items: next };
     }
     if (index < 0 && data.op !== "reorder") return { ok: false as const, error: "الخلفية غير موجودة" };
     if (data.op === "replace") {

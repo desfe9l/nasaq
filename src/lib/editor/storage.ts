@@ -149,6 +149,8 @@ export type SettingsKey =
   /** Subscriber choice: keep library assets in R2 or local-only. */
   | "cloudStorageMode"
   | "brandProfiles"
+  /** Owner-persisted custom font files (TTF/OTF/WOFF/WOFF2) for the font library. */
+  | "customFonts"
   /** Documents saved by the /import service, newest first (service history). */
   | "importServiceHistory"
   /** Account-library deletions so a later sync does not restore them. */
@@ -582,6 +584,7 @@ const OWNER_SCOPED_SETTINGS = new Set<string>([
   "assetFolders",
   "customLibrary",
   "cloudStorageMode",
+  "customFonts",
 ]);
 
 /** The row key `key` is stored under for the current owner. */

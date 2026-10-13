@@ -305,7 +305,6 @@ import { isStandalone } from "@/lib/app-install";
 import { MobileWorkspaceGuide } from "@/components/editor/MobileWorkspaceGuide";
 import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
 import { NSQ_ACCEPT } from "@/lib/nsq/format";
-import { rememberUploadedFont } from "@/lib/nsq/fonts";
 import { openDesignFile } from "@/lib/editor/import/open";
 
 /**
@@ -729,33 +728,38 @@ export function EditorApp({
       <input
         ref={fontInput}
         type="file"
-        accept=".ttf,.otf,.woff,.woff2"
+        accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const fontName = file.name
-              .replace(/\.[^.]+$/, "")
-              .replace(/[-_]/g, " ");
-            const face = new FontFace(fontName, `url(${reader.result})`);
-            face
-              .load()
-              .then((loaded) => {
-                document.fonts.add(loaded);
-                // Kept so a `.nsq` save can embed the font file it uses.
-                rememberUploadedFont(fontName, String(reader.result));
-                // Registering with the store is what makes the font selectable;
-                // adding it to `document.fonts` alone leaves it invisible to the UI.
-                useEditor.getState().registerFont(fontName);
-                toast.success(`تم تحميل الخط: ${fontName}`);
-              })
-              .catch(() => toast.error("تعذر تحميل الخط — تأكد من صيغة الملف"));
-          };
-          reader.onerror = () => toast.error("تعذر قراءة ملف الخط");
-          reader.readAsDataURL(file);
+          if (!files.length) return;
+          void (async () => {
+            const { validateFontFile, persistCustomFont, listCustomFonts } =
+              await import("@/lib/editor/custom-fonts");
+            const register = (family: string) =>
+              useEditor.getState().registerFont(family, "خط مخصص محفوظ");
+            let existing = await listCustomFonts();
+            let done = 0;
+            for (const file of files) {
+              try {
+                const record = await validateFontFile(file, existing);
+                const saved = await persistCustomFont(record, register);
+                existing = [saved, ...existing.filter((f) => f.family !== saved.family)];
+                done += 1;
+                toast.success(`تم حفظ الخط: ${saved.family}`, {
+                  description: "متاح الآن في مكتبة الخطوط لكل مستنداتك.",
+                });
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "تعذر تحميل الخط",
+                  { description: file.name },
+                );
+              }
+            }
+            if (done > 1) toast.success(`تم حفظ ${done} خطوط في مكتبتك`);
+          })();
         }}
       />
 
@@ -828,6 +832,7 @@ function Studio({
       window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
   }, []);
   const appearance = useEditor((s) => s.appearance);
+  const canvasColor = useEditor((s) => s.canvasColor);
   useEffect(
     () =>
       subscribeTheme((value) =>
@@ -2710,6 +2715,11 @@ function Studio({
         appearance === "dim" && "editor-dim",
         isFullscreenMode && "editor-focus",
       )}
+      style={
+        canvasColor
+          ? ({ "--editor-canvas": canvasColor } as React.CSSProperties)
+          : undefined
+      }
     >
       {/*
        * Toolbar — three zones, icon-first, one line at every width.

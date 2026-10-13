@@ -717,7 +717,10 @@ export type BubblePart =
   | "image"
   /** Border/stroke width. */
   | "stroke"
-  /** Duplicate + delete. */
+  /**
+   * Essential actions — ALWAYS in the bar, in one canonical order:
+   * alignment & distribution, rotation, ordering, duplication, deletion.
+   */
   | "element"
   /** The trigger of the group drawer. */
   | "drawer"
@@ -776,8 +779,14 @@ export function bubblePartWidth(part: BubblePart): number {
     // Fill + border. Two cells, so one selection kind never makes the bar
     // wider than the other.
     case "ink":
-    case "element":
       return cells(2);
+    /*
+     * Essential actions — permanently in the bar, one fixed order:
+     * align/distribute popover, rotate left/right, order popover, duplicate,
+     * delete. Six cells; they never fold into «المزيد».
+     */
+    case "element":
+      return cells(6);
     // Replace, crop, reposition (pan inside the frame), mask, fit, rotate,
     // enhance and lighten.
     case "image":

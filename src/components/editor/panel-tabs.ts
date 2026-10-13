@@ -24,7 +24,7 @@ export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[]
   { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
-  { id: "theme", label: "الألوان", icon: Palette },
+  { id: "theme", label: "المظهر", icon: Palette },
   { id: "fonts", label: "خطوط", icon: Baseline },
   { id: "settings", label: "إعدادات", icon: Settings2 },
 ];

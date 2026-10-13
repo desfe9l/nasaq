@@ -20,6 +20,22 @@ export function rememberUploadedFont(family: string, dataUrl: string): void {
   if (name && /^data:/i.test(dataUrl)) uploaded.set(name, dataUrl);
 }
 
+/** Remove one uploaded family from the session (library delete / account switch). */
+export function forgetUploadedFont(family: string): void {
+  const name = String(family || "").trim();
+  if (!name) return;
+  uploaded.delete(name);
+  const cached = faces.get(name);
+  if (cached) {
+    try {
+      document.fonts?.delete(cached.face);
+    } catch {
+      /* face already gone */
+    }
+    faces.delete(name);
+  }
+}
+
 export function uploadedFontSources(): { family: string; dataUrl: string }[] {
   return [...uploaded].map(([family, dataUrl]) => ({ family, dataUrl }));
 }

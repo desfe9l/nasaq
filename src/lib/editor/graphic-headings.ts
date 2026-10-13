@@ -281,12 +281,23 @@ function buildCoverBand(theme: Theme): CanvasEl {
   });
   const title = txt(
     theme,
-    { name: "عنوان الغلاف", x: 34, y: 3, w: W - 40, h: 11, content: "عنوان التقرير" },
+    { name: "عنوان الغلاف", x: 34, y: 3, w: W - 40, h: 11, content: "عنوان التقرير", headingPart: "title" },
     { fontFamily: "Tajawal", fontSize: 15, fontWeight: 900, color: "#ffffff", textAlign: "right", lineHeight: 1.25, textFit: "shrink" },
   );
+  // Description line: part of the composition but NEVER forced into the
+  // report — it ships hidden and the floating description control shows it.
   const subtitle = txt(
     theme,
-    { name: "سطر الغلاف", x: 34, y: 15, w: W - 40, h: 7, content: "الجهة المالكة · التاريخ" },
+    {
+      name: "سطر الغلاف",
+      x: 34,
+      y: 15,
+      w: W - 40,
+      h: 7,
+      content: "الجهة المالكة · التاريخ",
+      headingPart: "description",
+      hidden: true,
+    },
     { fontFamily: "Cairo", fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,.85)", textAlign: "right", textFit: "shrink" },
   );
   const rule = lineEl(
@@ -309,12 +320,22 @@ function buildSealTitle(theme: Theme): CanvasEl {
   });
   const title = txt(
     theme,
-    { name: "عنوان الختم", x: 0, y: 1, w: W - 28, h: 10, content: "عنوان مع ختم" },
+    { name: "عنوان الختم", x: 0, y: 1, w: W - 28, h: 10, content: "عنوان مع ختم", headingPart: "title" },
     { fontFamily: "Amiri", fontSize: 14, fontWeight: 700, color: theme.primary, textAlign: "right", textFit: "shrink" },
   );
+  // Independent description line — hidden until the author opts in.
   const subtitle = txt(
     theme,
-    { name: "سطر تحت الختم", x: 0, y: 11.5, w: W - 28, h: 6, content: "تقرير سنوي — الفصل الأول" },
+    {
+      name: "سطر تحت الختم",
+      x: 0,
+      y: 11.5,
+      w: W - 28,
+      h: 6,
+      content: "تقرير سنوي — الفصل الأول",
+      headingPart: "description",
+      hidden: true,
+    },
     { fontFamily: "Cairo", fontSize: 8.5, fontWeight: 600, color: theme.muted, textAlign: "right", textFit: "shrink" },
   );
   return makeGroup([seal, title, subtitle], "عنوان مع ختم دائري");

@@ -22,6 +22,7 @@ import {
   RotateCcw,
   RotateCw,
   PaintBucket,
+  Plus,
   Search,
   Scaling,
   Settings2,
@@ -42,6 +43,10 @@ import {
   type EditorBlendMode,
   type ElStyle,
 } from "@/lib/editor/model";
+import {
+  headingDescriptionState,
+  isHeadingLike,
+} from "@/lib/editor/heading-description";
 import { MAX_BLUR_MM, normalizeBlurMm } from "@/lib/editor/blur";
 import {
   LETTER_SPACINGS,
@@ -408,6 +413,10 @@ export function PropertiesPanel({
                 {TYPE_NAME[el.type]}
               </span>
             </div>
+
+            {/* وصف العنوان — always independent: show, edit or remove it
+                without touching the heading itself. */}
+            <HeadingDescriptionProps elId={el.id} />
 
             {/* Phase 2 — «الأبعاد والتحاذي» (open by default). */}
             <AccordionSection
@@ -3121,6 +3130,76 @@ const LayerRow = memo(function LayerRow({
     </div>
   );
 });
+
+/**
+ * «وصف العنوان» — the heading's description controls in the properties panel.
+ *
+ * Shown only for heading-like selections (a heading composition, its title or
+ * its description line). The description is independent of the heading: it can
+ * be shown, rewritten, hidden or removed — and a heading without one can get a
+ * fresh line that starts hidden, so no unwanted text is ever forced into the
+ * report.
+ */
+function HeadingDescriptionProps({ elId }: { elId: string }) {
+  const state = useEditor((s) => {
+    const page = s.pages.find((p) => p.id === s.activePageId);
+    if (!page) return null;
+    return headingDescriptionState(page.elements, elId);
+  });
+  const setHeadingDescription = useEditor((s) => s.setHeadingDescription);
+  const removeHeadingDescription = useEditor((s) => s.removeHeadingDescription);
+  const addHeadingDescription = useEditor((s) => s.addHeadingDescription);
+  if (!state || !isHeadingLike(state.heading)) return null;
+  const { heading, description, present, visible, text } = state;
+  return (
+    <section className="grid gap-2 rounded-lg border border-line p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-[11px] font-extrabold text-muted">وصف العنوان</h4>
+        {present && (
+          <button
+            type="button"
+            className="editor-mini-btn"
+            aria-pressed={visible}
+            title={visible ? "إخفاء الوصف" : "إظهار الوصف"}
+            onClick={() => setHeadingDescription(heading.id, { visible: !visible })}
+          >
+            {visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+            {visible ? "إخفاء" : "إظهار"}
+          </button>
+        )}
+      </div>
+      {present ? (
+        <>
+          <textarea
+            value={text}
+            rows={2}
+            aria-label="نص وصف العنوان"
+            placeholder="اكتب وصف العنوان — اتركه فارغًا لإخفائه"
+            className="w-full rounded-[8px] border border-line bg-surface px-2 py-1.5 text-[11px] font-semibold"
+            onChange={(e) => setHeadingDescription(heading.id, { text: e.target.value })}
+          />
+          <button
+            type="button"
+            className="editor-mini-btn justify-center text-error"
+            title="حذف سطر الوصف نهائيًا — العنوان يبقى كما هو"
+            onClick={() => removeHeadingDescription(heading.id)}
+          >
+            <Trash2 className="size-3.5" /> حذف الوصف
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="editor-mini-btn justify-center"
+          title="إضافة سطر وصف — يبدأ مخفيًا حتى تفعّله"
+          onClick={() => addHeadingDescription(heading.id)}
+        >
+          <Plus className="size-3.5" /> إضافة وصف
+        </button>
+      )}
+    </section>
+  );
+}
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
