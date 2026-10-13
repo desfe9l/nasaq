@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   AlignCenter,
   AlignJustify,
@@ -3141,11 +3142,14 @@ const LayerRow = memo(function LayerRow({
  * report.
  */
 function HeadingDescriptionProps({ elId }: { elId: string }) {
-  const state = useEditor((s) => {
-    const page = s.pages.find((p) => p.id === s.activePageId);
-    if (!page) return null;
-    return headingDescriptionState(page.elements, elId);
-  });
+  // Fresh object per call: shallow-compare so the snapshot settles (see HeadingDescriptionControl).
+  const state = useEditor(
+    useShallow((s) => {
+      const page = s.pages.find((p) => p.id === s.activePageId);
+      if (!page) return null;
+      return headingDescriptionState(page.elements, elId);
+    }),
+  );
   const setHeadingDescription = useEditor((s) => s.setHeadingDescription);
   const removeHeadingDescription = useEditor((s) => s.removeHeadingDescription);
   const addHeadingDescription = useEditor((s) => s.addHeadingDescription);
