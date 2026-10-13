@@ -379,13 +379,19 @@ export function EditorApp({
     void hydrate();
   }, [hydrate]);
 
-  // Expose store for browser tests after hydration
+  // Expose stores for browser tests after hydration (dev only)
   const hydrated = useEditor((s) => s.hydrated);
   useEffect(() => {
-    if (hydrated) {
+    if (hydrated && import.meta.env.DEV) {
       window.__nsqStore = useEditor;
     }
   }, [hydrated]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.__nsqToolStore = useTools;
+    }
+  }, []);
 
   /*
    * One document, one address. When the author switches documents INSIDE the
