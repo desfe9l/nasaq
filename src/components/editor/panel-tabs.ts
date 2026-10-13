@@ -6,9 +6,9 @@ import {
   FolderOpen,
   Layers,
   LayoutTemplate,
+  PanelTop,
   Palette,
   Settings2,
-  Shapes,
   SlidersHorizontal,
 } from "lucide-react";
 import type { LeftTab, RightTab } from "@/lib/editor/store";
@@ -21,7 +21,7 @@ export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[]
   { id: "library", label: "المكتبة", icon: FolderOpen },
   { id: "tools", label: "أدوات العناصر", icon: Blocks },
   { id: "elements", label: "العناصر", icon: LayoutTemplate },
-  { id: "shapes", label: "أشكال", icon: Shapes },
+  { id: "shapes", label: "المستند والتخطيط", icon: PanelTop },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "المظهر", icon: Palette },

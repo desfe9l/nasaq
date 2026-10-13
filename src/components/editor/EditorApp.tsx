@@ -17,6 +17,7 @@ import {
   type ToolId,
 } from "@/lib/editor/tools";
 import { ToolPropertiesBar } from "./ToolPropertiesBar";
+import { MagnifierOverlay } from "./MagnifierOverlay";
 import { beginImageCrop, cropSelectionToImage } from "@/lib/editor/crop-session";
 
 /**
@@ -206,6 +207,7 @@ import {
   Redo2,
   Save,
   Scan,
+  Search,
   SlidersHorizontal,
   RectangleHorizontal,
   Square,
@@ -797,6 +799,8 @@ function Studio({
   /** Where «الرئيسية» leads: the licensed Home, or the site for everyone else. */
   homeHref: string;
 }) {
+  const [magnifierActive, setMagnifierActive] = useState(false);
+  const activePageId = useEditor((s) => s.activePageId);
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
   useEffect(() => {
@@ -1139,6 +1143,14 @@ function Studio({
     requestAnimationFrame(land);
   }, [setZoom]);
   fitRef.current = fitToScreen;
+
+  // Focus mode removes every unrelated surface, then fits and centres the
+  // selected page in the newly available viewport without disabling zoom.
+  useEffect(() => {
+    if (!focusMode) return;
+    const timer = window.setTimeout(() => fitRef.current(), 60);
+    return () => window.clearTimeout(timer);
+  }, [focusMode, activePageId]);
 
   useEffect(() => {
     const onFitPage = () => fitRef.current();
@@ -2910,6 +2922,14 @@ function Studio({
                   icon={<Scan className="size-4" strokeWidth={1.7} />}
                   onClick={fitToScreen}
                 />
+                <IconButton
+                  label="المكبّرة"
+                  hint="اسحب فوق أي مساحة لعرضها في نافذة مكبرة قابلة للتحريك والحجم"
+                  className="editor-zoom-btn"
+                  active={magnifierActive}
+                  icon={<Search className="size-4" strokeWidth={1.7} />}
+                  onClick={() => setMagnifierActive((value) => !value)}
+                />
               </div>
             </>
           )}
@@ -3135,6 +3155,7 @@ function Studio({
       <ExportDialog />
       <PageSettingsHost />
       <NewPageHost />
+      <MagnifierOverlay active={magnifierActive} onClose={() => setMagnifierActive(false)} />
 
       {/*
        * Modal workbenches, mounted at the shell level so they survive a panel

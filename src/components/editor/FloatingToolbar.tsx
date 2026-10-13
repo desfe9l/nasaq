@@ -48,6 +48,8 @@ import {
   Underline,
   Unlock,
   X,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from "lucide-react";
 import { fitBoxToPage, type FitPageMode } from "@/lib/editor/fit-page";
@@ -221,6 +223,25 @@ export function FloatingToolbar({
         ? { style: { objectFit: mode === "fill" ? "cover" : "contain", objectX: 50, objectY: 50 } }
         : {}),
     });
+  };
+  /** Zoom the bitmap inside its frame without changing the frame geometry. */
+  const zoomImageInFrame = (direction: 1 | -1) => {
+    if (!(el.type === "image" || el.type === "logo") || !el.src) return;
+    const apply = (sourceW: number, sourceH: number) => {
+      const current = el.style?.crop ?? { sourceW, sourceH, x: 0, y: 0, w: sourceW, h: sourceH };
+      const factor = direction === 1 ? 0.86 : 1 / 0.86;
+      const w = Math.max(8, Math.min(sourceW, current.w * factor));
+      const h = Math.max(8, Math.min(sourceH, current.h * factor));
+      const cx = current.x + current.w / 2, cy = current.y + current.h / 2;
+      updateStyle(el.id, { crop: { sourceW, sourceH, w, h, x: Math.max(0, Math.min(sourceW - w, cx - w / 2)), y: Math.max(0, Math.min(sourceH - h, cy - h / 2)) }, objectFit: "cover" });
+    };
+    if (el.style?.crop) apply(el.style.crop.sourceW, el.style.crop.sourceH);
+    else {
+      const image = document.createElement("img");
+      image.onload = () => apply(image.naturalWidth, image.naturalHeight);
+      image.onerror = () => toast.error("تعذر قراءة أبعاد الصورة");
+      image.src = el.src;
+    }
   };
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const copyStyle = useEditor((s) => s.copyStyle);
@@ -1188,6 +1209,22 @@ export function FloatingToolbar({
             onClick={() => beginImageReposition(el.id)}
           >
             <RepositionImageIcon />
+          </TipButton>
+          <TipButton
+            label="تكبير الصورة داخل الإطار"
+            hint="يكبّر محتوى الصورة فقط مع تثبيت حجم الإطار"
+            disabled={el.locked || count !== 1}
+            onClick={() => zoomImageInFrame(1)}
+          >
+            <ZoomIn />
+          </TipButton>
+          <TipButton
+            label="تصغير الصورة داخل الإطار"
+            hint="يوسّع مساحة الصورة الظاهرة دون تحريك الإطار"
+            disabled={el.locked || count !== 1}
+            onClick={() => zoomImageInFrame(-1)}
+          >
+            <ZoomOut />
           </TipButton>
           {["image", "logo"].includes(el.type) && (
             <TipButton

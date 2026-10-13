@@ -39,6 +39,10 @@ export function AiReportPanel() {
 
   const generate = async () => {
     if (!brief.trim() || busy) return;
+    if (!activePageId || !pages.some((page) => page.id === activePageId)) {
+      toast.error("حدّد صفحة أولاً، ثم ولّد المسودة.");
+      return;
+    }
     if (entitlementsResolved && !entitlements.ai_report) {
       toast.error("تحتاج هذه الميزة إلى ترخيص نشط. لم يتغير المستند.");
       return;
@@ -102,9 +106,12 @@ export function AiReportPanel() {
           مسودة تقرير بالذكاء الاصطناعي
         </span>
       </h4>
-      <p className="text-[10px] leading-4 text-muted">
-        اكتب الحقائق أو النقاط المتاحة فقط. يُرسل عنوان المستند ونص الصفحات كسياق، ولا يُضاف شيء إلى الصفحة قبل «إدراج».
-      </p>
+      <ol className="grid gap-1 rounded-[8px] border border-line bg-surface-2 p-2 text-[10px] leading-4 text-muted">
+        <li><b className="text-ink">1.</b> حدّد الصفحة التي ستستقبل التقرير.</li>
+        <li><b className="text-ink">2.</b> اكتب الموضوع والسياق والحقائق المتاحة.</li>
+        <li><b className="text-ink">3.</b> ولّد المسودة العربية وراجع أقسامها.</li>
+        <li><b className="text-ink">4.</b> اختر «إدراج في الصفحة» لتطبيقها وترتيبها كعناصر قابلة للتحرير.</li>
+      </ol>
       <label className="grid gap-1 text-[11px] font-extrabold text-muted">
         موجز التقرير
         <textarea
