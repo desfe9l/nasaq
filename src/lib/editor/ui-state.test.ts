@@ -540,13 +540,23 @@ describe("floating panel spawn", () => {
 describe("selection bubble density", () => {
   const LANES = [1920, 1440, 1194, 1024, 834, 768, 700, 620, 480, 390, 320];
 
-  it("keeps every control in the bar on a desktop or tablet lane", () => {
-    for (const lane of [1920, 1194, 1024, 834, 768]) {
+  it("keeps every control in the bar on a wide lane, essentials on every lane", () => {
+    for (const lane of [1920, 1440, 1194]) {
       const text = bubbleLayout("text", lane);
       assert.deepEqual(text.bar, [...BUBBLE_PARTS.text]);
       assert.deepEqual(text.drawer, []);
       const object = bubbleLayout("object", lane);
       assert.deepEqual(object.bar, [...BUBBLE_PARTS.object]);
+    }
+    // The ESSENTIAL actions (alignment/distribution, rotation, ordering,
+    // duplication, deletion) stay in the bar on every realistic lane — they
+    // only fold at the very last resort, on the narrowest phone lanes (where
+    // «المزيد» still carries them).
+    for (const lane of [834, 768, 480]) {
+      for (const kind of ["text", "object", "image"] as const) {
+        const { bar } = bubbleLayout(kind, lane);
+        assert.ok(bar.includes("element"), `${kind} keeps essentials at ${lane}px`);
+      }
     }
   });
 
@@ -557,7 +567,8 @@ describe("selection bubble density", () => {
     assert.deepEqual(a, b);
     assert.equal(bubbleBarWidth(a.bar), bubbleBarWidth(b.bar));
     // Two different lanes inside the same band agree too.
-    assert.deepEqual(bubbleLayout("text", 800).bar, bubbleLayout("text", 1200).bar);
+    assert.deepEqual(bubbleLayout("text", 1440).bar, bubbleLayout("text", 1920).bar);
+    assert.deepEqual(bubbleLayout("text", 700).bar, bubbleLayout("text", 800).bar);
   });
 
   it("folds controls into a drawer instead of shrinking them on a phone lane", () => {
