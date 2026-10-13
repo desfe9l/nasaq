@@ -746,6 +746,11 @@ export const BUBBLE_DRAWER_PARTS: readonly BubblePart[] = [
  * Fold order: the first list that fits wins, so a wide lane keeps every control
  * in the bar and a phone lane keeps the icons and hands the fields to a drawer.
  * Nothing here depends on the selection's contents.
+ *
+ * ESSENTIAL actions (`element`) fold LAST — they are the last thing to leave
+ * the bar and the first to return, so alignment, rotation, ordering,
+ * duplication and deletion stay permanently accessible on every realistic
+ * lane; only formatting fields fold away before them.
  */
 export const BUBBLE_FOLDS: Record<
   BubbleKind,
@@ -753,12 +758,13 @@ export const BUBBLE_FOLDS: Record<
 > = {
   text: [
     [],
-    ["element"],
-    ["element", "typography"],
-    ["element", "typography", "format"],
+    ["typography"],
+    ["typography", "format"],
+    ["typography", "format", "stroke"],
+    ["typography", "format", "stroke", "element"],
   ],
-  object: [[], ["element"], ["element", "ink"], ["element", "ink", "stroke"]],
-  image: [[], ["element"], ["element", "stroke"]],
+  object: [[], ["ink"], ["ink", "stroke"], ["ink", "stroke", "element"]],
+  image: [[], ["stroke"], ["stroke", "image"], ["stroke", "image", "element"]],
 };
 
 /** Rendered width of one bubble part, excluding the gutters around it. */
