@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Eye, EyeOff, Plus, TextCursorInput, Trash2 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import {
@@ -26,11 +27,15 @@ export function HeadingDescriptionControl() {
 
   // Read the LIVE state from the page tree (identity-stable subscription on
   // the selection only; the state is derived at render).
-  const state = useEditor((s) => {
-    const page = s.pages.find((p) => p.id === s.activePageId);
-    if (!page || !selectedId) return null;
-    return headingDescriptionState(page.elements, selectedId);
-  });
+  // `headingDescriptionState` allocates a fresh object per call; without
+  // `useShallow` the snapshot never settles and React throws #185.
+  const state = useEditor(
+    useShallow((s) => {
+      const page = s.pages.find((p) => p.id === s.activePageId);
+      if (!page || !selectedId) return null;
+      return headingDescriptionState(page.elements, selectedId);
+    }),
+  );
 
   if (!state || !isHeadingLike(state.heading)) return null;
 
