@@ -102,6 +102,12 @@ import {
   type ReportBlockId,
 } from "./report-blocks";
 import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
+import {
+  addHeadingDescription as addHeadingDescriptionLine,
+  headingDescriptionState,
+  removeHeadingDescription as removeHeadingDescriptionLine,
+  setHeadingDescription as setHeadingDescriptionText,
+} from "./heading-description";
 import { framedImageOverrides, imageFrameDef } from "./image-frames";
 import type { ReportDraft } from "../ai/contract";
 import { insertPageAfter, resolveNewPageSize, type NewPageRequest } from "./page-order";
@@ -298,6 +304,12 @@ interface Ui {
   previewAll: boolean;
   focusMode: boolean;
   appearance: AppearanceMode;
+  /**
+   * Canvas workspace (pasteboard) colour — the surface around the artboards.
+   * `null` follows the current appearance theme's canvas tone. A workspace
+   * preference (like the grid): persisted per device, never in the document.
+   */
+  canvasColor: string | null;
   leftTab: LeftTab;
   rightTab: RightTab;
   leftOpen: boolean;
@@ -542,6 +554,8 @@ interface EditorStore extends Project, Ui, History {
   fontsProbed: boolean;
   probeFonts: () => void;
   registerFont: (family: string, note?: string) => void;
+  /** Remove an imported font from the library (session + persisted copy). */
+  removeFont: (family: string) => void;
   hydrate: () => Promise<void>;
   refreshProjects: () => Promise<void>;
   createProject: (pack: PackId, theme?: ThemeId) => Promise<boolean>;
@@ -623,6 +637,8 @@ interface EditorStore extends Project, Ui, History {
   ) => void;
   /** Set one of the three shared, persistent interface appearance modes. */
   setAppearance: (appearance: AppearanceMode) => void;
+  /** Set (or clear) the canvas workspace colour. */
+  setCanvasColor: (color: string | null) => void;
   setLeftTab: (t: LeftTab) => void;
   setRightTab: (t: RightTab) => void;
   /**
@@ -765,6 +781,15 @@ interface EditorStore extends Project, Ui, History {
     id: GraphicHeadingId,
     at: { x: number; y: number },
   ) => string | undefined;
+  /** Show/hide or rewrite a heading's independent description line. */
+  setHeadingDescription: (
+    id: string,
+    patch: { text?: string; visible?: boolean },
+  ) => void;
+  /** Remove a heading's description line entirely (heading stays). */
+  removeHeadingDescription: (id: string) => void;
+  /** Attach a fresh (hidden) description line to a heading that has none. */
+  addHeadingDescription: (id: string) => string | undefined;
   /** Insert or replace an AI draft as an editable hierarchy of report elements. */
   insertReportDraft: (
     draft: ReportDraft,
@@ -1928,6 +1953,10 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightOpen: nextRightOpen,
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
+          canvasColor:
+            typeof ui.canvasColor === "string" && ui.canvasColor.trim()
+              ? ui.canvasColor.trim()
+              : null,
           layersOpen: Boolean(ui.layersOpen),
           reportToolsOpen: Boolean(ui.reportToolsOpen),
           libraryOpen: Boolean(ui.libraryOpen),
@@ -1943,7 +1972,9 @@ export const useEditor = create<EditorStore>((set, get) => {
               ? ui.pagesPanelHeight
               : PAGES_PANEL_DEFAULT,
           ),
-          pagesRailCollapsed: Boolean(ui.pagesRailCollapsed),
+          // Compact page navigation is the DEFAULT; an explicit saved choice
+          // (expanded tray) always wins.
+          pagesRailCollapsed: ui.pagesRailCollapsed ?? true,
           pagesRailHidden: Boolean(ui.pagesRailHidden),
           bubbleEnabled: ui.bubble !== false,
           bubbleOffset:
@@ -2097,6 +2128,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     previewAll: true,
     focusMode: false,
     appearance: readStoredTheme() ?? "light",
+    canvasColor: null,
     leftTab: "library",
     rightTab: "properties",
     leftOpen: false,
@@ -2109,7 +2141,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     toolsOpen: false,
     artboardGridCols: 4,
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
-    pagesRailCollapsed: false,
+    pagesRailCollapsed: true,
     pagesRailHidden: false,
     contextMenu: null,
     bubbleEnabled: true,
@@ -2234,6 +2266,21 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
+    removeFont: (family) => {
+      const trimmed = String(family || "").trim();
+      if (!trimmed) return;
+      set({
+        fontChoices: get().fontChoices.filter((f) => f.family !== trimmed),
+      });
+      // Session bytes AND the persisted per-account library copy both go.
+      void import("../nsq/fonts")
+        .then(({ forgetUploadedFont }) => forgetUploadedFont(trimmed))
+        .catch(() => undefined);
+      void import("./custom-fonts")
+        .then(({ forgetCustomFont }) => forgetCustomFont(trimmed))
+        .catch(() => undefined);
+    },
+
     resetUserScopedState: () => {
       clearUploadedFonts();
       saveSessionGen += 1;
@@ -2295,6 +2342,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       const run = (async () => {
         try {
           await runHydrate();
+          /*
+           * Persistent custom fonts: the owner's imported font files are
+           * reloaded into the font library on every session, so a font
+           * imported once stays selectable in every document forever.
+           * Best-effort — a font restore must never block the editor boot.
+           */
+          void import("./custom-fonts")
+            .then(({ restoreCustomFonts }) =>
+              restoreCustomFonts(
+                (family) => get().registerFont(family, "خط مخصص محفوظ"),
+              ),
+            )
+            .catch(() => undefined);
         } finally {
           // The lifecycle never rests in `loading`: a run that aborted (owner
           // switched mid-boot) or that found no document falls back to what the
@@ -3937,6 +3997,14 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ appearance });
       writeStoredTheme(appearance);
     },
+    setCanvasColor: (color) => {
+      // A workspace preference: persisted per device, never in the document.
+      const canvasColor =
+        typeof color === "string" && color.trim() ? color.trim() : null;
+      if (get().canvasColor === canvasColor) return;
+      set({ canvasColor });
+      writeUi({ canvasColor: canvasColor ?? "" });
+    },
     setLeftTab: (leftTab) => {
       /*
        * «library» and «tools» are their OWN windows since the split; asking
@@ -4184,8 +4252,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
-        // Floating properties never auto-open over newly selected artwork.
-        rightOpen: s.rightOpen,
+        // Selecting artwork immediately shows ITS properties: the right panel
+        // opens on the properties tab (never an unrelated or empty tab). A
+        // deselection keeps the current panel so the page inspector is ready.
+        ...(id
+          ? { rightOpen: true, rightTab: "properties" as const }
+          : {}),
       })),
 
     setEditing: (id) => set({ editingId: id }),
@@ -4205,6 +4277,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: selectedIds.length
           ? selectedIds[selectedIds.length - 1]
           : null,
+        ...(selectedIds.length
+          ? { rightOpen: true, rightTab: "properties" as const }
+          : {}),
       });
     },
 
@@ -4219,6 +4294,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: keep,
         selectedId: keep.length ? keep[keep.length - 1] : null,
         activePageId: keep.length ? page.id : s.activePageId,
+        ...(keep.length ? { rightOpen: true, rightTab: "properties" as const } : {}),
       });
     },
 
@@ -4893,6 +4969,58 @@ export const useEditor = create<EditorStore>((set, get) => {
         duration: 1800,
       });
       return block.id;
+    },
+
+    /**
+     * Heading descriptions — independent of the heading itself. Every edit
+     * goes through the normal page pipeline (history + autosave), and a
+     * description hidden by default never forces placeholder text into the
+     * report.
+     */
+    setHeadingDescription: (id, patch) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const state = headingDescriptionState(page.elements, id);
+      if (!state?.description) return;
+      const next = setHeadingDescriptionText(page.elements, id, patch);
+      set({ pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: next } : p)) });
+      pushHistory();
+      scheduleSave(400);
+    },
+
+    removeHeadingDescription: (id) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const { els, removedId } = removeHeadingDescriptionLine(page.elements, id);
+      if (!removedId) return;
+      const state = headingDescriptionState(page.elements, id);
+      const keepId = state && state.heading.id !== removedId ? state.heading.id : null;
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: els } : p)),
+        selectedId: keepId,
+        selectedIds: keepId ? [keepId] : [],
+      });
+      pushHistory();
+      scheduleSave(400);
+    },
+
+    addHeadingDescription: (id) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return undefined;
+      const theme = THEMES[s.theme] ?? THEMES.official;
+      const { els, descriptionId } = addHeadingDescriptionLine(
+        page.elements,
+        id,
+        theme.muted,
+      );
+      if (!descriptionId) return undefined;
+      set({ pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: els } : p)) });
+      pushHistory();
+      scheduleSave(400);
+      return descriptionId;
     },
 
     insertReportDraft: (draft, existingId) => {
@@ -6321,6 +6449,8 @@ interface PersistedUi {
   snapElements?: boolean;
   /** Artwork outside the page rectangle stays visible (absent = on). */
   showOutsidePage?: boolean;
+  /** Canvas workspace colour override (""/absent = follow the theme). */
+  canvasColor?: string;
 }
 
 /**

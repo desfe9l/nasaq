@@ -77,6 +77,7 @@ import {
   MenuRow,
 } from "./ui/AnchorMenu";
 import { AlignIcon } from "./ui/AlignIcon";
+import { HeadingDescriptionControl } from "./HeadingDescriptionControl";
 import type { AlignEdge } from "@/lib/editor/model";
 
 /** Elements that render an editable text body. */
@@ -1295,6 +1296,117 @@ export function FloatingToolbar({
 
       {inBar.has("element") && (
         <div className="floating-toolbar-section">
+          {/*
+           * ESSENTIAL ACTIONS — permanently in the bar, one canonical order,
+           * identical icons everywhere they appear: alignment & distribution,
+           * rotation, ordering, duplication, deletion. Secondary actions stay
+           * contextual (image tools, formatting) or in «المزيد».
+           */}
+          <AnchorMenu
+            label="محاذاة وتوزيع"
+            width={228}
+            side="top"
+            align="start"
+            trigger={({ ref, ...props }) => (
+              <button
+                {...props}
+                ref={ref}
+                type="button"
+                className="floating-toolbar-btn"
+                aria-label="محاذاة وتوزيع"
+              >
+                <AlignIcon kind="center-h" />
+              </button>
+            )}
+          >
+            <MenuGrid columns={3} label="المحاذاة">
+              {(
+                [
+                  ["right", "محاذاة لليمين"],
+                  ["center-h", "توسيط أفقي"],
+                  ["left", "محاذاة لليسار"],
+                  ["top", "محاذاة للأعلى"],
+                  ["center-v", "توسيط رأسي"],
+                  ["bottom", "محاذاة للأسفل"],
+                ] as const
+              ).map(([kind, title]) => (
+                <MenuCell
+                  key={kind}
+                  icon={<AlignIcon kind={kind} />}
+                  label={title}
+                  onSelect={() => alignEdge(kind)}
+                />
+              ))}
+            </MenuGrid>
+            <MenuGrid columns={2} label="التوزيع">
+              <MenuCell
+                icon={<AlignIcon kind="dist-h" />}
+                label="توزيع أفقي متساوٍ"
+                disabled={count < 3}
+                onSelect={() => distribute("h")}
+              />
+              <MenuCell
+                icon={<AlignIcon kind="dist-v" />}
+                label="توزيع رأسي متساوٍ"
+                disabled={count < 3}
+                onSelect={() => distribute("v")}
+              />
+            </MenuGrid>
+          </AnchorMenu>
+          <TipButton
+            label="تدوير 90° لليسار"
+            hint="عكس عقارب الساعة"
+            onClick={() => rotate(-90)}
+          >
+            <RotateCcw />
+          </TipButton>
+          <TipButton
+            label="تدوير 90° لليمين"
+            hint="مع عقارب الساعة"
+            onClick={() => rotate(90)}
+          >
+            <RotateCw />
+          </TipButton>
+          <AnchorMenu
+            label="ترتيب الطبقات"
+            width={200}
+            side="top"
+            align="start"
+            trigger={({ ref, ...props }) => (
+              <button
+                {...props}
+                ref={ref}
+                type="button"
+                className="floating-toolbar-btn"
+                aria-label="ترتيب الطبقات"
+              >
+                <Layers2 />
+              </button>
+            )}
+          >
+            <MenuGrid columns={2} label="ترتيب الطبقات">
+              <MenuCell
+                icon={<ChevronsUp />}
+                label="إلى المقدمة"
+                onSelect={() => useEditor.getState().bring("front")}
+              />
+              <MenuCell
+                icon={<ArrowUp />}
+                label="طبقة للأمام"
+                onSelect={() => useEditor.getState().bring("forward")}
+              />
+              <MenuCell
+                icon={<ArrowDown />}
+                label="طبقة للخلف"
+                onSelect={() => useEditor.getState().bring("back")}
+              />
+              <MenuCell
+                icon={<ChevronsDown />}
+                label="إلى الخلف"
+                onSelect={() => useEditor.getState().bring("bottom")}
+              />
+            </MenuGrid>
+          </AnchorMenu>
           <TipButton label="تكرار" shortcut="⌘D" onClick={duplicateSelected}>
             <Copy />
           </TipButton>
@@ -1308,6 +1420,9 @@ export function FloatingToolbar({
           </TipButton>
         </div>
       )}
+
+      {/* الوصف التعريفي — contextual compact control (headings only). */}
+      <HeadingDescriptionControl />
 
       <span className="floating-toolbar-sep" aria-hidden />
 
@@ -1390,7 +1505,7 @@ export function FloatingToolbar({
             />
           ))}
         </MenuGrid>
-        <MenuGrid columns={4} label="التوزيع والتحويل">
+        <MenuGrid columns={2} label="التوزيع">
           <MenuCell
             icon={<AlignIcon kind="dist-h" />}
             label="توزيع أفقي متساوٍ"
@@ -1403,6 +1518,8 @@ export function FloatingToolbar({
             disabled={count < 3}
             onSelect={() => distribute("v")}
           />
+        </MenuGrid>
+        <MenuGrid columns={4} label="التدوير والقلب">
           <MenuCell
             icon={<RotateCcw />}
             label="تدوير 90° لليسار"
@@ -1413,8 +1530,6 @@ export function FloatingToolbar({
             label="تدوير 90° لليمين"
             onSelect={() => rotate(90)}
           />
-        </MenuGrid>
-        <MenuGrid columns={4} label="القلب والتحجيم">
           <MenuCell
             icon={<FlipHorizontal2 />}
             label="قلب أفقي"
@@ -1427,6 +1542,8 @@ export function FloatingToolbar({
             active={style.flipY === true}
             onSelect={() => flipSelected("y")}
           />
+        </MenuGrid>
+        <MenuGrid columns={2} label="التحجيم">
           <MenuCell
             icon={<Scaling />}
             label="قفل التحجيم — تجميد العرض والارتفاع"

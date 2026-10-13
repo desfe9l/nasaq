@@ -350,6 +350,14 @@ export interface CanvasEl {
   /** قفل ارتفاع مستقل — يمنع تغيير الارتفاع فقط */
   heightLocked?: boolean;
   hidden?: boolean;
+  /**
+   * Heading composition marker. `description` flags the optional subtitle /
+   * description line of a heading composition; `title` flags the heading
+   * itself. Pure metadata: rendering, geometry and export treat the element
+   * like any other text — it exists so every heading's description can be
+   * shown, edited or removed independently (never forced into the report).
+   */
+  headingPart?: "title" | "description";
   /** Shared movement relationship; unlike a group, linked elements remain independent. */
   linkId?: string;
   content?: string;

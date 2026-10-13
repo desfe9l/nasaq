@@ -1,5 +1,6 @@
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
+import { DocumentAppearancePanel } from "./DocumentAppearancePanel";
 import { useMemo, useState } from "react";
 import {
   Type,
@@ -17,6 +18,8 @@ import {
   FileCode2,
   ChevronDown,
   Eye,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import {
@@ -28,7 +31,6 @@ import {
   sizeIdOf,
   type CanvasEl,
   type ElType,
-  type ThemeId,
 } from "@/lib/editor/model";
 import { SHAPES, shapesByGroup } from "@/lib/editor/shapes";
 
@@ -126,7 +128,6 @@ export function LeftPanel({
   const addElement = useEditor((s) => s.addElement);
   const addTemplatePage = useEditor((s) => s.addTemplatePage);
   const theme = useEditor((s) => s.theme);
-  const setTheme = useEditor((s) => s.setTheme);
   const orgName = useEditor((s) => s.orgName);
   const setOrg = useEditor((s) => s.setOrg);
   const name = useEditor((s) => s.name);
@@ -557,7 +558,7 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "fonts" && <FontsTab />}
+        {tab === "fonts" && <FontsTab onUpload={onUpload} />}
 
         {tab === "templates" && (
           <div>
@@ -646,9 +647,6 @@ export function LeftPanel({
 
         {tab === "theme" && (
           <div>
-            <header className="mb-2.5">
-              <h2 className="text-[13px] font-extrabold">سمة المستند</h2>
-            </header>
             <label className="mb-3 block text-[11px] font-extrabold text-muted">
               اسم المشروع
               <input
@@ -666,46 +664,7 @@ export function LeftPanel({
                 className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink "
               />
             </label>
-            <div className="grid gap-2">
-              {(Object.values(THEMES) as (typeof THEMES)[ThemeId][]).map(
-                (t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTheme(t.id)}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-[8px] border p-2.5 text-right",
-                      theme === t.id
-                        ? "border-navy-2 bg-navy-2/5"
-                        : "border-line ",
-                    )}
-                  >
-                    <span className="flex size-9 shrink-0 overflow-hidden rounded-md border border-line">
-                      <span
-                        className="w-1/2"
-                        style={{ background: t.primary }}
-                      />
-                      <span
-                        className="w-1/3"
-                        style={{ background: t.accent }}
-                      />
-                      <span
-                        className="w-[16.6%]"
-                        style={{ background: t.surface }}
-                      />
-                    </span>
-                    <span className="min-w-0">
-                      <strong className="block text-[12px]">{t.name}</strong>
-                      <span className="text-[11px] text-muted">{t.desc}</span>
-                    </span>
-                  </button>
-                ),
-              )}
-            </div>
-            <p className="mt-3 text-[11px] leading-5 text-muted">
-              السمة تُطبَّق على العناصر الجديدة والقوالب المُدرجة. العناصر
-              الحالية تحتفظ بألوانها.
-            </p>
+            <DocumentAppearancePanel />
           </div>
         )}
 
@@ -951,7 +910,12 @@ export function ElementToolsWindow({
  * author uploaded. Applying a font here updates the selected text element, so
  * the panel doubles as the properties shortcut for typography.
  */
-function FontsTab() {
+function FontsTab({
+  onUpload,
+}: {
+  onUpload: (kind: "image" | "logo" | "font" | "library") => void;
+}) {
+  const removeFont = useEditor((s) => s.removeFont);
   const choices = useEditor((s) => s.fontChoices);
   const probed = useEditor((s) => s.fontsProbed);
   const updateStyle = useEditor((s) => s.updateStyle);
@@ -1093,6 +1057,28 @@ function FontsTab() {
                   >
                     <Star className={cn("size-3.5", fav && "fill-amber-400")} />
                   </span>
+                  {f.source === "uploaded" && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`حذف الخط ${f.family} من المكتبة`}
+                      title="حذف من مكتبة الخطوط"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFont(f.family);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeFont(f.family);
+                        }
+                      }}
+                      className="grid size-6 place-items-center rounded-[6px] text-muted/50 hover:text-error"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </span>
+                  )}
                   {current === f.family && (
                     <span className="text-[10px] font-extrabold text-brand-hover">
                       مُطبَّق
@@ -1109,7 +1095,17 @@ function FontsTab() {
   return (
     <div className="grid gap-4">
       <header>
-        <h2 className="text-[13px] font-extrabold">مكتبة الخطوط</h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-[13px] font-extrabold">مكتبة الخطوط</h2>
+          <button
+            type="button"
+            onClick={() => onUpload("font")}
+            title="استيراد ملفات خطوط من جهازك (TTF / OTF / WOFF / WOFF2) — تُحفظ في مكتبتك وتبقى متاحة عبر الجلسات والمستندات"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-line px-2 text-[11px] font-extrabold hover:border-navy-2"
+          >
+            <Upload className="size-3.5" /> استيراد خطوط
+          </button>
+        </div>
         <p className="mt-1 text-[11px] leading-5 text-muted">
           {probed
             ? `تم فحص خطوط هذا الجهاز (${detectPlatform()}). انقر على أي خط لتطبيقه على العنصر المحدد.`
@@ -1143,7 +1139,11 @@ function FontsTab() {
         system,
         "خطوط مثبّتة على هذا الجهاز — قد لا تتوفر على جهاز آخر.",
       )}
-      {group("خطوط مرفوعة", uploaded, "خطوط أضفتها أنت في هذا المتصفح.")}
+      {group(
+        "خطوط مرفوعة",
+        uploaded,
+        "خطوط استوردتها من جهازك — محفوظة في مكتبتك ومتاحة عبر الجلسات والمستندات.",
+      )}
 
       <p className="text-[10px] leading-5 text-muted">
         تعتمد القائمة على الخطوط المضمّنة وما يستطيع المتصفح التحقق منه على هذا

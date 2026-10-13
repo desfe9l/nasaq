@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Copy,
   GripVertical,
+  PanelBottomClose,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -183,18 +184,27 @@ export function PageRail({
           title="توسيع شريط الصفحات"
           aria-label="توسيع شريط الصفحات"
           aria-expanded={false}
-          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
+          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
         >
-          <ChevronDown className="size-3.5" aria-hidden />
+          <ChevronDown className="size-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
+          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
         >
-          <Plus className="size-3.5" aria-hidden />
+          <Plus className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={() => duplicatePage()}
+          title="تكرار الصفحة الحالية"
+          aria-label="تكرار الصفحة الحالية"
+          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
+        >
+          <Copy className="size-4" aria-hidden />
         </button>
         <ul
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto editor-pane-scroll"
@@ -209,7 +219,7 @@ export function PageRail({
                 aria-current={p.id === activePageId}
                 title={`${p.name} — ${p.elements.length} عنصر`}
                 className={cn(
-                  "page-rail-chip grid h-7 min-w-7 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums transition-colors",
+                  "page-rail-chip grid h-8 min-w-8 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums transition-colors",
                   p.id === activePageId
                     ? "is-active border-navy-2 bg-navy-2/10 text-brand"
                     : "border-transparent text-muted hover:border-line",
@@ -221,7 +231,7 @@ export function PageRail({
           ))}
         </ul>
         <span className="shrink-0 text-[10px] font-bold text-muted tabular-nums">
-          {pages.length}
+          {activeIndex >= 0 ? `${activeIndex + 1} / ${pages.length}` : pages.length}
         </span>
       </div>
     );
@@ -234,7 +244,7 @@ export function PageRail({
        * tooltip. Text labels would cost the rail's height budget for words a
        * hover already says.
        */}
-      <div className="page-rail-controls flex shrink-0 flex-col justify-center gap-1">
+      <div className="page-rail-controls flex shrink-0 flex-row items-center gap-1 self-center">
         <button
           type="button"
           onClick={() => togglePagesRail()}
@@ -262,6 +272,15 @@ export function PageRail({
           className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
         >
           <Copy className="size-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={() => useEditor.getState().togglePagesRailHidden()}
+          title="إخفاء شريط الصفحات بالكامل — يُعاد من «عرض»"
+          aria-label="إخفاء شريط الصفحات"
+          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+        >
+          <PanelBottomClose className="size-4" aria-hidden />
         </button>
       </div>
 
@@ -379,9 +398,9 @@ export function PageRail({
                   onPointerDown={startDrag(i)}
                   title="اسحب لإعادة الترتيب"
                   aria-label={`إعادة ترتيب ${p.name}`}
-                  className="drag-handle grid size-5 place-items-center rounded text-muted"
+                  className="drag-handle grid size-7 place-items-center rounded text-muted hover:bg-line/50"
                 >
-                  <GripVertical className="size-3" />
+                  <GripVertical className="size-3.5" />
                 </button>
                 {pages.length > 1 && (
                   <button
@@ -389,9 +408,9 @@ export function PageRail({
                     onClick={() => deletePage(p.id)}
                     title="حذف الصفحة"
                     aria-label={`حذف ${p.name}`}
-                    className="grid size-5 place-items-center rounded text-error"
+                    className="grid size-7 place-items-center rounded text-error hover:bg-error/10"
                   >
-                    <Trash2 className="size-3" />
+                    <Trash2 className="size-3.5" />
                   </button>
                 )}
               </span>
