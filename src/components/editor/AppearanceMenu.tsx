@@ -7,7 +7,7 @@ import { IconButton } from "./ui/IconButton";
 /**
  * «المظهر» — the permanent, icon-first appearance switch of the toolbar.
  *
- * The three interface modes (فاتح، خافت، داكن) already live deep inside «عرض»
+ * The three interface modes (فاتح، داكن، خافت) already live deep inside «عرض»
  * and the settings dialog; this control puts them one tap away without adding
  * a single pixel of toolbar height. The trigger is one IconButton cell — the
  * same box as every other header control — whose glyph mirrors the LIVE mode
@@ -26,13 +26,13 @@ const MODES: {
   Icon: typeof Sun;
 }[] = [
   { id: "light", label: "فاتح", hint: "واجهة مضيئة للنهار", Icon: Sun },
+  { id: "dark", label: "داكن", hint: "واجهة معتمة لليل", Icon: Moon },
   {
     id: "dim",
     label: "خافت",
     hint: "إضاءة متوسطة مريحة للعين",
     Icon: SunDim,
   },
-  { id: "dark", label: "داكن", hint: "واجهة معتمة لليل", Icon: Moon },
 ];
 
 export function AppearanceMenu() {
@@ -50,7 +50,7 @@ export function AppearanceMenu() {
           {...props}
           ref={ref}
           label="المظهر"
-          hint={`الوضع الحالي: ${current.label} — فاتح، خافت أو داكن`}
+          hint={`الوضع الحالي: ${current.label} — فاتح، داكن أو خافت`}
           icon={<CurrentIcon className="size-4" strokeWidth={1.7} />}
           data-tour="appearance"
         />

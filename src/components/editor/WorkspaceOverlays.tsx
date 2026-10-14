@@ -3,6 +3,7 @@ import {
   shortcutHint,
   shortcutKey,
 } from "@/lib/editor/keyboard";
+import { getNextAppearance } from "@/lib/theme";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { stepZoom } from "@/lib/editor/document-space";
 import { canvasViewport } from "@/lib/editor/canvas-space";
@@ -253,13 +254,7 @@ export function WorkspaceOverlays({
         selectAll();
         break;
       case "appearance":
-        setAppearance(
-          appearance === "light"
-            ? "dim"
-            : appearance === "dim"
-              ? "dark"
-              : "light",
-        );
+        setAppearance(getNextAppearance(appearance));
         break;
       case "undo":
         undo();

@@ -6349,9 +6349,9 @@ button.license-badge-locked:focus-visible {
   }
 }
 
-/* Phone: the strip takes its own row so actions cannot crush it, and the
-   long action labels yield to the icon. The tabs themselves keep their text. */
-@container site-header (max-width: 640px) {
+/* Widths up to 860px (phone and tablet portrait): the product strip takes its
+   own row so the actions cannot crush it — the tabs themselves keep their text. */
+@container site-header (max-width: 860px) {
   .site-header-bar {
     flex-wrap: wrap;
     row-gap: 4px;
@@ -6364,6 +6364,10 @@ button.license-badge-locked:focus-visible {
     padding-top: 2px;
     padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* Phone: the long action labels (and the theme name) yield to their icons. */
+@container site-header (max-width: 640px) {
   .site-header-action-label {
     position: absolute;
     width: 1px;

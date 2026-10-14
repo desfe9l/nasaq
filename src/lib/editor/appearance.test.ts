@@ -2,11 +2,27 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyStoredTheme,
+  getNextAppearance,
+  getThemeMeta,
   readStoredTheme,
   subscribeTheme,
   writeStoredTheme,
   type AppearanceMode,
 } from "../theme.ts";
+
+test("every surface advances through the same cycle: Light → Dark → Dim → Light", () => {
+  assert.equal(getNextAppearance("light"), "dark");
+  assert.equal(getNextAppearance("dark"), "dim");
+  assert.equal(getNextAppearance("dim"), "light");
+
+  for (const mode of ["light", "dark", "dim"] as AppearanceMode[]) {
+    const meta = getThemeMeta(mode);
+    assert.equal(meta.id, mode);
+    assert.equal(meta.nextId, getNextAppearance(mode));
+    assert.equal(meta.nextLabel, getThemeMeta(meta.nextId).label);
+    assert.ok(meta.label.length > 0 && meta.hint.length > 0);
+  }
+});
 
 test("one preference drives the three live appearance modes, legacy migration and blocked-storage fallback", () => {
   const values = new Map<string, string>();
