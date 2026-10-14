@@ -3377,6 +3377,16 @@ summary,
   user-select: none;
 }
 .panel-tab:hover { background: var(--editor-hover); color: var(--editor-text); }
+.panel-tab-pinned-group {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 2px;
+  background: color-mix(in srgb, var(--editor-panel) 96%, transparent);
+}
 .panel-tab.is-active {
   background: color-mix(in srgb, var(--editor-active, #2f6fb0) 12%, transparent);
   color: var(--editor-active, #2f6fb0);

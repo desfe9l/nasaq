@@ -144,6 +144,7 @@ type PanelId =
   | "tools"
   | "elements"
   | "properties"
+  | "settings"
   | "layers"
   | "report";
 
@@ -152,6 +153,7 @@ const PANEL_IDS: readonly PanelId[] = [
   "tools",
   "elements",
   "properties",
+  "settings",
   "layers",
   "report",
 ];
@@ -248,6 +250,7 @@ import { useInteraction } from "@/lib/editor/interaction-store";
 import { findElement } from "@/lib/editor/model";
 import { LeftPanel, ElementToolsWindow } from "./LeftPanel";
 import { PropertiesPanel, LayersPanel } from "./RightPanel";
+import { SettingsPanel } from "./SettingsPanel";
 import { AssetLibrary } from "./AssetLibrary";
 import { ReportToolsPanel } from "./ReportToolsPanel";
 import { AddMenu } from "./AddMenu";
@@ -1689,6 +1692,13 @@ function Studio({
       minSize: { width: 280, height: 240 },
       spawnShift: 0,
     },
+    settings: {
+      title: "الإعدادات",
+      side: "right",
+      defaultSize: { width: 340, height: 560 },
+      minSize: { width: 280, height: 240 },
+      spawnShift: 0,
+    },
     layers: {
       title: "الطبقات",
       side: "right",
@@ -1710,6 +1720,7 @@ function Studio({
     tools: toolsOpenFlag,
     elements: leftOpenFlag,
     properties: rightOpenFlag,
+    settings: false,
     layers: layersOpenFlag,
     report: reportOpenFlag,
   };
@@ -1839,6 +1850,9 @@ function Studio({
           rightOpen: open,
           ...(open ? { rightCollapsed: false } : {}),
         });
+        break;
+      case "settings":
+        // Shares the Properties window; it never owns a separate open flag.
         break;
       case "layers":
         useEditor.setState({ layersOpen: open });
@@ -2513,6 +2527,8 @@ function Studio({
         );
       case "properties":
         return <PropertiesPanel onReplaceImage={onReplaceImage} />;
+      case "settings":
+        return <SettingsPanel />;
       case "layers":
         return <LayersPanel />;
       case "report":
@@ -2549,6 +2565,10 @@ function Studio({
   /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
   const openLeftTab = (tab: LeftTab) => {
     if (useEditor.getState().focusMode) toggle("focusMode");
+    if (tab === "settings") {
+      revealPanel("settings");
+      return;
+    }
     // setLeftTab routes «library»/«tools» to their own windows.
     useEditor.getState().setLeftTab(tab);
     // Resolve EVERY child through its current host. Merely setting leftOpen

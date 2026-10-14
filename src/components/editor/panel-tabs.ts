@@ -26,7 +26,6 @@ export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[]
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "المظهر", icon: Palette },
   { id: "fonts", label: "خطوط", icon: Baseline },
-  { id: "settings", label: "إعدادات", icon: Settings2 },
 ];
 
 export const RIGHT_PANEL_TABS: { id: RightTab; label: string; icon: LucideIcon }[] = [
@@ -47,6 +46,7 @@ export const PANEL_META: Record<
   tools: { title: "أدوات العناصر", icon: Blocks },
   elements: { title: "لوحة العناصر", icon: LayoutTemplate },
   properties: { title: "الخصائص", icon: SlidersHorizontal },
+  settings: { title: "الإعدادات", icon: Settings2 },
   layers: { title: "الطبقات", icon: Layers },
   report: { title: "أدوات التقرير", icon: FileText },
 };

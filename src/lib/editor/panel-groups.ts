@@ -1,9 +1,9 @@
 /**
- * Panel grouping — the six editor windows can share ONE window as tabs.
+ * Panel grouping — editor surfaces can share ONE window as tabs; Settings stays pinned beside Properties.
  *
  * Authors kept asking for «أدوات التقرير» and «الخصائص» and «المكتبة» to live in
- * the same place instead of six floating cards. This module is the pure model
- * behind that: a partition of the six panel ids into groups. The FIRST member
+ * the same place instead of several floating cards. This module is the pure model
+ * behind that: a partition of the editor panel ids into groups. The FIRST member
  * of a group is its host — the window that renders the group's tab strip — so
  * a group is never an extra object floating beside the panels it contains.
  *
@@ -11,7 +11,7 @@
  *   • every panel id appears in exactly one group,
  *   • the host is always the group's first member,
  *   • a group never keeps a duplicate id; unknown ids from storage are dropped
- *     and missing ids are added back as their own group,
+ *     and missing ids are restored, with Settings pinned beside Properties,
  *   • moving a host that still has members promotes its next member, so a
  *     window never loses the tabs it was holding.
  *
@@ -24,6 +24,7 @@ export type EditorPanelId =
   | "tools"
   | "elements"
   | "properties"
+  | "settings"
   | "layers"
   | "report";
 
@@ -32,6 +33,7 @@ export const EDITOR_PANEL_IDS: readonly EditorPanelId[] = [
   "tools",
   "elements",
   "properties",
+  "settings",
   "layers",
   "report",
 ];
@@ -58,7 +60,7 @@ const STORAGE_KEY = "nasaq.panel.groups.v3";
 /**
  * The two windows the editor opens with, as separate groups of tabs:
  *   • the RIGHT window — لوحة العناصر, then أدوات العناصر and المكتبة,
- *   • the LEFT window — الخصائص, then الطبقات and أدوات التقرير.
+ *   • the LEFT window — الخصائص and pinned الإعدادات, then الطبقات and أدوات التقرير.
  * Hosts lead their groups, so `elements` and `properties` are the windows.
  */
 export const WORKSPACE_RIGHT_GROUP: readonly EditorPanelId[] = [
@@ -68,9 +70,74 @@ export const WORKSPACE_RIGHT_GROUP: readonly EditorPanelId[] = [
 ];
 export const WORKSPACE_LEFT_GROUP: readonly EditorPanelId[] = [
   "properties",
+  "settings",
   "layers",
   "report",
 ];
+
+/** Keep the Settings surface permanently adjacent to Properties in every layout. */
+function pinSettingsToProperties(
+  groups: PanelGroups,
+  tabs: PanelGroupTabs,
+): void {
+  let propertyHost = EDITOR_PANEL_IDS.find((host) =>
+    groups[host]?.includes("properties"),
+  );
+  if (!propertyHost) {
+    propertyHost = "properties";
+    groups.properties = ["properties"];
+    tabs.properties = "properties";
+  }
+
+  const settingsHost = EDITOR_PANEL_IDS.find((host) =>
+    groups[host]?.includes("settings"),
+  );
+  const settingsWasActive = Boolean(
+    settingsHost && tabs[settingsHost] === "settings",
+  );
+
+  // A stored/custom layout may have Settings in a different group. Move it
+  // back beside Properties, preserving any other tabs and the active tab.
+  if (settingsHost && settingsHost !== propertyHost) {
+    const source = groups[settingsHost].filter((id) => id !== "settings");
+    const previous = tabs[settingsHost];
+    delete groups[settingsHost];
+    delete tabs[settingsHost];
+    if (source.length) {
+      const nextHost = source[0];
+      groups[nextHost] = source;
+      tabs[nextHost] = previous && source.includes(previous) ? previous : nextHost;
+    }
+  }
+
+  // In the unlikely event of corrupt storage making Settings the host, re-key
+  // that group to Properties so the pinned tab can never become a window.
+  if (propertyHost === "settings") {
+    const source = groups.settings.filter(
+      (id) => id !== "settings" && id !== "properties",
+    );
+    const previous = tabs.settings;
+    delete groups.settings;
+    delete tabs.settings;
+    groups.properties = ["properties", "settings", ...source];
+    tabs.properties =
+      previous === "settings" || previous === "properties"
+        ? previous
+        : "properties";
+    return;
+  }
+
+  const members = [...groups[propertyHost]];
+  const remaining = members.filter(
+    (id) => id !== "settings" && id !== "properties",
+  );
+  const propertyIndex = members.indexOf("properties");
+  members.splice(0, members.length, ...remaining);
+  members.splice(Math.max(0, propertyIndex), 0, "properties", "settings");
+  groups[propertyHost] = members;
+  if (settingsWasActive) tabs[propertyHost] = "settings";
+  else if (!members.includes(tabs[propertyHost])) tabs[propertyHost] = "properties";
+}
 
 function isPanelId(value: unknown): value is EditorPanelId {
   return (
@@ -78,12 +145,13 @@ function isPanelId(value: unknown): value is EditorPanelId {
   );
 }
 
-/** Every panel alone in its own window — the shipped default. */
+/** Standalone windows by default, with Settings pinned beside Properties. */
 export function defaultPanelGroups(): PanelGroupState {
   const groups = {} as PanelGroups;
   const tabs = {} as PanelGroupTabs;
   for (const id of EDITOR_PANEL_IDS) {
-    groups[id] = [id];
+    if (id === "settings") continue;
+    groups[id] = id === "properties" ? ["properties", "settings"] : [id];
     tabs[id] = id;
   }
   return { groups, tabs };
@@ -104,8 +172,8 @@ export function defaultWorkspaceGroups(): PanelGroupState {
 
 /**
  * Normalise anything (parsed storage, hand-edited JSON) into a valid state.
- * Unknown ids are dropped, duplicates keep their first appearance, and any
- * panel the input forgot becomes its own group again.
+ * Unknown ids are dropped, duplicates keep their first appearance, and missing
+ * panels are restored. Settings is always reunited with Properties.
  */
 export function parsePanelGroups(raw: unknown): PanelGroupState {
   const base = defaultPanelGroups();
@@ -135,7 +203,7 @@ export function parsePanelGroups(raw: unknown): PanelGroupState {
   // Anything storage forgot (a panel added later, a corrupt row) comes back
   // as its own window rather than vanishing from the UI.
   for (const id of EDITOR_PANEL_IDS)
-    if (!seen.has(id)) {
+    if (id !== "settings" && !seen.has(id)) {
       groups[id] = [id];
       order.push(id);
     }
@@ -154,6 +222,8 @@ export function parsePanelGroups(raw: unknown): PanelGroupState {
     const wanted = storedTabs[host];
     tabs[host] = isPanelId(wanted) && members.includes(wanted) ? wanted : host;
   }
+  pinSettingsToProperties(groups, tabs);
+  fixTabs(groups, tabs);
   return { groups, tabs };
 }
 
@@ -204,36 +274,72 @@ export function movePanelTab(
   target: EditorPanelId,
   index?: number,
 ): PanelGroupState {
-  if (!state.groups[target] || tab === target) return state;
+  // Settings is a permanently pinned companion to Properties, never a
+  // draggable/detachable panel of its own.
+  if (!state.groups[target] || tab === target || tab === "settings" || target === "settings")
+    return state;
+
   const from = hostOf(state, tab);
+  const groups: PanelGroups = { ...state.groups };
+  const tabs: PanelGroupTabs = { ...state.tabs };
+
+  if (tab === "properties") {
+    if (from === target) {
+      const members = groups[target].filter(
+        (member) => member !== "properties" && member !== "settings",
+      );
+      const at = Math.max(1, Math.min(members.length, index ?? members.length));
+      members.splice(at, 0, "properties", "settings");
+      groups[target] = members;
+    } else {
+      const settingsWasActive = tabs[from] === "settings";
+      const sourceMembers = groups[from].filter(
+        (member) => member !== "properties" && member !== "settings",
+      );
+      const previous = tabs[from];
+      delete groups[from];
+      delete tabs[from];
+      if (sourceMembers.length) {
+        const nextHost = sourceMembers[0];
+        groups[nextHost] = sourceMembers;
+        tabs[nextHost] =
+          previous && sourceMembers.includes(previous) ? previous : nextHost;
+      }
+      const targetMembers = [...groups[target]];
+      const at = Math.max(
+        1,
+        Math.min(targetMembers.length, index ?? targetMembers.length),
+      );
+      targetMembers.splice(at, 0, "properties", "settings");
+      groups[target] = targetMembers;
+      tabs[target] = settingsWasActive ? "settings" : "properties";
+    }
+    pinSettingsToProperties(groups, tabs);
+    fixTabs(groups, tabs);
+    return { groups, tabs };
+  }
+
   if (from === target) {
-    // Reorder inside the same window: rebuild that member list.
-    const members = state.groups[target].filter((m) => m !== tab);
+    const members = groups[target].filter((member) => member !== tab);
     const at = Math.max(
       1,
       Math.min(members.length, (index ?? members.length) + 0),
     );
     members.splice(at, 0, tab);
-    return {
-      ...state,
-      groups: { ...state.groups, [target]: members },
-    };
+    groups[target] = members;
+  } else {
+    removeFromGroup(groups, tabs, from, tab);
+    const targetMembers = [...groups[target]];
+    const at = Math.max(
+      1,
+      Math.min(targetMembers.length, index ?? targetMembers.length),
+    );
+    targetMembers.splice(at, 0, tab);
+    groups[target] = targetMembers;
+    tabs[target] = tab;
   }
 
-  const groups: PanelGroups = { ...state.groups };
-  const tabs: PanelGroupTabs = { ...state.tabs };
-  removeFromGroup(groups, tabs, from, tab);
-
-  const targetMembers = [...groups[target]];
-  const at = Math.max(
-    1,
-    Math.min(targetMembers.length, index ?? targetMembers.length),
-  );
-  targetMembers.splice(at, 0, tab);
-  groups[target] = targetMembers;
-
-  // The moved tab becomes visible in its new window.
-  tabs[target] = tab;
+  pinSettingsToProperties(groups, tabs);
   fixTabs(groups, tabs);
   return { groups, tabs };
 }
@@ -272,13 +378,34 @@ export function detachPanelTab(
   state: PanelGroupState,
   tab: EditorPanelId,
 ): PanelGroupState {
+  if (tab === "settings") return state;
   const from = hostOf(state, tab);
-  if (from === tab) return state;
+  if (from === tab && tab !== "properties") return state;
   const groups: PanelGroups = { ...state.groups };
   const tabs: PanelGroupTabs = { ...state.tabs };
-  removeFromGroup(groups, tabs, from, tab);
-  groups[tab] = [tab];
-  tabs[tab] = tab;
+
+  if (tab === "properties") {
+    const previous = tabs[from];
+    const sourceMembers = groups[from].filter(
+      (member) => member !== "properties" && member !== "settings",
+    );
+    delete groups[from];
+    delete tabs[from];
+    if (sourceMembers.length) {
+      const nextHost = sourceMembers[0];
+      groups[nextHost] = sourceMembers;
+      tabs[nextHost] =
+        previous && sourceMembers.includes(previous) ? previous : nextHost;
+    }
+    groups.properties = ["properties", "settings"];
+    tabs.properties = previous === "settings" ? "settings" : "properties";
+  } else {
+    removeFromGroup(groups, tabs, from, tab);
+    groups[tab] = [tab];
+    tabs[tab] = tab;
+  }
+
+  pinSettingsToProperties(groups, tabs);
   fixTabs(groups, tabs);
   return { groups, tabs };
 }

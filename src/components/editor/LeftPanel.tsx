@@ -1,4 +1,3 @@
-import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
 import { DocumentAppearancePanel } from "./DocumentAppearancePanel";
 import { useMemo, useState } from "react";
@@ -13,7 +12,6 @@ import {
   Stamp,
   QrCode,
   BadgePercent,
-  Ruler,
   Gauge,
   FileCode2,
   ChevronDown,
@@ -23,12 +21,10 @@ import {
   X,
 } from "lucide-react";
 import {
-  SIZE_PRESETS,
   TEXT_PRESETS,
   THEMES,
   TYPE_NAME,
   pageSize,
-  sizeIdOf,
   type CanvasEl,
   type ElType,
 } from "@/lib/editor/model";
@@ -47,7 +43,6 @@ import { useIncrementalList } from "@/lib/editor/use-incremental-list";
 import { cn } from "@/lib/utils";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
-import { ScrubField } from "./ui/ScrubInput";
 import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { promptForQr } from "@/lib/editor/qr";
 import { TablePickerOverlay } from "./TablePicker";
@@ -56,9 +51,9 @@ import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import { LEFT_PANEL_TABS } from "./panel-tabs";
 
 /**
- * The elements window hosts every left tab EXCEPT «library» and «tools»:
- * those became their own independent floating windows (task of the split), so
- * keeping them here would render the same content in two places.
+ * The elements window hosts every left tab EXCEPT «library», «tools» and
+ * «settings»: the first two have their own windows, while Settings is pinned
+ * beside Properties. Keeping them here would duplicate those surfaces.
  */
 const ELEMENTS_WINDOW_TABS = LEFT_PANEL_TABS.filter(
   (t) => t.id !== "library" && t.id !== "tools",
@@ -119,11 +114,14 @@ export function LeftPanel({
 }) {
   const rawTab = useEditor((s) => s.leftTab);
   /*
-   * «library» and «tools» are their own windows since the split. When the
-   * shared tab value points at them (it is set when those windows open), this
-   * window falls back to its first tab instead of rendering blank.
+   * «library» and «tools» are their own windows, and Settings now belongs to
+   * the Properties sidebar. A stale/legacy leftTab value for any of them falls
+   * back to Elements instead of leaving this window blank.
    */
-  const tab = rawTab === "library" || rawTab === "tools" ? "elements" : rawTab;
+  const tab =
+    rawTab === "library" || rawTab === "tools" || rawTab === "settings"
+      ? "elements"
+      : rawTab;
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const addElement = useEditor((s) => s.addElement);
   const addTemplatePage = useEditor((s) => s.addTemplatePage);
@@ -137,22 +135,12 @@ export function LeftPanel({
    * active page object — an edit to any element on the active page replaces
    * `page` and would otherwise re-render this entire panel.
    */
-  const activeSizeId = useEditor((s) =>
-    sizeIdOf(s.pages.find((p) => p.id === s.activePageId)),
-  );
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
-  const setPageSize = useEditor((s) => s.setPageSize);
-  const setAllPageSizes = useEditor((s) => s.setAllPageSizes);
   const duplicatePage = useEditor((s) => s.duplicatePage);
   const deletePage = useEditor((s) => s.deletePage);
   const movePageById = useEditor((s) => s.movePageById);
   const renamePage = useEditor((s) => s.renamePage);
-  const toggle = useEditor((s) => s.toggle);
-  const showGrid = useEditor((s) => s.showGrid);
-  const snapGrid = useEditor((s) => s.snapGrid);
-  const snapElements = useEditor((s) => s.snapElements);
-  const storage = useEditor((s) => s.storage);
 
   const [category, setCategory] = useState<TemplateCategoryId | "all">("all");
   /*
@@ -176,7 +164,6 @@ export function LeftPanel({
   });
   const toggleGroup = (title: string) =>
     setOpenGroups((state) => ({ ...state, [title]: !(state[title] ?? false) }));
-  const [customSize, setCustomSize] = useState({ w: 210, h: 297 });
   const [qrBusy, setQrBusy] = useState(false);
   /* Shared intent: the report tools raise the same flag (see store). */
   const pickerOpen = useEditor((s) => s.tablePickerOpen);
@@ -254,12 +241,7 @@ export function LeftPanel({
     startPointerLibraryDrag(e, payload, label);
   };
 
-  const applyCustomSize = (scope: "page" | "all") => {
-    const w = Math.max(20, Math.min(1000, customSize.w));
-    const h = Math.max(20, Math.min(1000, customSize.h));
-    if (scope === "all") setAllPageSizes("custom", { w, h });
-    else if (activePageId) setPageSize(activePageId, "custom", { w, h });
-  };
+
 
   const templates = useMemo(
     () =>
@@ -275,13 +257,13 @@ export function LeftPanel({
       {/*
        * Tab strip — SHRINKABLE, never hidden.
        *
-       * Two layers of defence, because eight tabs have to survive a panel the
+       * Two layers of defence, because six tabs have to survive a panel the
        * author has dragged down to 232px:
        *   1. the strip is a container query context, so each tab drops its
        *      caption and becomes icon-only once the strip is too narrow for
-       *      eight labels — the tabs compress instead of overflowing;
+       *      six labels — the tabs compress instead of overflowing;
        *   2. `overflow-x-auto` remains as the floor: should the strip ever get
-       *      narrower than eight icons, it scrolls. A tab is therefore never
+       *      narrower than six icons, it scrolls. A tab is therefore never
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
@@ -309,7 +291,7 @@ export function LeftPanel({
               <Icon className="size-4 shrink-0" />
               {/*
                * The caption is the part that gives: it disappears below a
-               * 380px strip, so the row keeps all eight icons on screen instead
+               * 380px strip, so the row keeps all six icons on screen instead
                * of pushing the last two into overflow.
                */}
               <span className="hidden truncate @[380px]:block">{t.label}</span>
@@ -668,115 +650,7 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "settings" && (
-          <div className="grid gap-4">
-            <section>
-              <h2 className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-extrabold">
-                <Ruler className="size-4" /> مقاس الصفحة
-              </h2>
-              <div className="grid gap-1.5">
-                {SIZE_PRESETS.filter((s) => s.id !== "custom").map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => activePageId && setPageSize(activePageId, s.id)}
-                    className={cn(
-                      "rounded-[8px] border px-2.5 py-2 text-right",
-                      activeSizeId === s.id
-                        ? "border-navy-2 bg-navy-2/5"
-                        : "border-line ",
-                    )}
-                  >
-                    <strong className="block text-[12px]">{s.name}</strong>
-                    <span className="text-[11px] text-muted">{s.desc}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <ScrubField
-                  label="العرض مم"
-                  value={customSize.w}
-                  min={20}
-                  max={2000}
-                  step={1}
-                  precision={0}
-                  suffix="مم"
-                  onChange={(w) => setCustomSize((v) => ({ ...v, w }))}
-                />
-                <ScrubField
-                  label="الارتفاع مم"
-                  value={customSize.h}
-                  min={20}
-                  max={2000}
-                  step={1}
-                  precision={0}
-                  suffix="مم"
-                  onChange={(h) => setCustomSize((v) => ({ ...v, h }))}
-                />
-              </div>
-              <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => applyCustomSize("page")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
-                >
-                  تطبيق على الصفحة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyCustomSize("all")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
-                >
-                  تطبيق على الكل
-                </button>
-              </div>
-            </section>
 
-            <section>
-              <h2 className="mb-2 text-[13px] font-extrabold">
-                الدقة والمحاذاة
-              </h2>
-              <div className="grid gap-1.5">
-                <button type="button" className="h-11 rounded-lg border border-line text-[12px] font-bold" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))}>
-                  مظهر المحرر — فاتح / داكن
-                </button>
-                <ToggleRow
-                  label="إظهار الشبكة"
-                  value={showGrid}
-                  onChange={() => toggle("showGrid")}
-                />
-                <ToggleRow
-                  label="التقاط للشبكة"
-                  value={snapGrid}
-                  onChange={() => toggle("snapGrid")}
-                />
-                <ToggleRow
-                  label="محاذاة العناصر"
-                  value={snapElements}
-                  onChange={() => toggle("snapElements")}
-                />
-              </div>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-[13px] font-extrabold">مكتبة الخطوط</h2>
-              <p className="text-[11px] leading-5 text-muted">
-                ثمانية خطوط عربية مضمّنة (Tajawal، Cairo، IBM Plex Sans Arabic،
-                Noto Sans/Naskh/Kufi، Amiri، Reem Kufi)، مع إمكانية رفع خط مخصص
-                بصيغة TTF/OTF/WOFF.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-[13px] font-extrabold">التخزين</h2>
-              <p className="text-[11px] leading-5 text-muted">
-                {storage.mode === "indexeddb"
-                  ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك؛ قد تتطلب خدمات الترخيص أو الذكاء الاصطناعي اتصالاً."
-                  : "IndexedDB غير متاح في هذا المتصفح؛ يتم الحفظ في LocalStorage بمساحة محدودة."}
-              </p>
-            </section>
-          </div>
-        )}
       </div>
       <TemplatePreviewDialog
         template={previewTemplate}
