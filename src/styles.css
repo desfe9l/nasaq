@@ -1601,7 +1601,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * stays exactly on the artwork's corner instead of drifting inward.
  */
 .selection-frame {
-  --handle-hit: min(var(--handle-hit-size), 46%);
+  --handle-hit: var(--handle-hit-size);
+  --handle-inset: min(calc(var(--handle-size) / 2), 42%);
   --rotate-hit: var(--rotate-hit-size);
 }
 

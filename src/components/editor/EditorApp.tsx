@@ -1148,9 +1148,12 @@ function Studio({
   fitRef.current = fitToScreen;
 
   // Focus mode removes every unrelated surface, then fits and centres the
-  // selected page in the newly available viewport without disabling zoom.
+  // selected page in the newly available viewport (and restores fit on exit).
+  const prevFocusModeRef = useRef(focusMode);
   useEffect(() => {
-    if (!focusMode) return;
+    const toggled = prevFocusModeRef.current !== focusMode;
+    prevFocusModeRef.current = focusMode;
+    if (!focusMode && !toggled) return;
     const timer = window.setTimeout(() => fitRef.current(), 60);
     return () => window.clearTimeout(timer);
   }, [focusMode, activePageId]);
@@ -1760,6 +1763,9 @@ function Studio({
     setGroupState((s) => detachPanelTab(s, tab));
   /** Raise the window that holds `id`, on that tab. */
   const revealPanel = (id: PanelId) => {
+    if (useEditor.getState().focusMode) {
+      useEditor.getState().toggle("focusMode");
+    }
     const host = hostOf(groupState, id);
     // Desktop windows remain independently composable. On touch/overlay
     // surfaces a single shared window is deliberate: it maximises artboard
@@ -1773,7 +1779,7 @@ function Studio({
   };
   const togglePanelWindow = (id: PanelId) => {
     const host = hostOf(groupState, id);
-    if (panelOpen[host] && groupState.tabs[host] === id)
+    if (!useEditor.getState().focusMode && panelOpen[host] && groupState.tabs[host] === id)
       setPanelOpenFlag(host, false);
     else revealPanel(id);
   };
@@ -1781,11 +1787,22 @@ function Studio({
   const panelChecked = PANEL_IDS.reduce(
     (acc, id) => {
       const host = hostOf(groupState, id);
-      acc[id] = panelOpen[host] && groupState.tabs[host] === id;
+      acc[id] = !focusMode && panelOpen[host] && groupState.tabs[host] === id;
       return acc;
     },
     {} as Record<PanelId, boolean>,
   );
+  useEffect(() => {
+    const onReveal = (event: Event) => {
+      const detail = (event as CustomEvent<PanelId>).detail;
+      if (detail && (PANEL_IDS as readonly string[]).includes(detail)) {
+        revealPanel(detail);
+      }
+    };
+    window.addEventListener("nasaq:reveal-panel", onReveal);
+    return () => window.removeEventListener("nasaq:reveal-panel", onReveal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupState, compactPanels]);
   /**
    * Anything that opens a panel through the STORE (keyboard, command rows,
    * the tools that jump to a tab) still works when that panel is grouped:
@@ -1966,6 +1983,7 @@ function Studio({
         setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
         setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
       }
+      requestAnimationFrame(() => fitRef.current());
     };
     window.addEventListener("nasaq:reset-workspace", reset);
     return () => window.removeEventListener("nasaq:reset-workspace", reset);
@@ -2639,27 +2657,49 @@ function Studio({
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!stage) return;
     const view = canvasViewport(stage);
-    const next = Math.min(
-      (view.width - 40) / mmToPx(bounds.w),
-      (view.height - 40) / mmToPx(bounds.h),
+    const rawZoom = Math.min(
+      Math.max(80, view.width - 64) / Math.max(1, mmToPx(bounds.w)),
+      Math.max(80, view.height - 64) / Math.max(1, mmToPx(bounds.h)),
     );
-    setZoom(clampZoom(next));
-    requestAnimationFrame(() => {
-      const page = stage.querySelector<HTMLElement>(
+    const next = clampZoom(
+      Math.round(Math.min(4, rawZoom) * 10000) / 10000,
+    );
+    const sequence = ++fitSequenceRef.current;
+    setZoom(next);
+    let paintAttempts = 0;
+    let centrePass = 0;
+    const land = () => {
+      if (
+        sequence !== fitSequenceRef.current ||
+        useEditor.getState().zoom !== next
+      )
+        return;
+      const liveStage = document.querySelector<HTMLElement>(
+        ".editor-canvas-stage",
+      );
+      const page = liveStage?.querySelector<HTMLElement>(
         `[data-page-id="${CSS.escape(activePage.id)}"]`,
       );
-      if (!page) return;
+      if (!liveStage || !page || !page.isConnected) return;
       const rect = page.getBoundingClientRect();
-      const viewport = canvasViewport(stage);
-      stage.scrollLeft +=
+      const baseWidth = mmToPx(activeSize.w);
+      const paintedZoom = baseWidth > 0 ? rect.width / baseWidth : next;
+      if (Math.abs(paintedZoom - next) > 0.01 && paintAttempts++ < 12) {
+        requestAnimationFrame(land);
+        return;
+      }
+      const viewport = canvasViewport(liveStage);
+      liveStage.scrollLeft +=
         rect.left +
         ((bounds.x + bounds.w / 2) / activeSize.w) * rect.width -
         (viewport.left + viewport.width / 2);
-      stage.scrollTop +=
+      liveStage.scrollTop +=
         rect.top +
         ((bounds.y + bounds.h / 2) / activeSize.h) * rect.height -
         (viewport.top + viewport.height / 2);
-    });
+      if (centrePass++ < 1) requestAnimationFrame(land);
+    };
+    requestAnimationFrame(land);
   };
 
   /*
