@@ -4495,7 +4495,7 @@ body.is-resizing-panel .editor-dock-strip::before {
 .editor-ui {
   --editor-control-h: 34px;
   --editor-touch-h: 44px;
-  --editor-page-rail-collapsed-height: 36px;
+  --editor-page-rail-collapsed-height: 30px;
   --editor-control-radius: 8px;
   --editor-panel-radius: 10px;
   --editor-chrome-shadow: 0 1px 2px rgba(15, 30, 45, 0.08);
@@ -4670,7 +4670,11 @@ body.is-resizing-panel .editor-dock-strip::before {
   border-color: var(--editor-border);
 }
 .page-rail-actions .drag-handle { touch-action: none; }
-.editor-page-rail { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+.editor-page-rail { padding-bottom: max(2px, env(safe-area-inset-bottom)); }
+.editor-page-rail .page-rail-nav { touch-action: manipulation; }
+@media (pointer: coarse) {
+  .editor-page-rail .page-rail-actions button { min-width: 32px; min-height: 32px; }
+}
 .editor-page-rail ul { overscroll-behavior-x: contain; touch-action: pan-x; }
 .editor-panel-tabs { direction: rtl; overscroll-behavior-x: contain; }
 .artboard-page-options summary { cursor: pointer; font-size: 11px; padding-block: 6px; }

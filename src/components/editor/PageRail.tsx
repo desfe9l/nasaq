@@ -18,8 +18,8 @@ import { useEditor } from "@/lib/editor/store";
 import { clamp, cn } from "@/lib/utils";
 
 export function PageRail({
-  height = 112,
-  minHeight = 96,
+  height = 68,
+  minHeight = 56,
   collapsed: collapsedProp,
   onToggleCollapsed,
 }: {
@@ -103,12 +103,12 @@ export function PageRail({
    */
   const thumbBox = (ratio: number) => {
     const safeRatio = Number.isFinite(ratio) && ratio > 0.05 ? ratio : 1;
-    const label = 16; // caption row: name + page number
-    const chrome = 12; // li padding + border + thumbnail gap
-    const budget = Math.max(36, height - label - chrome);
-    const floorH = Math.max(26, minHeight - label - chrome);
-    const h = clamp(Math.min(budget, 104), Math.min(floorH, budget), 104);
-    const w = clamp(Math.round(h * safeRatio), 36, 224);
+    const label = 12; // caption row: name + page number
+    const chrome = 6; // li padding + border + thumbnail gap
+    const budget = Math.max(24, height - label - chrome);
+    const floorH = Math.max(20, minHeight - label - chrome);
+    const h = clamp(Math.min(budget, 52), Math.min(floorH, budget), 52);
+    const w = clamp(Math.round(h * safeRatio), 20, 96);
     return { w, h: Math.round(w / safeRatio) };
   };
 
@@ -184,7 +184,7 @@ export function PageRail({
           title="توسيع شريط الصفحات"
           aria-label="توسيع شريط الصفحات"
           aria-expanded={false}
-          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
+          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
         >
           <ChevronDown className="size-4" aria-hidden />
         </button>
@@ -193,7 +193,7 @@ export function PageRail({
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
+          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
         >
           <Plus className="size-4" aria-hidden />
         </button>
@@ -202,7 +202,7 @@ export function PageRail({
           onClick={() => duplicatePage()}
           title="تكرار الصفحة الحالية"
           aria-label="تكرار الصفحة الحالية"
-          className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
+          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
         >
           <Copy className="size-4" aria-hidden />
         </button>
@@ -219,7 +219,7 @@ export function PageRail({
                 aria-current={p.id === activePageId}
                 title={`${p.name} — ${p.elements.length} عنصر`}
                 className={cn(
-                  "page-rail-chip grid h-8 min-w-8 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums transition-colors",
+                  "page-rail-chip grid h-7 min-w-7 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums transition-colors",
                   p.id === activePageId
                     ? "is-active border-navy-2 bg-navy-2/10 text-brand"
                     : "border-transparent text-muted hover:border-line",
@@ -238,7 +238,7 @@ export function PageRail({
   }
 
   return (
-    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-surface overflow-hidden">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-1.5 border-t px-1.5 py-0.5 bg-surface overflow-hidden">
       {/*
        * One cell size for the whole rail control group — icon-only, named by
        * tooltip. Text labels would cost the rail's height budget for words a
@@ -251,7 +251,7 @@ export function PageRail({
           title="تصغير شريط الصفحات — صف واحد من الأرقام"
           aria-label="تصغير شريط الصفحات"
           aria-expanded
-          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+          className="page-rail-nav grid size-7 place-items-center rounded-[7px] border border-line text-muted"
         >
           <ChevronUp className="size-4" aria-hidden />
         </button>
@@ -260,7 +260,7 @@ export function PageRail({
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="page-rail-nav grid size-8 place-items-center rounded-[8px] bg-navy text-white"
+          className="page-rail-nav grid size-7 place-items-center rounded-[7px] bg-navy text-white"
         >
           <Plus className="size-4" aria-hidden />
         </button>
@@ -269,7 +269,7 @@ export function PageRail({
           onClick={() => duplicatePage()}
           title="تكرار الصفحة الحالية كنسخة مطابقة — يشمل الإعدادات والعناصر"
           aria-label="تكرار الصفحة الحالية كنسخة مطابقة"
-          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+          className="page-rail-nav grid size-7 place-items-center rounded-[7px] border border-line text-muted"
         >
           <Copy className="size-4" aria-hidden />
         </button>
@@ -278,7 +278,7 @@ export function PageRail({
           onClick={() => useEditor.getState().togglePagesRailHidden()}
           title="إخفاء شريط الصفحات بالكامل — يُعاد من «عرض»"
           aria-label="إخفاء شريط الصفحات"
-          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+          className="page-rail-nav grid size-7 place-items-center rounded-[7px] border border-line text-muted"
         >
           <PanelBottomClose className="size-4" aria-hidden />
         </button>
@@ -286,7 +286,7 @@ export function PageRail({
 
       <button
         type="button"
-        className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
         onClick={() => activatePage(activeIndex - 1)}
         disabled={activeIndex <= 0}
         aria-label="الصفحة السابقة"
@@ -296,7 +296,7 @@ export function PageRail({
       </button>
 
       <ul
-        className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-hidden px-1 py-1 editor-pane-scroll"
+        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden px-1 py-0.5 editor-pane-scroll"
         dir="rtl"
       >
         {pages.map((p, i) => {
@@ -311,7 +311,7 @@ export function PageRail({
                 itemRefs.current[p.id] = n;
               }}
               className={cn(
-                "page-rail-item group relative flex items-center gap-1 shrink-0 rounded-lg border p-1",
+                "page-rail-item group relative flex items-center gap-0.5 shrink-0 rounded-md border p-0.5",
                 active ? "is-active" : "border-line",
                 dragIndex === i && "opacity-50",
                 overIndex === i &&
@@ -392,13 +392,13 @@ export function PageRail({
                 </span>
               </div>
 
-              <span className="page-rail-actions flex flex-col gap-0.5">
+              <span className="page-rail-actions flex flex-col gap-px">
                 <button
                   type="button"
                   onPointerDown={startDrag(i)}
                   title="اسحب لإعادة الترتيب"
                   aria-label={`إعادة ترتيب ${p.name}`}
-                  className="drag-handle grid size-7 place-items-center rounded text-muted hover:bg-line/50"
+                  className="drag-handle grid size-5 place-items-center rounded text-muted hover:bg-line/50"
                 >
                   <GripVertical className="size-3.5" />
                 </button>
@@ -408,7 +408,7 @@ export function PageRail({
                     onClick={() => deletePage(p.id)}
                     title="حذف الصفحة"
                     aria-label={`حذف ${p.name}`}
-                    className="grid size-7 place-items-center rounded text-error hover:bg-error/10"
+                    className="grid size-5 place-items-center rounded text-error hover:bg-error/10"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -421,7 +421,7 @@ export function PageRail({
 
       <button
         type="button"
-        className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
         onClick={() => activatePage(activeIndex + 1)}
         disabled={activeIndex < 0 || activeIndex >= pages.length - 1}
         aria-label="الصفحة التالية"
@@ -467,7 +467,7 @@ const PageThumb = memo(function PageThumb({
   const size = pageSize(page);
   return (
     <span
-      className="page-thumbnail relative mb-1 block overflow-hidden rounded-md border border-line shadow-sm"
+      className="page-thumbnail relative mb-0.5 block overflow-hidden rounded-md border border-line shadow-sm"
       style={{
         width: `${w}px`,
         height: `${h}px`,
