@@ -114,6 +114,17 @@ const vite = await createServer({
 });
 try {
   const { useEditor, UI_KEY } = await vite.ssrLoadModule("/src/lib/editor/store.ts");
+  const {
+    PAGES_PANEL_DEFAULT,
+    PAGES_PANEL_MIN,
+    placeFloatingToolbar,
+  } = await vite.ssrLoadModule("/src/lib/editor/ui-state.ts");
+  const {
+    MIN_ZOOM,
+    MAX_ZOOM,
+    clampZoom,
+    stepZoom,
+  } = await vite.ssrLoadModule("/src/lib/editor/document-space.ts");
   const s = () => useEditor.getState();
 
   /* 1 ─ The six windows are independent. */
@@ -168,10 +179,50 @@ try {
   assert.equal(uiSlot().pagesRailHidden, false, "restored state is persisted");
 
   /* 4 ─ Compact default + floor. */
-  assert.equal(s().pagesPanelHeight, 96, "compact 96px rail by default");
+  assert.equal(s().pagesPanelHeight, PAGES_PANEL_DEFAULT, "compact rail by default");
   s().setPagesPanelHeight(30);
-  assert.equal(s().pagesPanelHeight, 84, "84px floor holds");
-  s().setPagesPanelHeight(96);
+  assert.equal(s().pagesPanelHeight, PAGES_PANEL_MIN, "rail floor holds");
+  s().setPagesPanelHeight(PAGES_PANEL_DEFAULT);
+
+  /* 5 ─ Selection never forces closed panels open, and workspace reset keeps properties active. */
+  const firstElId = s().pages[0]?.elements?.[0]?.id;
+  if (firstElId) {
+    s().closeFloatingPanels();
+    assert.equal(s().rightOpen, false, "properties closed before selection");
+    s().select(firstElId);
+    assert.equal(s().selectedId, firstElId, "element selected");
+    assert.equal(s().rightOpen, false, "selecting an element does not force rightOpen");
+    assert.equal(s().rightTab, "properties", "rightTab targets properties");
+    s().select(null);
+  }
+  s().resetWorkspaceLayout();
+  assert.equal(s().layersOpen, false, "resetWorkspaceLayout keeps layersOpen false so properties stays active");
+
+  /* 6 ─ Proportional zoom steps and obstacle-aware toolbar placement at max zoom. */
+  assert.equal(clampZoom(0.001), MIN_ZOOM, "zoom clamps at MIN_ZOOM");
+  assert.equal(clampZoom(999), MAX_ZOOM, "zoom clamps at MAX_ZOOM");
+  assert.ok(Math.abs(stepZoom(1, 1) - 1.2) < 1e-6, "stepZoom steps proportionally up");
+  assert.ok(Math.abs(stepZoom(1.2, -1) - 1) < 1e-6, "stepZoom steps proportionally down");
+  const highZoomPlacement = placeFloatingToolbar(
+    { left: -400, top: -400, right: 1840, bottom: 1300, width: 2240, height: 1700 },
+    { width: 260, height: 40 },
+    { width: 1440, height: 900 },
+    14,
+    12,
+    [
+      { left: 0, top: 0, right: 1440, bottom: 48, width: 1440, height: 48 },
+      { left: 1100, top: 48, right: 1440, bottom: 832, width: 340, height: 784 },
+      { left: 0, top: 48, right: 320, bottom: 832, width: 320, height: 784 },
+      { left: 0, top: 832, right: 1440, bottom: 900, width: 1440, height: 68 },
+    ],
+  );
+  assert.ok(
+    highZoomPlacement.top >= 48 &&
+      highZoomPlacement.top + 40 <= 832 &&
+      highZoomPlacement.left >= 320 &&
+      highZoomPlacement.left + 260 <= 1100,
+    "floating toolbar stays inside the unobscured canvas stage even when selection spans the viewport at max zoom",
+  );
 
   console.log(
     "PASS(1): six independent windows (all-open, close-all), persisted rail hide/show, compact rail default + floor.",

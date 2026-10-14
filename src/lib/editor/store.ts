@@ -4019,16 +4019,38 @@ export const useEditor = create<EditorStore>((set, get) => {
         libraryOpen: leftTab === "library" ? true : get().libraryOpen,
         toolsOpen: leftTab === "tools" ? true : get().toolsOpen,
       });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("nasaq:reveal-panel", {
+            detail:
+              leftTab === "library"
+                ? "library"
+                : leftTab === "tools"
+                  ? "tools"
+                  : leftTab === "settings"
+                    ? "settings"
+                    : "elements",
+          }),
+        );
+      }
       // Probing is deferred to the moment the font list is actually needed.
       if (leftTab === "fonts") get().probeFonts();
     },
-    setRightTab: (rightTab) =>
+    setRightTab: (rightTab) => {
       set({
         rightTab,
         rightCollapsed: false,
         rightOpen: rightTab === "properties" ? true : get().rightOpen,
         layersOpen: rightTab === "layers" ? true : get().layersOpen,
-      }),
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("nasaq:reveal-panel", {
+            detail: rightTab === "layers" ? "layers" : "properties",
+          }),
+        );
+      }
+    },
 
     toggleSidebar: (side) => {
       const overlay = isOverlayViewport() || side === "right";
@@ -4097,13 +4119,14 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     resetWorkspaceLayout: () => {
       const pagesPanelHeight = clampPagesHeight(PAGES_PANEL_DEFAULT);
+      const openSidebars = !isOverlayViewport();
       set({
         focusMode: false,
         leftCollapsed: false,
         rightCollapsed: false,
-        leftOpen: true,
-        rightOpen: true,
-        layersOpen: true,
+        leftOpen: openSidebars,
+        rightOpen: openSidebars,
+        layersOpen: false,
         reportToolsOpen: false,
         libraryOpen: false,
         toolsOpen: false,
@@ -4117,12 +4140,16 @@ export const useEditor = create<EditorStore>((set, get) => {
       void setSetting("focusMode", false);
       void setSetting("leftCollapsed", false);
       void setSetting("rightCollapsed", false);
-      void setSetting("leftOpen", true);
-      void setSetting("rightOpen", true);
+      void setSetting("leftOpen", openSidebars);
+      void setSetting("rightOpen", openSidebars);
       writeUi({
         pagesPanelHeight,
         pagesRailHidden: false,
         pagesRailCollapsed: false,
+        layersOpen: false,
+        reportToolsOpen: false,
+        libraryOpen: false,
+        toolsOpen: false,
         bubble: true,
         bubbleOffset: null,
       });
@@ -4252,12 +4279,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
-        // Selecting artwork immediately shows ITS properties: the right panel
-        // opens on the properties tab (never an unrelated or empty tab). A
-        // deselection keeps the current panel so the page inspector is ready.
-        ...(id
-          ? { rightOpen: true, rightTab: "properties" as const }
-          : {}),
+        // Selecting artwork updates the properties target without forcing a
+        // closed or compact sidebar to pop open over the canvas.
+        ...(id ? { rightTab: "properties" as const } : {}),
       })),
 
     setEditing: (id) => set({ editingId: id }),
@@ -4277,9 +4301,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: selectedIds.length
           ? selectedIds[selectedIds.length - 1]
           : null,
-        ...(selectedIds.length
-          ? { rightOpen: true, rightTab: "properties" as const }
-          : {}),
+        ...(selectedIds.length ? { rightTab: "properties" as const } : {}),
       });
     },
 
@@ -4294,7 +4316,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: keep,
         selectedId: keep.length ? keep[keep.length - 1] : null,
         activePageId: keep.length ? page.id : s.activePageId,
-        ...(keep.length ? { rightOpen: true, rightTab: "properties" as const } : {}),
+        ...(keep.length ? { rightTab: "properties" as const } : {}),
       });
     },
 

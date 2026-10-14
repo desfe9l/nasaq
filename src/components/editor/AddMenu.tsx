@@ -26,6 +26,7 @@ import { promptForQr } from "@/lib/editor/qr";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
 import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
+import { OPEN_PAGE_SETTINGS_EVENT } from "./PageSettingsDialog";
 
 /**
  * «إضافة» — the ONE insert menu of the studio.
@@ -94,10 +95,9 @@ export function AddMenu({
           const state = useEditor.getState();
           const page = state.pages.find((p) => p.id === state.activePageId);
           if (!page || page.locked) return;
-          if (!page.bg || page.bg === "transparent")
-            state.setPageBackground(page.id, { bg: "#ffffff" });
-          state.select(null);
-          state.setRightTab("properties");
+          window.dispatchEvent(
+            new CustomEvent(OPEN_PAGE_SETTINGS_EVENT, { detail: page.id }),
+          );
         }}
       />
       <MenuGroup title="نصوص وأشكال" />

@@ -513,7 +513,7 @@ export function placeFloatingToolbar(
       right: candidate.left + size.width,
       bottom: candidate.top + size.height,
     };
-    const score = blockedArea(box, avoid) + overlapArea(box, anchor) * 2;
+    const score = blockedArea(box, avoid) * 4 + overlapArea(box, anchor);
     if (score < bestScore) {
       best = candidate;
       bestScore = score;

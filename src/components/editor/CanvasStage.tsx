@@ -306,9 +306,25 @@ export function CanvasStage({
     const stage = stageRef.current;
     if (!stage) return;
     setStageEl(stage);
+    let prevW = 0;
+    let prevH = 0;
+    let prevPanX = 0;
+    let prevPanY = 0;
     const measure = () => {
-      stage.style.setProperty("--canvas-pan-x", `${stage.clientWidth}px`);
-      stage.style.setProperty("--canvas-pan-y", `${stage.clientHeight}px`);
+      const nextW = stage.clientWidth;
+      const nextH = stage.clientHeight;
+      const nextPanX = Math.max(48, nextW);
+      const nextPanY = Math.max(48, nextH);
+      stage.style.setProperty("--canvas-pan-x", `${nextW}px`);
+      stage.style.setProperty("--canvas-pan-y", `${nextH}px`);
+      if (prevW > 0 && prevH > 0 && (nextW !== prevW || nextH !== prevH)) {
+        stage.scrollLeft += nextPanX - prevPanX - (nextW - prevW) / 2;
+        stage.scrollTop += nextPanY - prevPanY - (nextH - prevH) / 2;
+      }
+      prevW = nextW;
+      prevH = nextH;
+      prevPanX = nextPanX;
+      prevPanY = nextPanY;
     };
     measure();
     const active = stage.querySelector<HTMLElement>(
@@ -340,10 +356,9 @@ export function CanvasStage({
     },
     [],
   );
-  /** Clicking an artboard's name: make it active and drop the selection. */
+  /** Clicking an artboard's name: make it active while preserving selection on the current page. */
   const activatePage = useCallback((pageId: string) => {
     useEditor.getState().setActivePage(pageId);
-    useEditor.getState().select(null);
   }, []);
   const [layerPicker, setLayerPicker] = useState<LayerPickerState>(null);
 
@@ -464,7 +479,14 @@ export function CanvasStage({
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const prev = useEditor.getState().zoom;
-      const next = clampZoom(prev * Math.exp(-e.deltaY * 0.002));
+      const rawDelta =
+        e.deltaMode === 1
+          ? e.deltaY * 32
+          : e.deltaMode === 2
+            ? e.deltaY * 240
+            : e.deltaY;
+      const boundedDelta = Math.max(-120, Math.min(120, rawDelta));
+      const next = clampZoom(prev * Math.exp(-boundedDelta * 0.002));
       zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
@@ -3646,7 +3668,12 @@ function SelectionTools({
 }) {
   const active = useInteraction((s) => s.active);
   const cropping = useInteraction((s) => s.crop !== null);
-  if (active || cropping) return null;
+  const toolBarActive = useTools(
+    (s) =>
+      ownsCanvas(s.tool, s.regionMode) ||
+      (s.tool === "select" && s.region !== null),
+  );
+  if (active || cropping || toolBarActive) return null;
   return <FloatingToolbar el={el} pageId={pageId} />;
 }
 function CropLayer({ pageId }: { pageId: string }) {

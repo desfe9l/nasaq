@@ -141,13 +141,15 @@ export function PropertiesPanel({
    * page edit re-renders the panel exactly once per committed gesture.
    */
   const page = useEditor((s) =>
-    s.rightOpen && !s.focusMode
-      ? s.pages.find((p) => p.id === s.activePageId)
-      : undefined,
+    !s.focusMode ? s.pages.find((p) => p.id === s.activePageId) : undefined,
   );
-  const selectedId = useEditor((s) =>
-    s.rightOpen && !s.focusMode ? s.selectedId : null,
+  const selectedId = useEditor((s) => (!s.focusMode ? s.selectedId : null));
+  const enteredGroupId = useEditor((s) =>
+    !s.focusMode ? s.enteredGroupId : null,
   );
+  const select = useEditor((s) => s.select);
+  const enterGroup = useEditor((s) => s.enterGroup);
+  const ungroup = useEditor((s) => s.ungroup);
   const updateElement = useEditor((s) => s.updateElement);
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
@@ -259,7 +261,7 @@ export function PropertiesPanel({
   };
 
   const selectedCount = useEditor((s) =>
-    s.rightOpen && !s.focusMode ? s.selectedIds.length : 0,
+    !s.focusMode ? s.selectedIds.length : 0,
   );
 
   return (
@@ -316,9 +318,21 @@ export function PropertiesPanel({
         {selectedCount > 1 && (
           <div className="grid gap-3" data-selection-inspector="multiple">
             <div className="rounded-xl border border-brand/25 bg-navy/5 p-3">
-              <p className="text-[11px] font-bold tracking-wide text-brand">
-                تحديد متعدد
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-bold tracking-wide text-brand">
+                  تحديد متعدد
+                </p>
+                <button
+                  type="button"
+                  onClick={() => select(null)}
+                  className="editor-mini-btn h-6 px-2 text-[10px]"
+                  title="إلغاء التحديد والعودة إلى خصائص الصفحة"
+                  aria-label="العودة إلى خصائص الصفحة"
+                >
+                  <X className="size-3" />
+                  <span>إغلاق التحديد</span>
+                </button>
+              </div>
               <h3 className="mt-1 text-[16px] font-extrabold text-ink">
                 {selectedCount} عناصر جاهزة للتحرير الجماعي
               </h3>
@@ -406,14 +420,55 @@ export function PropertiesPanel({
 
         {el && selectedCount === 1 && (
           <div key={el.id} className="grid gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[13px] font-extrabold">
-                {el.name || TYPE_NAME[el.type]}
-              </h3>
-              <span className="text-[11px] text-muted">
-                {TYPE_NAME[el.type]}
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-[13px] font-extrabold">
+                  {el.name || TYPE_NAME[el.type]}
+                </h3>
+                <span className="text-[11px] text-muted">
+                  {TYPE_NAME[el.type]}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  enteredGroupId ? enterGroup(null) : select(null)
+                }
+                className="editor-mini-btn h-7 shrink-0 px-2 text-[10px]"
+                title={
+                  enteredGroupId
+                    ? "الخروج من المجموعة"
+                    : "إلغاء التحديد والعودة إلى خصائص الصفحة"
+                }
+                aria-label={
+                  enteredGroupId
+                    ? "الخروج من المجموعة"
+                    : "العودة إلى خصائص الصفحة"
+                }
+              >
+                <X className="size-3" />
+                <span>{enteredGroupId ? "رجوع للمجموعة" : "خصائص الصفحة"}</span>
+              </button>
             </div>
+
+            {el.type === "group" && (
+              <div className="grid grid-cols-2 gap-1.5 rounded-[8px] border border-line bg-surface-2/40 p-2">
+                <button
+                  type="button"
+                  className="editor-mini-btn justify-center"
+                  onClick={() => enterGroup(el.id)}
+                >
+                  دخول المجموعة ({el.children?.length ?? 0})
+                </button>
+                <button
+                  type="button"
+                  className="editor-mini-btn justify-center"
+                  onClick={ungroup}
+                >
+                  فك التجميع
+                </button>
+              </div>
+            )}
 
             {/* وصف العنوان — always independent: show, edit or remove it
                 without touching the heading itself. */}
@@ -708,6 +763,27 @@ export function PropertiesPanel({
                       onCommit={(v) => updateStyle(el.id, { letterSpacing: v })}
                     />
                   </div>
+                  <div className="mt-1.5 flex gap-1">
+                    {LETTER_SPACINGS.map((l) => (
+                      <button
+                        key={l.id}
+                        type="button"
+                        title={l.label}
+                        onClick={() =>
+                          updateStyle(el.id, { letterSpacing: l.value })
+                        }
+                        className={cn(
+                          "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                          Math.abs((el.style.letterSpacing || 0) - l.value) <
+                            0.01
+                            ? "border-navy-2 bg-navy-2/5"
+                            : "border-line",
+                        )}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
                 </SubGroup>
 
                 {(el.type === "text" ||
@@ -741,31 +817,6 @@ export function PropertiesPanel({
                               "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               Math.abs(
                                 (el.style.lineHeight || 1.45) - l.value,
-                              ) < 0.01
-                                ? "border-navy-2 bg-navy-2/5"
-                                : "border-line",
-                            )}
-                          >
-                            {l.label}
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
-
-                    <Field label="تباعد الحروف">
-                      <div className="flex gap-1">
-                        {LETTER_SPACINGS.map((l) => (
-                          <button
-                            key={l.id}
-                            type="button"
-                            title={l.label}
-                            onClick={() =>
-                              updateStyle(el.id, { letterSpacing: l.value })
-                            }
-                            className={cn(
-                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
-                              Math.abs(
-                                (el.style.letterSpacing || 0) - l.value,
                               ) < 0.01
                                 ? "border-navy-2 bg-navy-2/5"
                                 : "border-line",
@@ -1029,6 +1080,7 @@ export function PropertiesPanel({
              * including the per-element-type blocks, behind one collapsible
              * group so the inspector stays scannable.
              */}
+            {el.type !== "group" && (
             <AccordionSection
               title="الخلفية والحدود"
               id="background"
@@ -1359,39 +1411,6 @@ export function PropertiesPanel({
                       </button>
                     </Field>
                   </div>
-
-                  <Field label="الشفافية" full>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round((el.opacity ?? 1) * 100)}
-                      onChange={(e) =>
-                        updateElement(
-                          el.id,
-                          { opacity: Number(e.target.value) / 100 },
-                          true,
-                        )
-                      }
-                      onBlur={() =>
-                        updateElement(el.id, { opacity: el.opacity })
-                      }
-                      className="w-full accent-navy"
-                    />
-                  </Field>
-
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
-                    قفل النسبة أثناء التحجيم
-                    <input
-                      type="checkbox"
-                      checked={el.style.aspectLock === true}
-                      onChange={(e) =>
-                        updateStyle(el.id, { aspectLock: e.target.checked })
-                      }
-                      className="accent-navy"
-                    />
-                  </label>
                 </>
               )}
 
@@ -1675,17 +1694,6 @@ export function PropertiesPanel({
                         <option value="stripe">صفوف متبادلة</option>
                       </select>
                     </Field>
-                    <ScrubField
-                      label="حجم الخط pt"
-                      value={round(Number(el.style.fontSize || 11) || 0)}
-                      min={5}
-                      max={40}
-                      step={0.5}
-                      onChange={(v) =>
-                        updateStyle(el.id, { fontSize: v }, true)
-                      }
-                      onCommit={(v) => updateStyle(el.id, { fontSize: v })}
-                    />
                   </div>
 
                   <TableTotals el={el} />
@@ -1980,17 +1988,6 @@ export function PropertiesPanel({
                       onCommit={(v) => updateStyle(el.id, { saturation: v })}
                     />
                   </div>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
-                    قفل النسبة أثناء التحجيم
-                    <input
-                      type="checkbox"
-                      checked={el.style.aspectLock === true}
-                      onChange={(e) =>
-                        updateStyle(el.id, { aspectLock: e.target.checked })
-                      }
-                      className="accent-navy"
-                    />
-                  </label>
                   <Field label="الملاءمة">
                     <select
                       value={el.style.objectFit || "cover"}
@@ -2321,6 +2318,7 @@ export function PropertiesPanel({
                 </select>
               </Field>
             </AccordionSection>
+            )}
 
             {/*
              * Step 8 — طبقة التلاشي. Only the image family can carry one, so

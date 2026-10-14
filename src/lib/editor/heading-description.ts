@@ -36,7 +36,8 @@ const TITLE_NAME_HINT = /عنوان|الغلاف|الختم/;
 export function isHeadingDescription(el: CanvasEl): boolean {
   return (
     el.headingPart === "description" ||
-    (el.headingPart == null && LEGACY_DESCRIPTION_NAMES.has(el.name.trim()))
+    (el.headingPart == null &&
+      LEGACY_DESCRIPTION_NAMES.has((el.name ?? "").trim()))
   );
 }
 
@@ -48,9 +49,9 @@ export function isHeadingLike(el: CanvasEl): boolean {
   if (isHeadingDescription(el)) return true;
   if (findHeadingDescription(el)) return true;
   if (el.type === "group") {
-    return el.children?.some((c) => TITLE_NAME_HINT.test(c.name)) ?? false;
+    return el.children?.some((c) => TITLE_NAME_HINT.test(c.name ?? "")) ?? false;
   }
-  return el.type === "text" && TITLE_NAME_HINT.test(el.name);
+  return el.type === "text" && TITLE_NAME_HINT.test(el.name ?? "");
 }
 
 /** Direct description child of a heading group, if any. */

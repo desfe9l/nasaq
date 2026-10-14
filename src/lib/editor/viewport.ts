@@ -86,14 +86,16 @@ export function zoomAnchoredAt(
       return;
     }
     const viewport = canvasViewport(stage);
+    const cell = page.closest<HTMLElement>(".artboard-cell") ?? page;
+    const bounds = cell.getBoundingClientRect();
     if (
-      r2.width <= viewport.width - 32 &&
-      r2.height + 36 <= viewport.height - 32
+      bounds.width <= viewport.width - 32 &&
+      bounds.height <= viewport.height - 32
     ) {
       stage.scrollLeft +=
-        r2.left + r2.width / 2 - (viewport.left + viewport.width / 2);
+        bounds.left + bounds.width / 2 - (viewport.left + viewport.width / 2);
       stage.scrollTop +=
-        r2.top + (r2.height - 36) / 2 - (viewport.top + viewport.height / 2);
+        bounds.top + bounds.height / 2 - (viewport.top + viewport.height / 2);
     } else {
       stage.scrollLeft += r2.left + ax * ratio - clientX;
       stage.scrollTop += r2.top + ay * ratio - clientY;

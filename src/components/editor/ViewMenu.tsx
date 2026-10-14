@@ -1,5 +1,7 @@
 import { Eye, Moon, Printer, Sun, SunDim, ZoomIn, ZoomOut } from "lucide-react";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import { stepZoom } from "@/lib/editor/document-space";
+import { canvasViewport } from "@/lib/editor/canvas-space";
 import { useEditor } from "@/lib/editor/store";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
@@ -70,14 +72,17 @@ export function ViewMenu({
   );
   const setPageBackground = useEditor((s) => s.setPageBackground);
   /** Zoom around the middle of the live stage, so the page never jumps. */
-  const zoomBy = (delta: number) => {
+  const zoomTo = (next: number) => {
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    if (!stage) return;
-    const rect = stage.getBoundingClientRect();
+    if (!stage) {
+      setZoom(next);
+      return;
+    }
+    const rect = canvasViewport(stage);
     zoomAnchoredAt(
       stage,
-      zoom,
-      zoom + delta,
+      useEditor.getState().zoom,
+      next,
       rect.left + rect.width / 2,
       rect.top + rect.height / 2,
     );
@@ -140,12 +145,12 @@ export function ViewMenu({
       <MenuRow
         icon={<ZoomIn className="size-4" />}
         label="تكبير"
-        onSelect={() => zoomBy(0.08)}
+        onSelect={() => zoomTo(stepZoom(useEditor.getState().zoom, 1))}
       />
       <MenuRow
         icon={<ZoomOut className="size-4" />}
         label="تصغير"
-        onSelect={() => zoomBy(-0.08)}
+        onSelect={() => zoomTo(stepZoom(useEditor.getState().zoom, -1))}
       />
       <MenuRow label="ملاءمة لوحة الصفحة" onSelect={fitToScreen} />
       <MenuRow
@@ -154,7 +159,7 @@ export function ViewMenu({
         onSelect={fitToScreen}
       />
       <MenuRow label="ملاءمة التحديد" onSelect={fitToSelection} />
-      <MenuRow label="مقياس 100%" onSelect={() => setZoom(1)} />
+      <MenuRow label="مقياس 100%" onSelect={() => zoomTo(1)} />
       <MenuRow
         label="ملء الشاشة"
         checked={typeof document !== "undefined" && !!document.fullscreenElement}

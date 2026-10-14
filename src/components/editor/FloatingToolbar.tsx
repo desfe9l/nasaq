@@ -406,11 +406,12 @@ export function FloatingToolbar({
     const frameNode = pageNode?.querySelector<HTMLElement>(
       `.selection-frame[data-el-id="${CSS.escape(el.id)}"]`,
     );
-    if (frameNode) grips.push(frameNode.getBoundingClientRect());
-    const leftEdge = Math.min(rect.left, ...grips.map((r) => r.left));
-    const rightEdge = Math.max(rect.right, ...grips.map((r) => r.right));
-    const topEdge = Math.min(rect.top, ...grips.map((r) => r.top));
-    const bottomEdge = Math.max(rect.bottom, ...grips.map((r) => r.bottom));
+    const frameRect = frameNode?.getBoundingClientRect();
+    const bounds = frameRect ? [rect, frameRect, ...grips] : [rect, ...grips];
+    const leftEdge = Math.min(...bounds.map((r) => r.left));
+    const rightEdge = Math.max(...bounds.map((r) => r.right));
+    const topEdge = Math.min(...bounds.map((r) => r.top));
+    const bottomEdge = Math.max(...bounds.map((r) => r.bottom));
     const interactionBox = {
       left: leftEdge,
       right: rightEdge,
