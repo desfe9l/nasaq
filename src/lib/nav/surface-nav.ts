@@ -169,7 +169,6 @@ export const EDITOR_ELEMENT_TAB_IDS = [
   "templates",
   "theme",
   "fonts",
-  "settings",
   "pages",
 ] as const;
 

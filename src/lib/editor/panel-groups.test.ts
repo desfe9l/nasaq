@@ -30,13 +30,16 @@ function assertPartition(state: ReturnType<typeof defaultPanelGroups>) {
     }
 }
 
-test("the default state is six independent windows", () => {
+test("Settings stays pinned beside Properties in the default state", () => {
   const state = defaultPanelGroups();
   assertPartition(state);
+  assert.deepEqual(state.groups.properties, ["properties", "settings"]);
+  assert.equal(hostOf(state, "settings"), "properties");
+  assert.equal(isGrouped(state, "properties"), true);
   for (const id of EDITOR_PANEL_IDS) {
-    assert.deepEqual(state.groups[id], [id]);
+    if (id === "settings") continue;
+    if (id !== "properties") assert.deepEqual(state.groups[id], [id]);
     assert.equal(hostOf(state, id), id);
-    assert.equal(isGrouped(state, id), false);
   }
 });
 
@@ -44,27 +47,28 @@ test("dropping a tab into another window groups them under the target host", () 
   let state = defaultPanelGroups();
   state = movePanelTab(state, "properties", "report");
   assertPartition(state);
-  assert.deepEqual(state.groups.report, ["report", "properties"]);
+  assert.deepEqual(state.groups.report, ["report", "properties", "settings"]);
   assert.equal(state.groups.properties, undefined);
   assert.equal(hostOf(state, "properties"), "report");
+  assert.equal(hostOf(state, "settings"), "report");
   assert.equal(isGrouped(state, "report"), true);
   assert.equal(state.tabs.report, "properties", "the dropped tab shows");
 
   state = movePanelTab(state, "library", "report");
   assertPartition(state);
-  assert.deepEqual(state.groups.report, ["report", "properties", "library"]);
+  assert.deepEqual(state.groups.report, ["report", "properties", "settings", "library"]);
 });
 
 test("moving a host out promotes its next member", () => {
   let state = defaultPanelGroups();
   state = movePanelTab(state, "properties", "report");
   state = movePanelTab(state, "layers", "report");
-  assert.deepEqual(state.groups.report, ["report", "properties", "layers"]);
+  assert.deepEqual(state.groups.report, ["report", "properties", "settings", "layers"]);
   // Drag the HOST tab into another window: the group survives behind it.
   state = movePanelTab(state, "report", "elements");
   assertPartition(state);
   assert.deepEqual(state.groups.elements, ["elements", "report"]);
-  assert.deepEqual(state.groups.properties, ["properties", "layers"]);
+  assert.deepEqual(state.groups.properties, ["properties", "settings", "layers"]);
   // The window left behind keeps showing the tab it was already on.
   assert.equal(state.tabs.properties, "layers");
 });
@@ -74,7 +78,7 @@ test("reordering inside one window keeps the host first", () => {
   state = movePanelTab(state, "properties", "report");
   state = movePanelTab(state, "layers", "report");
   state = movePanelTab(state, "layers", "report", 0);
-  assert.deepEqual(state.groups.report, ["report", "layers", "properties"]);
+  assert.deepEqual(state.groups.report, ["report", "layers", "properties", "settings"]);
   state = movePanelTab(state, "report", "report", 5); // host onto itself: no-op
   assert.equal(state.groups.report[0], "report");
 });
@@ -85,7 +89,7 @@ test("detaching gives a tab its own window again", () => {
   state = movePanelTab(state, "library", "report");
   state = detachPanelTab(state, "properties");
   assertPartition(state);
-  assert.deepEqual(state.groups.properties, ["properties"]);
+  assert.deepEqual(state.groups.properties, ["properties", "settings"]);
   assert.deepEqual(state.groups.report, ["report", "library"]);
   assert.equal(detachPanelTab(state, "tools"), state);
 });
@@ -115,7 +119,7 @@ test("stored garbage normalises back to a valid partition", () => {
   });
   assertPartition(parsed);
   // Unknown id dropped, duplicate dropped, missing panels restored.
-  assert.deepEqual(parsed.groups.report, ["report", "properties", "library"]);
+  assert.deepEqual(parsed.groups.report, ["report", "properties", "settings", "library"]);
   for (const id of ["tools", "elements", "layers"] as const)
     assert.deepEqual(parsed.groups[id], [id]);
   assert.equal(parsed.tabs.report, "library", "a stored tab is honoured");
@@ -127,7 +131,7 @@ test("the shipped layout is two windows: content on the right, inspector on the 
   const state = defaultWorkspaceGroups();
   assertPartition(state);
   assert.deepEqual(state.groups.elements, ["elements", "tools", "library"]);
-  assert.deepEqual(state.groups.properties, ["properties", "layers", "report"]);
+  assert.deepEqual(state.groups.properties, ["properties", "settings", "layers", "report"]);
   assert.equal(Object.keys(state.groups).length, 2);
   assert.equal(state.tabs.elements, "elements");
   assert.equal(state.tabs.properties, "properties");
