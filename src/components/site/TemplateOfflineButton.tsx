@@ -58,7 +58,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
 
   if (state === "checking") {
     return (
-      <span className="inline-flex h-7 items-center gap-1 rounded-full border border-line px-2 text-[10px] font-bold text-muted">
+      <span className="inline-flex h-7 items-center gap-1 self-center rounded-full border border-line px-2 text-[10px] font-bold text-muted">
         <Loader2 className="size-3 animate-spin" /> جارٍ التحقق…
       </span>
     );
@@ -67,7 +67,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
     return (
       <span
         title="متاح دون اتصال — تم تنزيل القالب على هذا الجهاز"
-        className="inline-flex h-7 items-center gap-1 rounded-full bg-ok/10 px-2 text-[10px] font-extrabold text-success border border-ok/30"
+        className="inline-flex h-7 items-center gap-1 self-center rounded-full bg-ok/10 px-2 text-[10px] font-extrabold text-success border border-ok/30"
       >
         <Check className="size-3" /> متاح دون اتصال
       </span>
@@ -75,7 +75,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
   }
   if (state === "offline-blocked") {
     return (
-      <span className="inline-flex h-7 items-center gap-1 rounded-full bg-gold/10 px-2 text-[10px] font-bold text-warning border border-gold/40">
+      <span className="inline-flex h-7 items-center gap-1 self-center rounded-full bg-gold/10 px-2 text-[10px] font-bold text-warning border border-gold/40">
         <WifiOff className="size-3" /> يتطلب اتصالاً
       </span>
     );
@@ -87,7 +87,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
       disabled={state === "downloading"}
       title="حفظ القالب للاستخدام دون اتصال"
       className={cn(
-        "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[10px] font-bold transition",
+        "inline-flex h-7 items-center gap-1 self-center rounded-full border px-2 text-[10px] font-bold transition",
         "border-line bg-surface hover:bg-line-2 text-ink",
         state === "downloading" && "opacity-60 cursor-wait"
       )}

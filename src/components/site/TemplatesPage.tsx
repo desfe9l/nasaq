@@ -517,8 +517,8 @@ export function TemplatesPage({
       <SiteHeader current="/templates" />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <p className="nsq-eyebrow">مكتبة نَسَق</p>
             <h1 className="nsq-title mt-2.5 text-[28px]">القوالب</h1>
             <p className="mt-2.5 max-w-2xl text-[14px] leading-7 text-muted">
@@ -526,22 +526,31 @@ export function TemplatesPage({
               واحفظه في «قوالبي الخاصة» — والتغييرات تظهر في الكتالوج مباشرة.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setForm({ mode: "create" })}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
-          >
-            <Plus className="size-4" />
-            إضافة قالب جديد
-          </button>
-          {entitlements.premium_templates && (
-            <a
-              href={templatesFilterPathFor({ pill: "custom" })}
-              className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-extrabold text-ink"
+          {/*
+           * The page's own action sits on the FIRST line of the header, level
+           * with the eyebrow and the title, instead of being bottom-aligned
+           * under the paragraph. A primary action that floats below the text
+           * reads as a stray element; aligned with the heading it reads as the
+           * page's door.
+           */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ mode: "create" })}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
             >
-              قوالبي
-            </a>
-          )}
+              <Plus className="size-4 shrink-0" />
+              إضافة قالب جديد
+            </button>
+            {entitlements.premium_templates && (
+              <a
+                href={templatesFilterPathFor({ pill: "custom" })}
+                className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-extrabold text-ink"
+              >
+                قوالبي
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Search + filters */}

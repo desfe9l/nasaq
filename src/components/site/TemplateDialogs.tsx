@@ -135,7 +135,20 @@ export function QuickViewDialog({
         onClose={onClose}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+      {/*
+       * Reading order: identity → artwork → facts → actions.
+       *
+       * The facts column used to be the FIRST column of a two-column grid and
+       * the gallery the second, which is backwards in an RTL document — the
+       * dialog opened on a lone description with no name and a strip of empty
+       * panel under it, while the artwork sat on the far side of the fold.
+       * The quick view now reads top-down at every width: the title and the
+       * facts under it, the artwork at full width where it can actually be
+       * read, and the actions at the end of the dialog. `min-w-0` keeps the
+       * thumbnail strip scrolling inside its own box on a phone instead of
+       * widening the panel (the page-level fault in `TemplateDetailPage`).
+       */}
+      <div className="grid gap-5">
         <div className="min-w-0">
           {/*
            * The quick view IS the gallery: swipe/drag, arrows, dots and
@@ -143,15 +156,22 @@ export function QuickViewDialog({
            * "preview" means one thing everywhere in the product.
            */}
           <TemplateGallery
+            /* One width for the whole gallery — the page label above it, the
+               sheet, the dots and the thumbnail strip all share it, so the
+               dialog reads as a column and not as three unrelated rows. */
+            className="mx-auto w-full max-w-[520px]"
             slides={slidesFromTemplate(entry.pages, entry.previews)}
             locked={entry.managedTemplate?.tier === "licensed"}
             lockedNote="النسخة الكاملة تتطلب ترخيصًا"
             label={`معاينة ${entry.title}`}
+            /* Shorter than a full page's allowance: the dialog also carries the
+               facts and the actions, and all three must fit one screen. */
+            stageClassName="[--gallery-stage-h:48vh]"
             onSlideChange={setIndex}
           />
         </div>
 
-        <aside className="grid content-start gap-3">
+        <aside className="grid min-w-0 content-start gap-3">
           <div className="flex flex-wrap gap-1.5">
             {entry.badges.map((badge) => (
               <span
@@ -198,8 +218,8 @@ export function QuickViewDialog({
             </div>
           )}
 
-          <div className="mt-1 grid gap-2 border-t border-line pt-4">
-            <button type="button" onClick={onUse} className={PRIMARY_BTN}>
+          <div className="mt-1 grid gap-2 border-t border-line pt-4 sm:grid-cols-2">
+            <button type="button" onClick={onUse} className={cn(PRIMARY_BTN, "sm:col-span-2")}>
               <Plus className="size-4" /> استخدام القالب
             </button>
             {onEdit && (

@@ -49,6 +49,7 @@ import {
 import { entrySlug } from "@/lib/templates/entry-slug";
 import { TEMPLATE_CATEGORIES } from "@/lib/editor/templates";
 import { cn } from "@/lib/utils";
+import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import type { CatalogEntry } from "@/lib/templates/catalog";
 
 export function TemplateCategoryPage({ categoryId }: { categoryId: string }) {
@@ -133,7 +134,7 @@ export function TemplateCategoryPage({ categoryId }: { categoryId: string }) {
     <div className="min-h-full bg-paper">
       <SiteHeader current={TEMPLATES_ROUTE} />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 md:py-10">
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-10">
         <nav className="text-[11px] font-bold text-muted">
           <a href={TEMPLATES_ROUTE} className="hover:text-brand">
             القوالب
@@ -142,7 +143,7 @@ export function TemplateCategoryPage({ categoryId }: { categoryId: string }) {
           <span className="text-ink">{surface.title}</span>
         </nav>
 
-        <header className="mt-3 flex flex-wrap items-end justify-between gap-4">
+        <header className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold tracking-[0.2em] text-muted">
               NASAQ · TEMPLATES
@@ -220,22 +221,23 @@ export function TemplateCategoryPage({ categoryId }: { categoryId: string }) {
         </div>
 
         {inFamily.length > 0 && (
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={cn("mt-6", CARD_WRAP)}>
             {inFamily.map((entry) => {
               const locked = entryRequiresLicense(entry, entitlements);
               return (
-                <TemplateCard
-                  key={entry.id}
-                  entry={entry}
-                  href={templatePathFor(entrySlug(entry))}
-                  locked={locked}
-                  available={!locked}
-                  actions={{
-                    onUse: () => void run(entry, "use"),
-                    onQuickView: () => setQuickViewId(entry.id),
-                    onDuplicate: () => void run(entry, "duplicate"),
-                  }}
-                />
+                <div key={entry.id} className={cn("flex flex-col", CARD_W)}>
+                  <TemplateCard
+                    entry={entry}
+                    href={templatePathFor(entrySlug(entry))}
+                    locked={locked}
+                    available={!locked}
+                    actions={{
+                      onUse: () => void run(entry, "use"),
+                      onQuickView: () => setQuickViewId(entry.id),
+                      onDuplicate: () => void run(entry, "duplicate"),
+                    }}
+                  />
+                </div>
               );
             })}
           </div>

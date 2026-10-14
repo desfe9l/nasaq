@@ -9,6 +9,7 @@ import {
   templateDisplaySlug,
 } from "@/lib/templates/published";
 import { cn } from "@/lib/utils";
+import { CARD_PREVIEW_H, CARD_W, CARD_WRAP } from "./cards";
 
 const packs = PACKS.filter((pack) => pack.id !== "blank").map((pack) => ({
   ...pack,
@@ -26,8 +27,16 @@ export function PremiumTemplates({
   const published = usePublishedTemplates().filter(
     (item) => item.tier === "licensed" && !item.id.startsWith("builtin_pack_") && !item.id.startsWith("builtin_page_"),
   );
+  /*
+   * The premium shelf uses the SAME card as the catalog: one shared preview
+   * height, one radius, one border, one action row. It used to be a four-up
+   * `grid` of `h-36` tiles — a different card, on the same page, one scroll
+   * apart from the catalog's — which is why the shelves read as unrelated
+   * strips rather than as one library. Only the preview contents differ.
+   */
   const card =
-    "flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-3 text-right transition-colors hover:border-brand/50";
+    "shadow-card group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover";
+  const body = "flex flex-1 flex-col p-4 text-right";
   return (
     <section
       className={cn("mx-auto w-full max-w-6xl px-4 py-6 sm:px-6", className)}
@@ -65,33 +74,42 @@ export function PremiumTemplates({
               </div>
             </>
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={cn("mt-4", CARD_WRAP)}>
             {published.map((template) => (
               <a
                 key={template.id}
                 href={publishedTemplatePath(templateDisplaySlug(template))}
-                className={card}
+                className={cn(card, CARD_W)}
               >
-                {template.thumbnail && (
-                  <SmartImage
-                    src={template.thumbnail}
-                    alt=""
-                    decorative
-                    fit="contain"
-                    aspectRatio="4 / 3"
-                    className="h-36 w-full rounded border border-line bg-surface-2"
-                  />
-                )}
-                <strong className="line-clamp-2 text-[13px]">
-                  {template.title}
-                </strong>
-                {template.description && (
-                  <p className="line-clamp-2 text-[11px] leading-5 text-muted">
-                    {template.description}
-                  </p>
-                )}
-                <span className="mt-auto">
-                  <PremiumAccessNote compact />
+                <span
+                  className="grid shrink-0 place-items-center overflow-hidden border-b border-line/70 bg-paper/70 p-3"
+                  style={{ height: CARD_PREVIEW_H }}
+                >
+                  {template.thumbnail ? (
+                    <SmartImage
+                      src={template.thumbnail}
+                      alt=""
+                      decorative
+                      fit="contain"
+                      aspectRatio="210 / 297"
+                      className="max-h-full max-w-full rounded-[3px] border border-line bg-white shadow-sm"
+                    />
+                  ) : (
+                    <PremiumAccessNote compact />
+                  )}
+                </span>
+                <span className={body}>
+                  <strong className="line-clamp-2 text-[14px] font-extrabold leading-6 text-ink">
+                    {template.title}
+                  </strong>
+                  {template.description && (
+                    <span className="mt-2 line-clamp-3 flex-1 text-[12px] leading-6 text-muted">
+                      {template.description}
+                    </span>
+                  )}
+                  <span className="mt-3 border-t border-line/70 pt-3">
+                    <PremiumAccessNote compact />
+                  </span>
                 </span>
               </a>
             ))}
@@ -99,20 +117,27 @@ export function PremiumTemplates({
               <a
                 key={pack.id}
                 href="/templates"
-                className={card}
+                className={cn(card, CARD_W)}
                 aria-label={`قوالب ${pack.title} المميزة`}
               >
-                <div className="flex h-36 justify-center overflow-hidden rounded border border-line bg-surface-2 p-2">
-                  <TemplatePreview page={pack.page} className="h-full" />
-                </div>
-                <strong className="text-[13px]">{pack.title}</strong>
-                <p className="line-clamp-2 text-[11px] leading-5 text-muted">
-                  {pack.desc}
-                </p>
-                <div className="mt-auto grid gap-2">
-                  <PremiumAccessNote compact />
-                  <span className="text-[10px] text-muted">{pack.pages} صفحة</span>
-                </div>
+                <span
+                  className="grid shrink-0 place-items-center overflow-hidden border-b border-line/70 bg-paper/70 p-3"
+                  style={{ height: CARD_PREVIEW_H }}
+                >
+                  <TemplatePreview page={pack.page} className="max-h-full max-w-full rounded-[3px] shadow-sm" />
+                </span>
+                <span className={body}>
+                  <strong className="text-[14px] font-extrabold leading-6 text-ink">
+                    {pack.title}
+                  </strong>
+                  <span className="mt-2 line-clamp-3 flex-1 text-[12px] leading-6 text-muted">
+                    {pack.desc}
+                  </span>
+                  <span className="mt-3 flex items-center justify-between gap-2 border-t border-line/70 pt-3">
+                    <PremiumAccessNote compact />
+                    <span className="text-[10.5px] font-bold text-muted">{pack.pages} صفحة</span>
+                  </span>
+                </span>
               </a>
             ))}
           </div>

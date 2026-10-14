@@ -23,19 +23,41 @@ export const SITE_CARD =
  *
  * `flex-wrap` + `justify-center` instead of `grid-cols-*`: a trailing partial
  * row (5 packs in a 3-up grid, for example) sits centered under the full rows
- * rather than hugging one edge. Pair with `cardWidth()` on every child.
+ * rather than hugging one edge. Pair with `CARD_W` on every child.
+ *
+ * The row is its own CONTAINER, and the card width is decided by how much room
+ * the row actually has — not by the viewport. That is what stops the same card
+ * from being 352px on `/templates` (a `max-w-6xl` page) and 296px on a category
+ * page (which used to be `max-w-7xl` with a four-up grid): the columns are a
+ * property of the shelf, so one card is one size wherever it is shown. It also
+ * means a shelf placed inside a narrow column (the editor, a dialog) wraps
+ * correctly without any surface-specific breakpoints.
  */
-export const CARD_WRAP = "flex flex-wrap justify-center gap-4 md:gap-6";
+export const CARD_WRAP = "@container flex flex-wrap justify-center gap-4 @2xl:gap-6";
 
 /**
- * Card width inside `CARD_WRAP`.
+ * Card width inside `CARD_WRAP` — one card per row until the row is wide enough
+ * for two (42rem / 672px) and then three (64rem / 1024px).
  *
- * Each basis is `(100% − gaps) / columns` at the gap that is live on that
- * breakpoint (16px below `md`, 24px from `md` up), which is what keeps exactly
- * N cards per row while the row stays centered.
+ * Each basis is `(100% − gaps) / columns` at the gap that is live in that same
+ * container (16px under `@2xl`, 24px from `@2xl` up), which is what keeps
+ * exactly N cards per row while the row stays centered. The thresholds are the
+ * narrowest row that still leaves a card room to breathe (~328px at two up,
+ * ~325px at three up), so a card never squeezes its own title or its primary
+ * button — the fault that made «استخدام القالب» break into two lines.
  */
 export const CARD_W =
-  "basis-full sm:basis-[calc(50%-0.5rem)] md:basis-[calc(50%-0.75rem)] lg:basis-[calc(33.3333%-1rem)]";
+  "basis-full @2xl:basis-[calc(50%-0.75rem)] @5xl:basis-[calc(33.3333%-1rem)]";
+
+/**
+ * The preview box inside a card, in px.
+ *
+ * Every card that paints a template — the catalog, a category page, the licensed
+ * workspace shelf, the published shelf — reserves the SAME height, so cards in
+ * neighbouring rows are the same height and mixed rows never look stitched
+ * together. Landscape pages fit by width inside it (see `TemplateCard`).
+ */
+export const CARD_PREVIEW_H = 232;
 
 /**
  * Icon-tile backgrounds — one tint per pillar, so tiles are distinguishable at
