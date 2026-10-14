@@ -21,6 +21,8 @@ import {
   readStoredTheme,
   writeStoredTheme,
   subscribeTheme,
+  getNextAppearance,
+  getThemeMeta,
   type AppearanceMode,
 } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -50,29 +52,15 @@ import {
 } from "./AccountMenuPanel";
 
 /**
- * The three appearance states in cycle order: Light → Dark → Dim → Light...
- * Each has a distinct glyph and Arabic name.
+ * The glyph of each appearance state. The Arabic names, hints and the cycle
+ * order itself come from `@/lib/theme`, so the header, the editor action and
+ * the appearance menu can never disagree about what the next press does.
  */
-const THEME_CYCLE: readonly {
-  id: AppearanceMode;
-  label: string;
-  icon: typeof Sun;
-}[] = [
-  { id: "light", label: "فاتح", icon: Sun },
-  { id: "dark", label: "داكن", icon: MoonStar },
-  { id: "dim", label: "خافت", icon: CloudSun },
-];
-
-/** Get the next theme in the cycle. */
-function getNextTheme(current: AppearanceMode): AppearanceMode {
-  const idx = THEME_CYCLE.findIndex((t) => t.id === current);
-  return THEME_CYCLE[(idx + 1) % THEME_CYCLE.length].id;
-}
-
-/** Get the theme choice by id. */
-function getThemeChoice(id: AppearanceMode) {
-  return THEME_CYCLE.find((t) => t.id === id) ?? THEME_CYCLE[0];
-}
+const THEME_ICONS: Record<AppearanceMode, typeof Sun> = {
+  light: Sun,
+  dark: MoonStar,
+  dim: CloudSun,
+};
 
 /**
  * The editor call-to-action in the site chrome.
@@ -421,22 +409,26 @@ export function SiteHeader({ current }: { current: string }) {
 
 <div className="site-header-actions flex shrink-0 items-center gap-1.5">
             {/*
-             * Appearance — a single compact cycling button: Light → Dark → Dim.
-             * Shows the current mode's icon and name; press to advance.
+             * Appearance — a single compact cycling button:
+             * فاتح → داكن → خافت (the shared `getNextAppearance` order).
+             * Shows the current mode's glyph and name; press to advance.
              */}
-            <button
-              type="button"
-              onClick={() => setTheme(getNextTheme(appearance))}
-              aria-label={`مظهر الواجهة: ${getThemeChoice(appearance).label}. اضغط للتبديل إلى ${getThemeChoice(getNextTheme(appearance)).label}`}
-              title={`مظهر ${getThemeChoice(appearance).label} — اضغط للتبديل إلى ${getThemeChoice(getNextTheme(appearance)).label}`}
-              className="site-appearance-cycle inline-flex h-11 min-w-[56px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-bold text-ink transition-[background-color,border-color,color] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              {(() => {
-                const ThemeIcon = getThemeChoice(appearance).icon;
-                return <ThemeIcon className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />;
-              })()}
-              <span className="site-appearance-label hidden sm:inline">{getThemeChoice(appearance).label}</span>
-            </button>
+            {(() => {
+              const appearanceMeta = getThemeMeta(appearance);
+              const ThemeIcon = THEME_ICONS[appearance] ?? Sun;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setTheme(getNextAppearance(appearance))}
+                  aria-label={`مظهر الواجهة: ${appearanceMeta.label}. اضغط للتبديل إلى ${appearanceMeta.nextLabel}`}
+                  title={`مظهر ${appearanceMeta.label} — اضغط للتبديل إلى ${appearanceMeta.nextLabel}`}
+                  className="site-appearance-cycle inline-flex h-11 min-w-[56px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-bold text-ink transition-[background-color,border-color,color] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                >
+                  <ThemeIcon className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+                  <span className="site-appearance-label hidden sm:inline">{appearanceMeta.label}</span>
+                </button>
+              );
+            })()}
           {/*
            * «اطلب خدمة» — the platform's own request channel, in the chrome.
            *

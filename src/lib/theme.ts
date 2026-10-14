@@ -7,6 +7,51 @@
 
 export type AppearanceMode = "light" | "dim" | "dark";
 
+/**
+ * The one cycle order every surface advances through:
+ * Light → Dark → Dim → Light.
+ *
+ * The site-header button, the editor's «تبديل المظهر» action (keyboard and
+ * overlay) and the appearance menu all read this helper, so one press means
+ * the same thing everywhere instead of each surface inventing its own order.
+ */
+export function getNextAppearance(current: AppearanceMode): AppearanceMode {
+  switch (current) {
+    case "dark":
+      return "dim";
+    case "dim":
+      return "light";
+    default:
+      return "dark";
+  }
+}
+
+export interface ThemeMeta {
+  id: AppearanceMode;
+  label: string;
+  hint: string;
+  nextId: AppearanceMode;
+  nextLabel: string;
+}
+
+const THEME_COPY: Record<AppearanceMode, { label: string; hint: string }> = {
+  light: { label: "فاتح", hint: "واجهة مضيئة للنهار" },
+  dark: { label: "داكن", hint: "واجهة معتمة لليل" },
+  dim: { label: "خافت", hint: "إضاءة متوسطة مريحة للعين" },
+};
+
+/** The Arabic name, hint and next step of an appearance mode. */
+export function getThemeMeta(appearance: AppearanceMode): ThemeMeta {
+  const mode: AppearanceMode = appearance in THEME_COPY ? appearance : "light";
+  const nextId = getNextAppearance(mode);
+  return {
+    id: mode,
+    ...THEME_COPY[mode],
+    nextId,
+    nextLabel: THEME_COPY[nextId].label,
+  };
+}
+
 const THEME_KEY = "nasaq-theme";
 const THEME_EVENT = "nasaq:appearance-change";
 
