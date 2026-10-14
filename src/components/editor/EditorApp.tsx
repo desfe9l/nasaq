@@ -2163,11 +2163,11 @@ function Studio({
     isFullscreenMode;
   const effectivePagesRailCollapsed =
     pagesRailCollapsed || (isMobileSurface && !mobileRailExpanded);
-  const collapsedRailHeight = coarsePointer ? 44 : PAGES_RAIL_COLLAPSED;
+  const collapsedRailHeight = coarsePointer ? 40 : PAGES_RAIL_COLLAPSED;
   const effectiveRailHeight = effectivePagesRailCollapsed
     ? collapsedRailHeight
     : deviceSurface === "mobile-landscape"
-      ? Math.min(pagesPanelHeight, 76)
+      ? Math.min(pagesPanelHeight, 60)
       : pagesPanelHeight;
   const toggleEffectivePagesRail = useCallback(() => {
     if (!isMobileSurface) {

@@ -247,10 +247,10 @@ export function layoutShiftSignificant(
  * second artboard. 96px keeps a full thumbnail row plus its caption while
  * giving the canvas back the height the old 112px default spent.
  */
-export const PAGES_PANEL_DEFAULT = 96;
-export const PAGES_PANEL_MIN = 84;
+export const PAGES_PANEL_DEFAULT = 68;
+export const PAGES_PANEL_MIN = 56;
 /** The one-line strip the rail collapses to (page numbers only). */
-export const PAGES_RAIL_COLLAPSED = 36;
+export const PAGES_RAIL_COLLAPSED = 30;
 /** A docked panel's strip may take at most this share of its screen axis. */
 export const DOCK_MAX_SHARE = 0.4;
 
@@ -327,7 +327,7 @@ export function clampPagesHeight(height: number): number {
   const viewport = typeof window === "undefined" ? 900 : window.innerHeight;
   const max = Math.max(
     PAGES_PANEL_MIN + 24,
-    Math.min(144, viewport * 0.25, viewport - PAGES_PANEL_RESERVED),
+    Math.min(96, viewport * 0.2, viewport - PAGES_PANEL_RESERVED),
   );
   const value = Number.isFinite(height) ? height : PAGES_PANEL_DEFAULT;
   return Math.min(max, Math.max(PAGES_PANEL_MIN, Math.round(value)));
