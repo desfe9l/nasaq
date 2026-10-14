@@ -167,7 +167,7 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
           <span className="font-bold text-ink">{entry.title}</span>
         </nav>
 
-        <div className="mt-4 grid gap-7 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+        <div className="mt-4 grid min-w-0 gap-7 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           {/*
            * The real document, as a slides experience.
            *
@@ -177,7 +177,19 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
            * A locked (paid) template uses the SAME preview; the requirement is
            * stated on the artwork rather than replacing it.
            */}
-          <aside className="grid content-start gap-3">
+          {/*
+           * `min-w-0` is load-bearing: a grid item's automatic minimum size is
+           * its content's min-content width, and the gallery's thumbnail strip
+           * (six 76px sheets in a row) makes that ~496px. On a 390px phone the
+           * column was therefore forced to 496px, which pushed the whole page
+           * sideways and clipped both the title and the artwork. With the
+           * floor removed the strip scrolls inside its own box, as designed.
+           *
+           * `order` puts the title and the facts first on a phone (a page must
+           * not open on a picture with no name on it) and returns the preview to
+           * the leading column from `lg` up, where it belongs.
+           */}
+          <aside className="order-2 grid min-w-0 content-start gap-3 lg:order-1">
             <TemplateGallery
               slides={slidesFromTemplate(entry.pages, entry.previews)}
               locked={locked}
@@ -187,7 +199,7 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
             />
           </aside>
 
-          <section className="min-w-0">
+          <section className="order-1 min-w-0 lg:order-2">
             <p className="text-[10px] font-extrabold tracking-[0.2em] text-muted">
               NASAQ · TEMPLATE
             </p>

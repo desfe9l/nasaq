@@ -100,6 +100,8 @@ export function TemplateGallery({
     () => aspectRatioOf(pageSize(slide?.page ?? slides[0]?.page)) ?? "210 / 297",
     [slide, slides],
   );
+  /** The same proportions as `ratio`, in numbers, for the contain arithmetic. */
+  const fit = useMemo(() => pageSize(slide?.page ?? slides[0]?.page), [slide, slides]);
 
   const go = useCallback(
     (next: number) => {
@@ -213,11 +215,13 @@ export function TemplateGallery({
 
   return (
     <section
-      className={cn("template-gallery", className)}
+      className={cn("template-gallery min-w-0", className)}
       aria-roledescription="معرض صفحات"
       aria-label={label}
       data-gallery=""
       data-index={safeIndex}
+      /* The page's own width-to-height factor, read by the stage in CSS. */
+      style={{ "--gallery-ratio": (fit.w / fit.h).toFixed(4) } as React.CSSProperties}
     >
       <div className="flex items-center justify-between gap-2 pb-2">
         <p className="inline-flex items-center gap-1.5 text-[12px] font-extrabold text-muted">
@@ -263,7 +267,7 @@ export function TemplateGallery({
           total > 1 && "cursor-grab active:cursor-grabbing",
           stageClassName,
         )}
-        style={full ? undefined : { aspectRatio: ratio, maxHeight: "62vh" }}
+        style={full ? undefined : { aspectRatio: ratio }}
       >
         {/* The sheet: transform carries the live drag, the transition carries
             the settle, and reduced-motion users get the settle instantly. */}
@@ -343,7 +347,7 @@ export function TemplateGallery({
           {showThumbnails && (
             <div
               id={`gallery-thumbs-${listId}`}
-              className="mt-3 flex gap-2 overflow-x-auto pb-1"
+              className="mt-3 flex min-w-0 gap-2 overflow-x-auto pb-1"
               aria-label="مصغّرات الصفحات"
             >
               {slides.map((item, i) => {

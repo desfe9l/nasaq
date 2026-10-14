@@ -21,12 +21,14 @@ import {
 } from "lucide-react";
 import { pageSize } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
+import { CARD_PREVIEW_H } from "./cards";
 import { pagesLabel, type CatalogBadge, type CatalogEntry } from "@/lib/templates/catalog";
 import { TemplateStackPreview } from "./TemplatePreview";
 import { LicenseBadge } from "./LicenseBadge";
 
-/** Preview box height (px). Landscape pages fit by width instead. */
-const PREVIEW_BOX = 232;
+/** Preview box height (px) — shared with every other template card.
+ * Landscape pages fit by width instead. */
+const PREVIEW_BOX = CARD_PREVIEW_H;
 
 /**
  * Card actions. «استخدام القالب» and «معاينة سريعة» are always offered; the
@@ -301,34 +303,50 @@ export function TemplateCard({
           )}
         </div>
 
-        <div className="mt-4 flex items-center gap-2 border-t border-line/70 pt-4">
+        {/*
+         * The footer is two lines, not one: the primary action owns a line of
+         * its own, and the secondary actions share the one below it.
+         *
+         * WHY
+         * ---
+         * «استخدام القالب» used to be squeezed onto a single row beside
+         * «التفاصيل» and the overflow menu. On the narrower shelves that left
+         * the label about a hundred pixels, so the button wrapped inside itself
+         * («استخدام» over «القالب») and the row read as a pile rather than a
+         * decision. A primary action is never the thing that gives way: it is
+         * full width and `whitespace-nowrap`, so the label stays on one line at
+         * every card width, and the row under it stays calm.
+         */}
+        <div className="mt-4 border-t border-line/70 pt-4">
           <button
             type="button"
             onClick={actions.onUse}
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-navy px-3 text-[12px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-navy px-3 text-[12px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
           >
-            <Plus className="size-4" />
+            <Plus className="size-4 shrink-0" />
             استخدام القالب
           </button>
-          {href ? (
-            <a
-              href={href}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
-            >
-              <Eye className="size-4" />
-              التفاصيل
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={actions.onQuickView}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
-            >
-              <Eye className="size-4" />
-              معاينة سريعة
-            </button>
-          )}
-          {managed && <ActionMenu items={menuItems} />}
+          <div className="mt-2 flex items-center gap-2">
+            {href ? (
+              <a
+                href={href}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
+              >
+                <Eye className="size-4 shrink-0" />
+                التفاصيل
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={actions.onQuickView}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
+              >
+                <Eye className="size-4 shrink-0" />
+                معاينة سريعة
+              </button>
+            )}
+            {managed && <ActionMenu items={menuItems} />}
+          </div>
         </div>
       </div>
     </article>

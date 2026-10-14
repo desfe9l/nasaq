@@ -6775,8 +6775,24 @@ button.license-badge-locked:focus-visible {
  * scrolling always wins), and the arrows sit on the two ends where a reader
  * looks for them — in this Arabic-first document, «التالي» is on the LEFT.
  */
+/*
+ * The stage is exactly as big as the artwork it shows.
+ *
+ * `--gallery-stage-h` is the tallest the stage may become (a share of the
+ * viewport, so a preview never swallows the page it sits on) and
+ * `--gallery-ratio` is the current page's width-to-height factor, written on
+ * the gallery element by React. The stage's width is therefore the sheet's
+ * width at its maximum height, and its height follows through `aspect-ratio`:
+ * the sheet always fills the stage exactly — no letterboxing, and above all no
+ * CLIPPING, which is what a width-only stage did to every page taller than it.
+ */
+.template-gallery {
+  --gallery-stage-h: 62vh;
+}
 .template-gallery-stage {
   isolation: isolate;
+  width: min(100%, calc(var(--gallery-ratio, 0.7071) * var(--gallery-stage-h)));
+  max-height: var(--gallery-stage-h);
 }
 
 .template-gallery-sheet {
