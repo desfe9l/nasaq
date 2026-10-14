@@ -4162,11 +4162,13 @@ body.is-resizing-panel .editor-dock-strip::before {
 /*
  * The document status chip — the ONE state readout in the editor chrome.
  *
- * It lives inside the header's document capsule, in normal flow: it can never
- * overlap the canvas, the artboard, the page rail, the toolbars or a selection
- * handle, on any surface. Tones are editor roles (light / dark / dim all resolve
- * them), so a state never becomes invisible on a theme switch. Only a state
- * that is genuinely working pulses — a settled document is still.
+ * It sits inside the brand lockup, directly beside the NASAQ mark, in normal
+ * flow: it can never overlap the canvas, the artboard, the page rail, the
+ * toolbars or a selection handle, on any surface. (On phones, where the header
+ * shows no mark, the same chip takes the document capsule instead — never both.)
+ * Tones are editor roles (light / dark / dim all resolve them), so a state never
+ * becomes invisible on a theme switch. Only a state that is genuinely working
+ * pulses — a settled document is still.
  */
 .editor-sync-status {
   display: inline-flex;
@@ -5652,6 +5654,51 @@ button.license-badge-locked:focus-visible {
 /* NASAQ mark in the editor header: fixed small box so the header height never changes. */
 .editor-brand-mark { display: inline-flex; align-items: center; flex-shrink: 0; }
 .editor-brand-mark img { width: 24px; height: 24px; }
+
+/*
+ * The brand lockup: the NASAQ mark with the ONE document/sync status directly
+ * beside it. `inline-flex` + `align-items: center` centres the chip on the mark
+ * (both are 24px tall), and the gap decides the spacing, so the pair is aligned
+ * by construction instead of by margins — and stays aligned in RTL, where the
+ * lockup simply mirrors and the chip lands on the mark's left.
+ */
+.editor-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+/*
+ * Beside a 24px mark the chip is deliberately small: mark-sized height, a
+ * compact pill radius, and a tighter width cap than the wide-header default.
+ * The dot keeps the tone colour (so green still means "genuinely synced") and
+ * gains a faint ring so a 8px dot stays clearly visible against the toolbar.
+ */
+.editor-brand-lockup .editor-sync-status {
+  height: 24px;
+  max-width: 16ch;
+  gap: 5px;
+  margin-inline-end: 0;
+  padding: 0 7px;
+  border-radius: 999px;
+}
+.editor-brand-lockup .editor-sync-status .dot {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 22%, transparent);
+}
+/*
+ * iPad portrait, landscape phone and the tightest desktop band: the lockup
+ * keeps the dot and the short label and gives the row back its width. The
+ * status never shrinks away — hiding the state is how the old editor lost it.
+ */
+@media (max-width: 1099px) {
+  .editor-brand-lockup .editor-sync-status {
+    max-width: 11ch;
+    padding-inline: 6px;
+  }
+}
 
 /*
  * ============================================================================

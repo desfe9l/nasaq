@@ -204,15 +204,16 @@ try {
       .locator('.editor-header-actions button[aria-keyshortcuts="⌘S"]')
       .click();
     /*
-     * The save state is ONE chip in the document capsule (the old per-button
-     * `.is-saved` tone was a second rendering of the same state). Wait for it
-     * to leave «جارٍ الحفظ…» and report a settled document.
+     * The save state is ONE chip, in the brand lockup beside the NASAQ mark
+     * (the old per-button `.is-saved` tone was a second rendering of the same
+     * state, and the document capsule is now the title's alone). Wait for it to
+     * leave «جارٍ الحفظ…» and report a settled document.
      */
     await page
       .locator(
-        '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="local"], ' +
-          '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="synced"], ' +
-          '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="ready"]',
+        '.editor-brand-lockup [data-testid="editor-sync-status"][data-status="local"], ' +
+          '.editor-brand-lockup [data-testid="editor-sync-status"][data-status="synced"], ' +
+          '.editor-brand-lockup [data-testid="editor-sync-status"][data-status="ready"]',
       )
       .first()
       .waitFor();

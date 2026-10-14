@@ -2165,6 +2165,14 @@ function Studio({
   const isMobileSurface =
     deviceSurface === "mobile-portrait" ||
     deviceSurface === "mobile-landscape";
+  /*
+   * The brand lockup is fixed-width chrome pinned to the header's leading edge,
+   * so its status chip speaks in short labels everywhere except a true desktop
+   * row — iPad portrait/landscape spend that width on the canvas instead. The
+   * full sentence stays available in the chip's tooltip and its a11y label, and
+   * the tone/colour never changes with the label.
+   */
+  const brandStatusCompact = deviceSurface !== "desktop";
   const [mobileRailExpanded, setMobileRailExpanded] = useState(false);
   useEffect(() => {
     // Each mobile opening starts artboard-first. Expansion stays available for
@@ -2801,16 +2809,26 @@ function Studio({
                * marketing, never a new-document state, never a document reset.
                * It still passes through the leave guard, so a dirty document is
                * asked about before the door opens.
+               *
+               * The mark and the ONE document/sync status share a single lockup:
+               * the status dot sits directly beside the logo, centred on it, in
+               * normal flow — so the state is legible at the edge of the header
+               * and can never be rendered twice (the document capsule is the
+               * title's alone). The chip itself is untouched: same projection,
+               * same tones, and it only turns green on a settled document.
                */}
-              <a
-                href={WORKSPACE_HOME_PATH}
-                className="editor-brand-mark"
-                title="نَسَق | NASAQ — العودة إلى مساحة العمل"
-                aria-label="العودة إلى مساحة عمل نَسَق الرئيسية"
-                onClick={leaveEditor}
-              >
-                <BrandLogo compact markOnly />
-              </a>
+              <div className="editor-brand-lockup">
+                <a
+                  href={WORKSPACE_HOME_PATH}
+                  className="editor-brand-mark"
+                  title="نَسَق | NASAQ — العودة إلى مساحة العمل"
+                  aria-label="العودة إلى مساحة عمل نَسَق الرئيسية"
+                  onClick={leaveEditor}
+                >
+                  <BrandLogo compact markOnly />
+                </a>
+                <EditorDocumentStatus compact={brandStatusCompact} />
+              </div>
               <span className="editor-header-sep" aria-hidden />
             </>
           )}
@@ -2973,8 +2991,11 @@ function Studio({
               placeholder="مستند جديد"
             />
             {/* Narrow phone chrome shows the short label: the surface comes
-                from the editor's ONE responsive resolver, not a probe. */}
-            <EditorDocumentStatus compact={isMobileSurface} />
+                from the editor's ONE responsive resolver, not a probe. The
+                chip lives here on phones because the header has no logo to sit
+                beside on those surfaces; on every wider surface it is in the
+                brand lockup and this slot stays empty. */}
+            {isMobileSurface && <EditorDocumentStatus compact />}
           </div>
         </div>
 

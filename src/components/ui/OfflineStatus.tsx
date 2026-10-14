@@ -20,8 +20,9 @@ import { WORKSPACE_ROUTE } from "@/lib/site-routes";
  * House rule, and the reason this file replaced three separate indicators:
  *
  *   · exactly ONE component renders the document's state at a time — the
- *     editor's chrome chip (`EditorDocumentStatus`) or, outside the editor, the
- *     compact site pill (`OfflineStatus`), and never both on the same screen;
+ *     editor's chrome chip (`EditorDocumentStatus`, which sits directly beside
+ *     the NASAQ mark in the editor header) or, outside the editor, the compact
+ *     site pill (`OfflineStatus`), and never both on the same screen;
  *   · the state comes from ONE projection (`documentStatus()`), so «جارٍ
  *     الحفظ» can never be painted by two components and «تحميل» can never mean
  *     a save or a sync;
@@ -63,11 +64,14 @@ function useDocumentStatus(): DocumentStatus {
 }
 
 /**
- * Always-visible document status for the editor header capsule.
+ * Always-visible document status — the green/amber/red dot beside the NASAQ
+ * mark in the editor header (and, on phones, inside the document capsule).
  *
  * It owns the save state, the sync state and the connection state — the
  * `SaveNowButton` beside it is an ACTION, so the same state is never rendered
- * twice. A `retryable` state turns the chip into the retry control.
+ * twice. The tone comes from ONE projection, so green is only ever painted for
+ * a document that is genuinely settled/synced. A `retryable` state turns the
+ * chip into the retry control.
  */
 export function EditorDocumentStatus({ compact = false }: { compact?: boolean }) {
   const status = useDocumentStatus();
