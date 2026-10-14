@@ -86,13 +86,17 @@ describe("clampPagesHeight", () => {
   });
 
   it("leaves a sane height untouched, rounded to whole pixels", () => {
-    assert.equal(clampPagesHeight(110), 110);
-    assert.equal(clampPagesHeight(110.6), 111);
+    assert.equal(clampPagesHeight(PAGES_PANEL_DEFAULT), PAGES_PANEL_DEFAULT);
+    assert.equal(
+      clampPagesHeight(PAGES_PANEL_DEFAULT + 0.6),
+      PAGES_PANEL_DEFAULT + 1,
+    );
   });
 
   it("caps the panel so the artboard keeps usable room (headless viewport 900)", () => {
-    // Even a very tall workspace keeps a single compact row.
-    assert.equal(clampPagesHeight(5000), 144);
+    // The compact strip caps a docked pages panel at 96px — one thumbnail row
+    // plus its controls — instead of the old 144px ceiling.
+    assert.equal(clampPagesHeight(5000), 96);
     assert.ok(clampPagesHeight(5000) < 900);
   });
 

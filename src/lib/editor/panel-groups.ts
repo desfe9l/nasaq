@@ -75,6 +75,20 @@ export const WORKSPACE_LEFT_GROUP: readonly EditorPanelId[] = [
   "report",
 ];
 
+/**
+ * Remove a window key entirely. `PanelGroups`/`PanelGroupTabs` are total records,
+ * so dropping a window is a deliberate key deletion the mapped type cannot
+ * express as an optional property.
+ */
+function dropHost(
+  groups: PanelGroups,
+  tabs: PanelGroupTabs,
+  host: EditorPanelId,
+): void {
+  delete (groups as Partial<PanelGroups>)[host];
+  delete (tabs as Partial<PanelGroupTabs>)[host];
+}
+
 /** Keep the Settings surface permanently adjacent to Properties in every layout. */
 function pinSettingsToProperties(
   groups: PanelGroups,
@@ -99,10 +113,11 @@ function pinSettingsToProperties(
   // A stored/custom layout may have Settings in a different group. Move it
   // back beside Properties, preserving any other tabs and the active tab.
   if (settingsHost && settingsHost !== propertyHost) {
-    const source = groups[settingsHost].filter((id) => id !== "settings");
+    const source: EditorPanelId[] = groups[settingsHost].filter(
+      (id) => id !== "settings",
+    );
     const previous = tabs[settingsHost];
-    delete groups[settingsHost];
-    delete tabs[settingsHost];
+    dropHost(groups, tabs, settingsHost);
     if (source.length) {
       const nextHost = source[0];
       groups[nextHost] = source;
@@ -113,12 +128,11 @@ function pinSettingsToProperties(
   // In the unlikely event of corrupt storage making Settings the host, re-key
   // that group to Properties so the pinned tab can never become a window.
   if (propertyHost === "settings") {
-    const source = groups.settings.filter(
+    const source: EditorPanelId[] = groups.settings.filter(
       (id) => id !== "settings" && id !== "properties",
     );
     const previous = tabs.settings;
-    delete groups.settings;
-    delete tabs.settings;
+    dropHost(groups, tabs, "settings");
     groups.properties = ["properties", "settings", ...source];
     tabs.properties =
       previous === "settings" || previous === "properties"
@@ -285,7 +299,7 @@ export function movePanelTab(
 
   if (tab === "properties") {
     if (from === target) {
-      const members = groups[target].filter(
+      const members: EditorPanelId[] = groups[target].filter(
         (member) => member !== "properties" && member !== "settings",
       );
       const at = Math.max(1, Math.min(members.length, index ?? members.length));
@@ -293,7 +307,7 @@ export function movePanelTab(
       groups[target] = members;
     } else {
       const settingsWasActive = tabs[from] === "settings";
-      const sourceMembers = groups[from].filter(
+      const sourceMembers: EditorPanelId[] = groups[from].filter(
         (member) => member !== "properties" && member !== "settings",
       );
       const previous = tabs[from];
@@ -386,7 +400,7 @@ export function detachPanelTab(
 
   if (tab === "properties") {
     const previous = tabs[from];
-    const sourceMembers = groups[from].filter(
+    const sourceMembers: EditorPanelId[] = groups[from].filter(
       (member) => member !== "properties" && member !== "settings",
     );
     delete groups[from];

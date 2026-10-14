@@ -145,7 +145,7 @@ function AiSection() {
               })}
             </div>}
             {status?.canManage && <div className="mt-3 flex items-center gap-3">
-              <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-brand px-3 text-[11px] font-bold text-white disabled:opacity-50"><Save className="size-3.5" aria-hidden />{saving ? "جارٍ الحفظ…" : "حفظ إعدادات المزوّدين"}</button>
+              <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-navy px-3 text-[11px] font-bold text-on-brand disabled:opacity-50"><Save className="size-3.5" aria-hidden />{saving ? "جارٍ الحفظ…" : "حفظ إعدادات المزوّدين"}</button>
               <span role="status" className="text-xs text-muted">{saved}</span>
             </div>}
           </section>
