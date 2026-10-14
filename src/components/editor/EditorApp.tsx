@@ -804,8 +804,13 @@ function Studio({
 }) {
   const [magnifierActive, setMagnifierActive] = useState(false);
   const activePageId = useEditor((s) => s.activePageId);
+  /*
+   * The document name is DATA only here: the browser tab is its one chrome
+   * surface (the editor header no longer repeats it). Editing it — and every
+   * other use — goes through the store: the dedicated «اسم المشروع» field,
+   * autosave, exports and the document metadata.
+   */
   const name = useEditor((s) => s.name);
-  const setName = useEditor((s) => s.setName);
   useEffect(() => {
     const project = name.trim() || "مستند جديد";
     document.title = `${project} — نَسَق`;
@@ -2802,11 +2807,13 @@ function Studio({
       }
     >
       {/*
-       * Toolbar — three zones, icon-first, one line at every width.
+       * Toolbar — icon-first, one line at every width.
        *
        * The canvas is the product, so the bar keeps only what belongs to the
-       * DOCUMENT: history, the scaling cluster, the document name, and the
-       * document actions (view options, save, project file, export, account).
+       * DOCUMENT: history, the scaling cluster, and the document actions
+       * (view options, save, project file, export, account). The document's
+       * NAME is not chrome here — it lives in the document itself (and in its
+       * own field), so no header cell sits above the tab strip.
        *
        * Insert actions stay in «إضافة»; appearance has its own permanent
        * icon-first control, while «عرض» keeps zoom, workspace and panel options.
@@ -3019,25 +3026,28 @@ function Studio({
           )}
         </div>
 
-        {/* ② The document itself — its name, centred, editable in place. */}
-        <div className="editor-header-zone editor-header-center">
-          <div className="editor-doc-capsule">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-label="اسم المشروع"
-              title={name || "مستند جديد"}
-              className="editor-doc-name"
-              placeholder="مستند جديد"
-            />
-            {/* Narrow phone chrome shows the short label: the surface comes
-                from the editor's ONE responsive resolver, not a probe. The
-                chip lives here on phones because the header has no logo to sit
-                beside on those surfaces; on every wider surface it is in the
-                brand lockup and this slot stays empty. */}
-            {isMobileSurface && <EditorDocumentStatus compact />}
+        {/*
+         * ② Document identity — the header carries NO report title any more.
+         *
+         * The name used to sit centred in the tool row, directly above the
+         * editor's tab strip, where it read as part of the tabs (and cost a
+         * phone a whole header row). It is untouched as DATA: the document
+         * metadata, the browser tab, autosave, exports and its own dedicated
+         * field (لوحة العناصر ← المظهر ← اسم المشروع) all still own it.
+         *
+         * What stays is the ONE document/sync status. On phones the header has
+         * no NASAQ mark to carry it, so the capsule holds the chip — never the
+         * title, never a placeholder — and on every wider surface the chip is
+         * in the brand lockup and this zone is not rendered at all, so no empty
+         * slot is left where the title used to be.
+         */}
+        {isMobileSurface && (
+          <div className="editor-header-zone editor-header-center">
+            <div className="editor-doc-capsule">
+              <EditorDocumentStatus compact />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ③ Document actions and the account. */}
         <div className="editor-header-zone editor-header-actions ms-auto">

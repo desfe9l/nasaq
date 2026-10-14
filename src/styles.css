@@ -4076,8 +4076,8 @@ body.is-resizing-panel .editor-dock-strip::before {
 /*
  * Desktop: the tool row stays one line. The surface strip under it is a
  * second row on purpose, so panel navigation stays on screen on iPad without
- * an edge menu or a hamburger. The document name is the only flexible part
- * of the tool row, and it is capped.
+ * an edge menu or a hamburger. Every zone in the tool row is fixed-width
+ * chrome, so the row can never be stretched by a document's content.
  */
 @media (min-width: 768px) {
   .editor-ui .editor-toolbar-main { flex-wrap: nowrap; }
@@ -4089,20 +4089,20 @@ body.is-resizing-panel .editor-dock-strip::before {
 /*
  * Tablet / landscape phone (768–1099px): the bar cannot hold every control on
  * one row, so the secondary ones (zoom stepper, library shortcut) yield to the
- * «عرض» and «إضافة» menus, which carry the same commands, and the document
- * name is the part that gives way. The row never exceeds the viewport.
+ * «عرض» and «إضافة» menus, which carry the same commands. The row never
+ * exceeds the viewport.
  */
 @media (min-width: 768px) and (max-width: 1099px) {
   .editor-ui .editor-zoom-cluster,
   .editor-ui .editor-header-sep:has(+ .editor-zoom-cluster),
   .editor-ui .editor-header-library { display: none; }
   .editor-ui .editor-header-center { flex-shrink: 1; }
-  .editor-ui .editor-doc-name { width: clamp(6ch, 14vw, 16ch); min-width: 6ch; }
   /*
-   * Belt for the tightest desktop band: if a long document name plus the
-   * fixed clusters still exceed the row, the tools scroll INSIDE their zone
-   * — every control stays reachable, nothing overflows the viewport edge and
-   * nothing hides off-screen.
+   * Belt for the tightest desktop band: if the fixed clusters still exceed
+   * the row, the tools scroll INSIDE their zone — every control stays
+   * reachable, nothing overflows the viewport edge and nothing hides
+   * off-screen. (No part of the document's content can widen the row: the
+   * name is not header chrome any more.)
    */
   .editor-ui .editor-header-primary {
     flex-shrink: 1;
@@ -4131,33 +4131,6 @@ body.is-resizing-panel .editor-dock-strip::before {
   border-radius: 11px;
   background: var(--editor-surface);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.editor-ui .editor-doc-name {
-  /* The document identity is chrome, not a tiny fixed label. Let Arabic names
-     breathe on desktop/tablet while keeping the capsule usable on phones. */
-  width: clamp(12ch, 16vw, 22ch);
-  min-width: 9ch;
-  max-width: 22ch;
-  height: 28px;
-  flex: 0 1 auto;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--editor-text);
-  font-size: 12px;
-  font-weight: 800;
-  text-align: center;
-  outline: none;
-  transition: background-color 120ms ease;
-}
-.editor-ui .editor-doc-name:hover,
-.editor-ui .editor-doc-name:focus {
-  background: var(--editor-hover);
-}
-.editor-ui .editor-doc-name:focus {
-  box-shadow: 0 0 0 1.5px var(--editor-accent);
 }
 
 /*
@@ -4239,17 +4212,13 @@ body.is-resizing-panel .editor-dock-strip::before {
 @media (prefers-reduced-motion: reduce) {
   .editor-sync-status.is-busy .dot { animation: none; }
 }
-/* Phones: the chip keeps its dot and short label, and yields the name first.
-   It never shrinks away — hiding the state is how the old editor lost it — so
-   the document name yields the space instead (it stays readable and scrolls
-   inside its own field). */
+/* Phones: the chip keeps its dot and short label. It never shrinks away —
+   hiding the state is how the old editor lost it — and the capsule it lives in
+   holds nothing else now that the document name is no longer header chrome. */
 .editor-ui[data-device-surface^="mobile-"] .editor-sync-status {
   max-width: 11ch;
   padding-inline: 6px;
   flex: 0 0 auto;
-}
-.editor-ui[data-device-surface^="mobile-"] .editor-doc-name {
-  min-width: 5ch;
 }
 
 /* One 32px chrome control for everything inside the capsule. */
@@ -4592,11 +4561,10 @@ body.is-resizing-panel .editor-dock-strip::before {
   .editor-header-actions > * { flex-shrink: 0; }
   .editor-ui .editor-header-center { flex: 1 1 auto; justify-content: center; }
   .editor-ui .editor-header-actions { margin-inline-start: 0; }
-  .editor-ui .editor-doc-name { width: clamp(8ch, 22vw, 14ch); min-width: 6ch; }
 }
 
 /*
- * Phone: two deliberate rows — the document identity, then the controls. The
+ * Phone: two deliberate rows — the document status, then the controls. The
  * history cluster scrolls inside its own row rather than pushing the export
  * and account controls off screen.
  */
@@ -4615,8 +4583,9 @@ body.is-resizing-panel .editor-dock-strip::before {
     overscroll-behavior-inline: contain;
   }
   .editor-ui .editor-header-actions { grid-row: 2; grid-column: 2; }
-  .editor-ui .editor-doc-capsule { width: 100%; }
-  .editor-ui .editor-doc-name { width: 100%; max-width: 100%; }
+  /* The capsule holds the status chip alone now, so it hugs it instead of
+     leaving an empty pill where the document name used to be. */
+  .editor-ui .editor-doc-capsule { width: auto; max-width: 100%; }
 }
 
 @media (max-width: 600px) {
@@ -4624,10 +4593,6 @@ body.is-resizing-panel .editor-dock-strip::before {
     min-height: 56px;
     padding-block: 5px;
     overscroll-behavior-inline: contain;
-  }
-
-  .editor-ui .editor-doc-name {
-    font-size: 11px;
   }
 
   .editor-ui .editor-header-sep {
@@ -6433,17 +6398,11 @@ button.license-badge-locked:focus-visible {
 }
 
 .editor-ui[data-device-surface^="mobile-"] .editor-doc-capsule {
-  width: 100%;
+  /* Hugs the status chip: no title field, and no empty pill in its place. */
+  width: auto;
+  max-width: 100%;
   min-width: 0;
   padding: 2px;
-}
-
-.editor-ui[data-device-surface^="mobile-"] .editor-doc-name {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  padding-inline: 5px;
-  font-size: 11px;
 }
 
 .editor-ui[data-device-surface^="mobile-"] .editor-header-actions {
@@ -6608,9 +6567,6 @@ button.license-badge-locked:focus-visible {
 @media (max-width: 350px) {
   .editor-ui[data-device-surface="mobile-portrait"] {
     --ui-control: 38px;
-  }
-  .editor-ui[data-device-surface="mobile-portrait"] .editor-doc-capsule {
-    max-width: 54px;
   }
   .editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock .product-nav-tab {
     width: 40px;
