@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { AI_PROVIDER_IDS, DEFAULT_AI_PROVIDER_SETTINGS, type AiProviderSettings } from "./provider-config";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { checkAppSafetyLimit, checkOperationLimit } from "@/lib/policy/limits";
 import { noteProviderSignal } from "@/lib/control-plane/snapshot";
@@ -451,19 +452,31 @@ export const deleteDesignMemoryFn = createServerFn({ method: "POST" })
  */
 export const nasaqAiStatusFn = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async (): Promise<{
+  .handler(async ({ context }): Promise<{
+    canManage: boolean;
     configured: boolean;
     model: string;
     capabilities: string[];
     fallbacks: string[];
     constitutionVersion: string;
+    providers: { id: string; configured: boolean; connection: "missing" | "connected" | "error"; enabled: boolean; priority: number; models: Record<string, string> }[];
   }> => {
-    const model = process.env.NASAQ_AI_MODEL?.trim() || "gemini-2.5-flash";
+    const { isAdminIdentity } = await import("@/lib/auth/admin-identity.server");
+    const { getSql } = await import("@/lib/db");
+    if (!(await isAdminIdentity(await getSql(), { id: context.userId || "", email: context.userEmail ?? null, emailVerified: context.userEmailVerified === true }))) {
+      return { canManage: false, configured: false, model: "غير متاح", capabilities: [], fallbacks: [], constitutionVersion: DESIGN_CONSTITUTION_VERSION, providers: [] };
+    }
+    const { checkProviderConnection, providerKey, readAiProviderSettings } = await import("./provider-config.server");
+    const settings = await readAiProviderSettings();
+    const providers = await Promise.all(AI_PROVIDER_IDS.map(async (id) => ({ id, configured: Boolean(providerKey(id)), connection: await checkProviderConnection(id), ...settings.providers[id] })));
+    const model = process.env.NASAQ_AI_MODEL?.trim() || settings.providers.google.models.default;
     return {
-      configured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      canManage: true,
+      configured: providers.some((provider) => provider.enabled && provider.configured),
       model,
-      fallbacks: ["gemini-3.5-flash", "gemini-3.1-flash-lite"],
+      fallbacks: providers.filter((provider) => provider.enabled && provider.configured).sort((a, b) => a.priority - b.priority).slice(1).map((provider) => `${provider.id}:${provider.models.default}`),
       constitutionVersion: DESIGN_CONSTITUTION_VERSION,
+      providers,
       capabilities: [
         "تقرير ذكي",
         "توجيه تصميمي قابل للتحرير",
@@ -473,6 +486,23 @@ export const nasaqAiStatusFn = createServerFn({ method: "GET" })
         "توأم التصميم",
       ],
     };
+  });
+
+export const nasaqAiSaveProviderSettingsFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: AiProviderSettings) => data)
+  .handler(async ({ data, context }) => {
+    const { isAdminIdentity } = await import("@/lib/auth/admin-identity.server");
+    const { getSql } = await import("@/lib/db");
+    if (!(await isAdminIdentity(await getSql(), { id: context.userId || "", email: context.userEmail ?? null, emailVerified: context.userEmailVerified === true }))) return { ok: false as const, error: "غير مصرح" };
+    const ids = Object.keys(DEFAULT_AI_PROVIDER_SETTINGS.providers) as (keyof typeof DEFAULT_AI_PROVIDER_SETTINGS.providers)[];
+    for (const id of ids) {
+      if (!data.providers[id] || !Number.isFinite(Number(data.providers[id].priority))) return { ok: false as const, error: "إعدادات المزوّد غير صالحة" };
+      for (const model of Object.values(data.providers[id].models)) if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(String(model))) return { ok: false as const, error: "اسم النموذج غير صالح" };
+    }
+    const { saveAiProviderSettings } = await import("./provider-config.server");
+    await saveAiProviderSettings(data);
+    return { ok: true as const };
   });
 
 

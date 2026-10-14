@@ -3,10 +3,11 @@ import { languageModelConfigured, visualNoteReady, type LanguageNoteRequest } fr
 
 /** Optional note from the configured language model, using the shared AI boundary. */
 export async function requestLanguageNote(input: LanguageNoteRequest): Promise<string> {
-  if (!languageModelConfigured({ GEMINI_API_KEY: process.env.GEMINI_API_KEY })) {
+  if (!languageModelConfigured({ GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY, GEMINI_API_KEY: process.env.GEMINI_API_KEY, GROK_API_KEY: process.env.GROK_API_KEY, MISTRAL_API_KEY: process.env.MISTRAL_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY })) {
     throw new Error("not_configured");
   }
   return requestGemini({
+    task: "design",
     maxOutputTokens: 400,
     timeoutMs: 30_000,
     system:
@@ -17,7 +18,7 @@ export async function requestLanguageNote(input: LanguageNoteRequest): Promise<s
 
 /** A visual note needs both a configured model and a real rendered image. */
 export async function requestVisualNote(input: LanguageNoteRequest & { images?: string[] }): Promise<string> {
-  if (!visualNoteReady({ GEMINI_API_KEY: process.env.GEMINI_API_KEY }, input.images)) {
+  if (!visualNoteReady({ GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY, GEMINI_API_KEY: process.env.GEMINI_API_KEY, GROK_API_KEY: process.env.GROK_API_KEY, MISTRAL_API_KEY: process.env.MISTRAL_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }, input.images)) {
     throw new Error("not_configured");
   }
   const image = input.images?.find((item) => item.startsWith("data:image/"));
@@ -25,6 +26,7 @@ export async function requestVisualNote(input: LanguageNoteRequest & { images?: 
   const match = image.match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) throw new Error("not_configured");
   return requestGemini({
+    task: "image",
     maxOutputTokens: 400,
     timeoutMs: 45_000,
     system:

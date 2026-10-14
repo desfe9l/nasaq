@@ -24,6 +24,8 @@ import {
   type DesignBriefInput,
 } from "./design-contract.ts";
 import { constitutionSystemAddendum } from "@/lib/intelligence/design-constitution";
+import { AI_PROVIDER_IDS, type AiProviderId, type AiTask } from "./provider-config";
+import { readAiProviderSettings, providerKey } from "./provider-config.server";
 
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -43,6 +45,7 @@ export type GeminiProviderErrorCode =
   | "provider_error";
 
 export type GeminiRequest = {
+  task?: AiTask;
   model?: string;
   system: string;
   userParts: GeminiPart[];
@@ -233,7 +236,32 @@ async function classifyGeminiError(response: Response): Promise<GeminiProviderEr
  * details never cross this function as raw responses.
  */
 export async function requestGemini(request: GeminiRequest): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const settings = await readAiProviderSettings();
+  const providers = AI_PROVIDER_IDS
+    .filter((id) => settings.providers[id].enabled && providerKey(id))
+    .sort((a, b) => settings.providers[a].priority - settings.providers[b].priority);
+  if (!providers.length) throw new GeminiProviderError("not_configured");
+  let lastError: GeminiProviderError | null = null;
+  for (const id of providers) {
+    const model = id === "google"
+      ? process.env.NASAQ_AI_MODEL?.trim() || settings.providers[id].models[request.task ?? "default"] || settings.providers[id].models.default
+      : settings.providers[id].models[request.task ?? "default"] || settings.providers[id].models.default;
+    try {
+      const text = id === "google"
+        ? await requestGoogle({ ...request, model })
+        : await requestOpenAiCompatible(id, providerKey(id), model, request);
+      if (request.modelSink) request.modelSink.model = `${id}:${model}`;
+      return text;
+    } catch (error) {
+      if (error instanceof GeminiProviderError && error.code === "provider_aborted") throw error;
+      lastError = error instanceof GeminiProviderError ? error : new GeminiProviderError("provider_error");
+    }
+  }
+  throw lastError ?? new GeminiProviderError("provider_unavailable");
+}
+
+async function requestGoogle(request: GeminiRequest): Promise<string> {
+  const apiKey = providerKey("google");
   if (!apiKey) throw new GeminiProviderError("not_configured");
 
   const models = candidateModels(request.model);
@@ -252,6 +280,64 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
     }
   }
   throw lastInvalid ?? new GeminiProviderError("invalid_model");
+}
+
+const OPENAI_BASE_URL: Record<Exclude<AiProviderId, "google">, string> = {
+  grok: "https://api.x.ai/v1/chat/completions",
+  mistral: "https://api.mistral.ai/v1/chat/completions",
+  openrouter: "https://openrouter.ai/api/v1/chat/completions",
+};
+
+async function requestOpenAiCompatible(id: Exclude<AiProviderId, "google">, apiKey: string, model: string, request: GeminiRequest): Promise<string> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, request.timeoutMs ?? 45_000);
+  const abort = () => controller.abort();
+  request.signal?.addEventListener("abort", abort, { once: true });
+  try {
+    const content = request.userParts.map((part) => "text" in part
+      ? { type: "text", text: part.text }
+      : { type: "image_url", image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` } });
+    const endpoint = id === "grok" && apiKey.startsWith("gsk_") ? "https://api.groq.com/openai/v1/chat/completions" : OPENAI_BASE_URL[id];
+    const selectedModel = id === "grok" && apiKey.startsWith("gsk_") && model.startsWith("grok-") ? "openai/gpt-oss-20b" : model;
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [{ role: "system", content: request.system }, { role: "user", content: content.length === 1 && content[0].type === "text" ? content[0].text : content }],
+        temperature: request.temperature ?? 0.2,
+        max_tokens: Math.min(8_192, request.maxOutputTokens),
+        ...(request.jsonResponse ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+    if (!response.ok) {
+      let body = "";
+      try { body = await response.text(); } catch { /* response details are not exposed */ }
+      const lower = body.toLowerCase();
+      if (response.status === 401 || (response.status === 403 && !/quota|credit|billing|rate.?limit/.test(lower))) throw new GeminiProviderError("provider_auth");
+      if (/quota|credit|insufficient|billing/.test(lower)) throw new GeminiProviderError("provider_quota");
+      if (response.status === 429) throw new GeminiProviderError("provider_rate");
+      if (response.status === 408 || response.status === 504) throw new GeminiProviderError("provider_timeout");
+      if (response.status >= 500) throw new GeminiProviderError("provider_unavailable");
+      if (response.status === 404) throw new GeminiProviderError("invalid_model");
+      throw new GeminiProviderError("provider_error");
+    }
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
+    const raw = payload.choices?.[0]?.message?.content;
+    const text = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((part) => part && typeof part === "object" && "text" in part ? String((part as {text: unknown}).text) : "").join("") : "";
+    if (!text.trim()) throw new GeminiProviderError("provider_empty");
+    return text.trim();
+  } catch (error) {
+    if (error instanceof GeminiProviderError) throw error;
+    if (request.signal?.aborted) throw new GeminiProviderError("provider_aborted");
+    if (timedOut) throw new GeminiProviderError("provider_timeout");
+    throw new GeminiProviderError("provider_unavailable");
+  } finally {
+    clearTimeout(timeout);
+    request.signal?.removeEventListener("abort", abort);
+  }
 }
 
 async function requestGeminiModel(apiKey: string, model: string, request: GeminiRequest): Promise<string> {
@@ -422,6 +508,7 @@ export function parseProviderJson(text: string): unknown {
 export async function generateReportDraft(rawInput: ReportDraftInput): Promise<ReportDraft> {
   const input = normalizeDraftInput(rawInput);
   const text = await requestGemini({
+    task: "report",
     model: modelName(),
     temperature: 0.2,
     maxOutputTokens: 2_400,
@@ -461,6 +548,7 @@ export async function generateDesignBrief(
   const input = normalizeDesignBriefInput(rawInput);
   if (!input.prompt) throw new GeminiProviderError("provider_error");
   const text = await requestGemini({
+    task: "design",
     model: modelName(),
     temperature: input.mode === "professional" ? 0.25 : 0.45,
     maxOutputTokens: 16_000,
@@ -499,6 +587,7 @@ export async function transformSelection(rawInput: SelectionActionInput): Promis
   const input = normalizeSelectionInput(rawInput);
   if (!validSelectionInput(input)) throw new GeminiProviderError("provider_error");
   const text = await requestGemini({
+    task: "selection",
     model: modelName(),
     temperature: 0.2,
     maxOutputTokens: 1_600,
@@ -522,6 +611,7 @@ export async function analyzeImage(rawInput: ImageAnalysisInput): Promise<ImageA
   const match = input.imageData.match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) throw new GeminiProviderError("provider_error");
   const text = await requestGemini({
+    task: "image",
     model: modelName(),
     temperature: 0,
     maxOutputTokens: 1_600,
