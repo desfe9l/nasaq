@@ -90,12 +90,20 @@ export function AccountBadge({
 }) {
   const meta = BADGE_META[tier];
   const Icon = meta.Icon;
-  const label = (tier === "ADMIN" && isOwner) ? "المالك الرئيسي" : meta.label;
+  /*
+   * The owner refinement belongs to the roomy surfaces, not the chip: «المالك
+   * الرئيسي» is wider than every other label, and a pill that changes width
+   * inside the account chip re-flows the whole header (and leaves an open card
+   * measured against a chip that has since moved). The chip therefore prints one
+   * of four short states, and the owner detail stays in the tooltip.
+   */
+  const label = !compact && tier === "ADMIN" && isOwner ? "المالك الرئيسي" : meta.label;
   return (
     <span
       data-account-status={tier}
+      aria-busy={tier === "LOADING" || undefined}
       className={cn(
-        "inline-flex shrink-0 items-center whitespace-nowrap gap-1 rounded-full border py-0.5 text-[11px] font-bold leading-4",
+        "account-badge inline-flex shrink-0 items-center whitespace-nowrap gap-1 rounded-full border py-0.5 text-[11px] font-bold leading-4",
         compact ? "px-2" : "px-2.5",
         meta.className,
         className,

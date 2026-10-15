@@ -14,7 +14,7 @@ import { BrandLogo } from "@/components/site/SiteChrome";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useLicense } from "@/lib/license/client";
-import { licenseSummary } from "@/lib/license/summary";
+import { AccountSubscriptionCard } from "@/components/site/AccountSubscriptionCard";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
@@ -128,39 +128,14 @@ export function EditorSettingsDialog({
   );
 }
 
-/** One label/value row in the settings sheets. */
-function Row({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-2">
-      <dt className="shrink-0 pt-0.5 text-[11px] font-bold text-muted">
-        {label}
-      </dt>
-      <dd className="min-w-0 text-end text-[12px] font-extrabold">
-        {children}
-      </dd>
-    </div>
-  );
-}
-
 function AccountSection() {
   const { user } = useCurrentUserState();
   const identity = accountIdentity(user);
-  const { isLoading, hasLicense, isAdmin, isSuspended, license, trial, activate } =
-    useLicense(user?.id, user?.primaryEmail);
-  const summary = licenseSummary({
-    isLoading,
-    isAdmin,
-    isSuspended,
-    hasLicense,
-    license,
-    trial,
-  });
+  // Only the OPERATION belongs here. The state itself — package, dates, the days
+  // left — is rendered by the shared account/subscription section below, so the
+  // dialog cannot describe the account differently from the header card and
+  // `/account`, and cannot grow a second countdown of its own.
+  const { activate } = useLicense(user?.id, user?.primaryEmail);
 
   const [key, setKey] = useState("");
   const [activating, setActivating] = useState(false);
@@ -208,38 +183,11 @@ function AccountSection() {
       </section>
 
       <section className="rounded-[12px] border border-line p-4">
-        <h3 className="text-[11px] font-extrabold text-muted">
-          الترخيص والاشتراك
-        </h3>
-        <dl className="mt-1 divide-y divide-line">
-          <Row label="الحالة">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold",
-                summary.tone === "licensed" && "bg-ok/12 text-success",
-                summary.tone === "suspended" && "bg-danger/12 text-error",
-                (summary.tone === "free" || summary.tone === "loading") &&
-                  "bg-line-2 text-muted",
-              )}
-            >
-              {summary.tone === "loading" && (
-                <Loader2 className="size-3 animate-spin" aria-hidden />
-              )}
-              {summary.label}
-            </span>
-          </Row>
-          {license?.keyPrefix && (
-            <Row label="المفتاح">
-              <span dir="ltr">•••• {license.keyPrefix}</span>
-            </Row>
-          )}
-          {summary.detail && (
-            <Row label="التفاصيل">
-              <span className="text-[11px] font-bold">{summary.detail}</span>
-            </Row>
-          )}
-        </dl>
+        <AccountSubscriptionCard user={user} variant="menu" />
 
+        <h4 className="mt-4 text-[11px] font-extrabold text-muted">
+          تفعيل مفتاح على هذا الحساب
+        </h4>
         <div className="mt-3 flex items-center gap-2">
           <input
             value={key}

@@ -46,10 +46,14 @@ import { WorkspaceMark } from "./WorkspaceMark";
 import { useAccountTier } from "./AccountBadge";
 import {
   AccountMenuPanel,
+  AccountMenuRowSlot,
   accountMenuItemClass,
   accountMenuItemMutedClass,
+  accountMenuLayerClass,
+  useAccountMenuDismiss,
   useAccountMenuPlacement,
 } from "./AccountMenuPanel";
+import { AccountSubscriptionCard } from "./AccountSubscriptionCard";
 
 /**
  * The glyph of each appearance state. The Arabic names, hints and the cycle
@@ -171,10 +175,15 @@ function HeaderAccount() {
    * entitlement, so the menu item appears only for accounts that hold it
    * (the same probe the service page itself uses — never the security
    * boundary, which the server re-checks per call).
+   *
+   * Keyed on the account id rather than the session object: an effect that
+   * depends on a derived object re-runs on every render of the header, and the
+   * header re-renders often. The id is what this probe is actually about.
    */
   const [canImport, setCanImport] = useState(false);
+  const accountId = user?.id ?? null;
   useEffect(() => {
-    if (!user) return;
+    if (!accountId) return;
     let alive = true;
     void adminTemplatesAccessFn()
       .then((access) => alive && setCanImport(access.ok))
@@ -182,11 +191,12 @@ function HeaderAccount() {
     return () => {
       alive = false;
     };
-  }, [user]);
+  }, [accountId]);
   useEffect(() => setHydrated(true), []);
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const { placement, place, reset } = useAccountMenuPlacement({ triggerRef: buttonRef });
 
   /** Closing forgets the measurement too, so a stale card can never reopen. */
@@ -195,23 +205,15 @@ function HeaderAccount() {
     reset();
   }, [reset]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeMenu();
-    };
-    /*
-     * Outside clicks fall THROUGH to whatever they landed on — no scrim stands
-     * between the visitor and the page — which is why this is a window listener
-     * rather than a full-screen layer.
-     */
-    window.addEventListener("click", closeMenu);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", closeMenu);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, closeMenu]);
+  /*
+   * The whole dismissal contract, shared with the editor: a press that lands
+   * outside the card, Escape, or the card's own close button. NOT a blanket
+   * window `click` listener — that closed the card every time an author tapped
+   * its padding, its identity block, or the gap between two rows, which is what
+   * read as "the menu disappears on any touch". Nothing here stands between the
+   * visitor and the page either: outside presses fall through to the page.
+   */
+  useAccountMenuDismiss({ open, panelRef, triggerRef: buttonRef, onClose: closeMenu });
 
   if (!hydrated || !authEnabled || isPending) return null;
 
@@ -239,7 +241,6 @@ function HeaderAccount() {
   // account area always print the same name for the same session.
   const { label } = accountIdentity(user);
 
-
   /** Measure first, then open: the card's first paint is already placed. */
   const openMenu = () => {
     if (!place()) return;
@@ -249,9 +250,14 @@ function HeaderAccount() {
   /*
    * One account menu for all viewport sizes; mobile navigation does not mount
    * another identity/status control.
+   *
+   * Order is fixed and never depends on an async answer flipping it: the
+   * account's standing first (it is the thing the card is opened to check),
+   * then the work, then the administrative doors, then signing out.
    */
   const items = (
     <>
+      <AccountSubscriptionCard user={user} variant="menu" />
       {canImport && (
         <a href={IMPORT_ROUTE} role="menuitem" className={accountMenuItemClass}>
           <Layers className="size-4 opacity-70" aria-hidden />
@@ -311,19 +317,23 @@ function HeaderAccount() {
         placement &&
         createPortal(
           /*
-           * The floating card: `absolute` inside a full-viewport fixed layer, so
-           * the header's stacking context or a scroll container can never clip
-           * it. The placement is measured from the HEADER's bottom edge (not the
-           * chip's), which is what keeps the card clear of the toolbar and its
-           * buttons instead of starting inside the bar. `pointer-events-none`
-           * lets an outside click fall through to the page beneath (the window
-           * listener above closes the card).
+           * The floating card: `absolute` inside `account-menu-layer` — one
+           * full-viewport, pointer-transparent layer on the shared dropdown
+           * elevation, so the header's stacking context, a scroll container or
+           * a page dialog can neither clip the card nor bury it. The placement
+           * is measured from the HEADER's bottom edge (not the chip's), which is
+           * what keeps the card clear of the bar and its buttons instead of
+           * starting inside them. `pointer-events: none` on the layer lets an
+           * outside press reach the page beneath it; `account-menu-panel-floating`
+           * switches the card itself back on.
            */
-          <div className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]">
+          <div className={accountMenuLayerClass}>
             <AccountMenuPanel
               user={user}
               label="قائمة الحساب"
               className="account-menu-panel-floating"
+              panelRef={panelRef}
+              onClose={closeMenu}
               style={{
                 insetInlineEnd: placement.insetInlineEnd,
                 top: placement.top,
@@ -571,9 +581,17 @@ export function BrandLockup() {
 }
 
 
-/** Admin links for site menu. */
+/**
+ * Admin links for the site menu.
+ *
+ * Its own component so `useAccountTier` mounts only while the card is open for
+ * a real session. While the server is still answering, the block reserves the
+ * single row it will occupy: the rows above it therefore never slide down the
+ * moment the tier resolves, which is what made the list look out of order.
+ */
 function AdminSiteLinks({ user }: { user: AppUser }) {
   const { tier } = useAccountTier(user);
+  if (tier === "LOADING") return <AccountMenuRowSlot />;
   if (tier !== "ADMIN") return null;
   return (
     <>

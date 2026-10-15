@@ -95,5 +95,79 @@ test("opening account or mobile navigation cannot mount another status", () => {
   assert.equal((header.match(/<HeaderAccount\s/g) || []).length, 1);
   assert.doesNotMatch(header, /HeaderAccount variant/);
   assert.match(header, /if \(open\) closeMenu\(\)/);
-  assert.match(header, /event.key === "Escape"/);
+  /*
+   * Dismissal is one shared rule, not a per-surface listener: Escape and a press
+   * that lands outside the card, decided by containment. A surface that adds its
+   * own window listener is how the card started vanishing on any touch.
+   */
+  assert.match(header, /useAccountMenuDismiss\(\{ open, panelRef, triggerRef: buttonRef, onClose: closeMenu \}\)/);
+  assert.match(panel, /installAccountMenuDismiss\(\{/, "one installer for both surfaces");
+  const rule = read("src/lib/account-menu.ts");
+  assert.match(rule, /event\.key === "Escape"/, "Escape leaves; nothing else in the card does");
+  assert.match(rule, /events\.addEventListener\("pointerdown", press, \{ capture: true \}\)/);
+  for (const [name, text] of [["site", header], ["editor", read("src/components/editor/EditorAccountMenu.tsx")]]) {
+    assert.doesNotMatch(text, /addEventListener\("click", closeMenu\)/, `${name}: no blanket click-to-close`);
+    assert.doesNotMatch(text, /addEventListener\("(scroll|resize)", closeMenu/, `${name}: a scroll or resize re-measures, never closes`);
+    assert.doesNotMatch(text, /onPointerDown=\{closeMenu\}/, `${name}: no invisible sheet over the page`);
+  }
+});
+
+test("the session identity is stable, so account effects run once per account", () => {
+  /*
+   * The account surfaces key their effects on `user`. `useCurrentUserState()`
+   * therefore has to hand out the SAME object until the session store actually
+   * publishes a different answer — a fresh literal on every render turns every
+   * `useEffect([user])` into a per-render fetch, and the account page (load →
+   * setData → render → load) visibly shakes. These assertions pin the memo and
+   * the id-keyed reload, because the failure is invisible in a static render.
+   */
+  const hook = read("src/lib/auth/use-current-user.ts");
+  assert.match(hook, /const user = useMemo<AppUser \| null>\(/);
+  assert.match(hook, /\}, \[data\]\);/, "memoised on the store snapshot, not rebuilt per render");
+  assert.match(hook, /const state = useMemo<CurrentUserState>\(/);
+  assert.match(hook, /const DEV_USER_STATE: CurrentUserState = \{ user: DEV_USER, isPending: false \};/);
+  assert.doesNotMatch(
+    hook,
+    /return \{\s*user: user\s*\?/,
+    "no un-memoised object literal handed to 40 consumers",
+  );
+
+  const page = read("src/components/site/AccountPage.tsx");
+  assert.match(page, /const accountId = user\?\.id \?\? null;/);
+  assert.match(page, /\}, \[isPending, accountId, load\]\);/, "reload keys on the account, not the object");
+  assert.doesNotMatch(page, /\[isPending, user, load\]/);
+  assert.match(page, /<AccountSubscriptionCard user=\{user\} variant="page" \/>/);
+  assert.match(page, /AccountOverviewSkeleton/, "the payment blocks load into a box of their own size");
+});
+
+test("the subscription section renders derived facts and no local arithmetic", () => {
+  const card = read("src/components/site/AccountSubscriptionCard.tsx");
+  // Dates, day counts and the meter come from the pure module — the component
+  // cannot invent its own countdown, and cannot recompute one on a timer.
+  assert.match(card, /from "@\/lib\/account\/subscription"/);
+  assert.doesNotMatch(card, /new Date\(|Date\.now|86_400|getTime\(/);
+  assert.doesNotMatch(card, /setInterval|setTimeout/, "a ticking countdown is a repaint loop with extra steps");
+  assert.doesNotMatch(card, /animate-pulse/, "loading placeholders do not shimmer");
+  // The account's standing must never be decided in the view: it is read.
+  assert.doesNotMatch(card, /useState/, "the section holds no state of its own");
+  assert.match(card, /role="progressbar"/);
+});
+
+test("every subscription class the section writes has a rule in the sheet", () => {
+  const sources = [
+    "src/components/site/AccountSubscriptionCard.tsx",
+    "src/components/site/SiteChrome.tsx",
+    "src/components/editor/EditorAccountMenu.tsx",
+    "src/components/editor/EditorSettingsDialog.tsx",
+  ];
+  const sheet = read("src/styles.css");
+  const written = new Set();
+  for (const path of sources) {
+    const src = read(path);
+    for (const match of src.matchAll(/"((?:subscription|account-menu)-[a-z0-9-]+)"/g)) written.add(match[1]);
+  }
+  assert.ok(written.size >= 20, `expected the section's classes to be collected, saw ${written.size}`);
+  const orphan = [...written].filter((name) => !sheet.includes(`.${name}`));
+  // A class with no rule is a decoration that silently does nothing on screen.
+  assert.deepEqual(orphan, [], `classes written but never styled: ${orphan.join(", ")}`);
 });

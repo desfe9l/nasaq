@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -26,10 +26,14 @@ import {
 } from "@/lib/site-routes";
 import {
   AccountMenuPanel,
+  AccountMenuRowSlot,
   accountMenuItemClass,
   accountMenuItemMutedClass,
+  accountMenuLayerClass,
+  useAccountMenuDismiss,
   useAccountMenuPlacement,
 } from "@/components/site/AccountMenuPanel";
+import { AccountSubscriptionCard } from "@/components/site/AccountSubscriptionCard";
 import { cn } from "@/lib/utils";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
@@ -46,11 +50,20 @@ import { requestLeave } from "@/lib/editor/leave-controller";
  * Licence state is the server's too — `useAccountTier` → `getLicenseStatusFn` —
  * and is displayed, never decided, here.
  *
- * Deliberately compact: an avatar plus the account name. The toolbar is one
- * compact control owns its status; the expanded card adds full identity and actions. The card itself is
- * shared with the site chrome (`AccountMenuPanel`) — geometry included — and is
- * portalled to `<body>` and measured from the TOOLBAR's bottom edge, so a
- * wrapped toolbar row can never end up under the card.
+ * Deliberately compact: an avatar plus the account name. The toolbar keeps the
+ * status chip; the expanded card adds full identity, the account/subscription
+ * details and the actions. The card itself is shared with the site chrome
+ * (`AccountMenuPanel`) — geometry and dismissal included — and is portalled to
+ * `<body>` on the dropdown layer, measured from the TOOLBAR's bottom edge, so a
+ * wrapped toolbar row can never end up under the card and the card can never
+ * cover a tool.
+ *
+ * Opening and closing are the part that used to fight the author, so they are
+ * stated once here: the chip toggles, a press outside the card or Escape leaves
+ * it, and NOTHING else does. A scroll of the toolbar strip, a rotation, the
+ * keyboard sliding up on a tablet or a re-measure of the chip repositions the
+ * card instead of closing it — and the layer it floats on is pointer-transparent
+ * except for the card, so the workspace behind it stays usable.
  */
 
 /**
@@ -65,6 +78,9 @@ import { requestLeave } from "@/lib/editor/leave-controller";
  */
 function AdminEditorLinks({ user }: { user: AppUser }) {
   const { tier } = useAccountTier(user);
+  // A row that appears when the answer arrives moves every row under it, so the
+  // slot is held open until the tier is known.
+  if (tier === "LOADING") return <AccountMenuRowSlot />;
   if (tier !== "ADMIN") return null;
   return (
     <>
@@ -78,6 +94,7 @@ function AdminEditorLinks({ user }: { user: AppUser }) {
 
 function MyTemplatesLink({ user }: { user: AppUser }) {
   const { tier } = useAccountTier(user);
+  if (tier === "LOADING") return <AccountMenuRowSlot />;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
     <a href={templatesFilterPathFor({ pill: "custom" })} role="menuitem" className={accountMenuItemClass}>
@@ -88,6 +105,7 @@ function MyTemplatesLink({ user }: { user: AppUser }) {
 }
 function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: () => void }) {
   const { tier } = useAccountTier(user);
+  if (tier === "LOADING") return <AccountMenuRowSlot />;
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
     <button type="button" role="menuitem" onClick={onRequest} className={accountMenuItemClass}>
@@ -110,6 +128,7 @@ export function EditorAccountMenu({
   /* The open document, so its own page is one click away from inside it. */
   const openProjectId = useEditor((s) => s.id);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -121,22 +140,14 @@ export function EditorAccountMenu({
     reset();
   }, [reset]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeMenu();
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", closeMenu);
-    // The toolbar strip scrolls horizontally, which would strand a menu that
-    // stays anchored to where the chip used to be.
-    window.addEventListener("scroll", closeMenu, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", closeMenu);
-      window.removeEventListener("scroll", closeMenu, true);
-    };
-  }, [open, closeMenu]);
+  /*
+   * Escape and a press outside the card. Deliberately NOT: a `scroll` listener
+   * (the toolbar strip and the card itself both scroll — closing on scroll threw
+   * the card away the moment the author scrolled inside it), a `resize` listener
+   * (a tablet rotating, or a phone's URL bar collapsing, is a resize), or a
+   * full-viewport layer that swallows every press in the workspace.
+   */
+  useAccountMenuDismiss({ open, panelRef, triggerRef: buttonRef, onClose: closeMenu });
 
   // Same rule as the site chrome: nothing renders until the session resolves,
   // so a signed-in author never sees a sign-in prompt flash on reload.
@@ -201,19 +212,19 @@ export function EditorAccountMenu({
         placement &&
         createPortal(
           /*
-           * The scrim-less layer: full-viewport, above the toolbar's own layer,
-           * so the card floats free of the strip it came from. Pointer-down
-           * outside the card closes it; the card swallows its own.
+           * The card floats on the shared dropdown layer: full-viewport but
+           * pointer-transparent, so the workspace behind it keeps working and no
+           * toolbar row, drawer or panel can clip it. Outside presses fall
+           * THROUGH to the page and are answered by `useAccountMenuDismiss`
+           * (containment), not by an invisible sheet laid over the editor.
            */
-          <div
-            className="fixed inset-0 z-[var(--z-dropdown)]"
-            onPointerDown={closeMenu}
-            tabIndex={-1}
-          >
+          <div className={accountMenuLayerClass}>
             <AccountMenuPanel
               user={user}
               label="قائمة الحساب"
               className="account-menu-panel-floating"
+              panelRef={panelRef}
+              onClose={closeMenu}
               style={{
                 insetInlineEnd: placement.insetInlineEnd,
                 top: placement.top,
@@ -221,6 +232,7 @@ export function EditorAccountMenu({
                 maxHeight: placement.maxHeight,
               }}
             >
+              <AccountSubscriptionCard user={user} variant="menu" />
               <NewDocumentMenuItem
                 user={user}
                 onRequest={() => {
