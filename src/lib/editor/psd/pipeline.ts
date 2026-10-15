@@ -159,3 +159,14 @@ export function applyAssetDecisions(
   for (const page of next.pages) visit(page.elements);
   return { project: next, saves };
 }
+
+/**
+ * Import a PSD file and return the NASAQ project.
+ * @param arrayBuffer The PSD file contents.
+ * @param fileName The name of the file.
+ * @returns The NASAQ project.
+ */
+export async function importPSDToCanvas(arrayBuffer: ArrayBuffer, fileName: string): Promise<Project> {
+  const result = await importPsdBytes(arrayBuffer, fileName);
+  return result.project;
+}
