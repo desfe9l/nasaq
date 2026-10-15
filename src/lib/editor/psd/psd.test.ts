@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { initializeCanvas, readPsd, writePsd, type Layer } from "ag-psd";
 
+// Mock localStorage for storage tests
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+Object.defineProperty(globalThis, "localStorage", { value: localStorageMock });
+
+// Mock IndexedDB for storage tests
+import "fake-indexeddb/auto";
+
 import {
   applyAssetDecisions,
   assertEditablePsdValidation,
@@ -751,5 +772,73 @@ describe("PSD → NASAQ", () => {
     assert.equal(el.type, "text");
     assert.equal(el.style.blur, 12.7, "the blur reaches the element as an editable style");
     assert.equal(el.content, "عنوان");
+  });
+
+  it("importProject rejects concurrent calls (importing guard)", async () => {
+    const { useEditor } = await import("../store.ts");
+    useEditor.setState({
+      hydrated: true,
+      entitlementsResolved: true,
+      entitlementsOwner: "__anon__",
+      sessionOwner: "__anon__",
+    });
+    const store = useEditor.getState();
+
+    const project = {
+      version: 2,
+      name: "Test Project",
+      theme: "official",
+      pages: [
+        {
+          id: "p1",
+          name: "Page 1",
+          w: 210,
+          h: 297,
+          elements: [],
+        },
+      ],
+    } as any;
+
+    // Start two concurrent imports
+    const p1 = store.importProject(project);
+    const p2 = store.importProject(project);
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+    const results = [r1, r2].sort((a, b) => (a === b ? 0 : a ? -1 : 1));
+    // Exactly one should succeed, the other should be rejected by the importing guard
+    assert.equal(results[0], true, "first import should succeed");
+    assert.equal(results[1], false, "concurrent import should be rejected");
+  });
+
+  it("importProject allows sequential imports after first completes", async () => {
+    const { useEditor } = await import("../store.ts");
+    useEditor.setState({
+      hydrated: true,
+      entitlementsResolved: true,
+      entitlementsOwner: "__anon__",
+      sessionOwner: "__anon__",
+    });
+    const store = useEditor.getState();
+
+    const project = {
+      version: 2,
+      name: "Test Project",
+      theme: "official",
+      pages: [
+        {
+          id: "p1",
+          name: "Page 1",
+          w: 210,
+          h: 297,
+          elements: [],
+        },
+      ],
+    } as any;
+
+    const r1 = await store.importProject(project);
+    assert.equal(r1, true, "first import should succeed");
+
+    const r2 = await store.importProject(project);
+    assert.equal(r2, true, "second sequential import should also succeed");
   });
 });

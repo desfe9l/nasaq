@@ -1353,6 +1353,7 @@ export const useEditor = create<EditorStore>((set, get) => {
   let activeSaveGen = -1;
   let saveSessionGen = 0;
   let cleanSnapshot: ProjectSnapshot = projectSlice(blank);
+  let importing = false;
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
   const scheduleSave = (delay = 900) => {
@@ -3716,6 +3717,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!requireEditorAccess()) {
         return false;
       }
+      if (importing) {
+        return false;
+      }
       if (!data || !Array.isArray(data.pages) || !data.pages.length) {
         toast.error("ملف المشروع غير صالح — لا يحتوي على صفحات");
         return false;
@@ -3818,10 +3822,12 @@ export const useEditor = create<EditorStore>((set, get) => {
           return false;
         }
       }
-      const incoming =
-        existing ||
-        normalizeProject({
-          version: data.version || 2,
+      importing = true;
+      try {
+        const incoming =
+          existing ||
+          normalizeProject({
+            version: data.version || 2,
           nativeFormat: data.nativeFormat,
           nativeSourceProjectId: data.nativeSourceProjectId,
           embeddedFonts: data.embeddedFonts,
@@ -3917,6 +3923,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         toast.success(opts.successMessage || "تم استيراد المشروع");
       }
       return true;
+    } finally {
+      importing = false;
+    }
     },
 
     setZoom: (z) => {
