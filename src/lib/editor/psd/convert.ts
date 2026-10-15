@@ -214,7 +214,32 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     return el;
   }
 
-  if (node.kind === "adjustment" || node.kind === "empty") {
+  if (node.kind === "adjustment") {
+    // Adjustment layers become full-page editable elements with color properties.
+    const box = placeBox(node, acc.dpi);
+    const el = elementBase(acc, node, "shape", false);
+    el.x = box.x;
+    el.y = box.y;
+    el.w = box.w;
+    el.h = box.h;
+    el.style = {
+      fill: "#ffffff",
+      opacity: node.opacity,
+      blendMode: node.cssBlend as ElStyle["blendMode"],
+      brightness: node.effects.brightness,
+      contrast: node.effects.contrast,
+      saturation: node.effects.saturation,
+      sharpness: node.effects.sharpness,
+      ...(node.effects.hue !== undefined ? { hue: node.effects.hue } : {}),
+    };
+    stampOrigin(el, box, node);
+    applyCommonStyle(el, node);
+    acc.shapeCount += 1;
+    acc.native += 1;
+    if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
+    return el;
+  }
+  if (node.kind === "empty") {
     noteFallback(
       acc,
       node,

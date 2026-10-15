@@ -900,7 +900,25 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
 
   if (layer.adjustment) {
     node.kind = "adjustment";
-    issues.push(`طبقة ضبط (${layer.adjustment.type}) ليس لها عنصر مقابل في نَسَق`);
+    const adj = layer.adjustment;
+    const adjType = String(adj.type || "").toLowerCase();
+    // Map Photoshop adjustment types to NASAQ editable color properties.
+    if (adjType.includes("brightness") || adjType.includes("contrast")) {
+      if (typeof adj.brightness === "number") node.effects.brightness = adj.brightness;
+      if (typeof adj.contrast === "number") node.effects.contrast = adj.contrast;
+      issues.push("تعديل السطوع والتباين");
+    } else if (adjType.includes("hue") || adjType.includes("saturation")) {
+      if (typeof adj.hue === "number") node.effects.hue = adj.hue;
+      if (typeof adj.saturation === "number") node.effects.saturation = adj.saturation;
+      if (typeof adj.lightness === "number") node.effects.brightness = adj.lightness;
+      issues.push("تعديل التشبع واللون");
+    } else if (adjType.includes("levels")) {
+      issues.push("تعديل المستويات");
+    } else if (adjType.includes("curves")) {
+      issues.push("تعديل المنحنيات");
+    } else {
+      issues.push(`طبقة ضبط: ${adj.type}`);
+    }
     return node;
   }
 

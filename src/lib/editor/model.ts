@@ -223,6 +223,8 @@ export interface ElStyle {
   contrast?: number;
   /** Image color saturation, percent. 100 is unchanged. */
   saturation?: number;
+  /** Hue shift in degrees, from adjustment layers. */
+  hue?: number;
   /** Image clarity, percent. 0 is unchanged; higher sharpens. */
   sharpness?: number;
   stroke?: number;
