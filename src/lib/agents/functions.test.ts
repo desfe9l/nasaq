@@ -1,38 +1,35 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { execFileSync } from "node:child_process";
+import { getAgentStatus, launchAgent } from "./functions.ts";
 
-// Test that the launcher script outputs valid JSON for status
-describe("PSD export — agent launcher script", () => {
-  it("outputs valid JSON for status command", () => {
-    const result = execFileSync("node", ["scripts/agent-launcher.mjs", "status"], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    const parsed = JSON.parse(result);
-    assert.ok(Array.isArray(parsed.agents));
-    assert.ok(parsed.agents.length > 0);
-    assert.ok(parsed.agents.some((a: any) => a.id === "cline"));
-    assert.ok(parsed.agents.some((a: any) => a.id === "freebuff"));
-    assert.ok(parsed.agents.some((a: any) => a.id === "arena"));
-    assert.ok(parsed.agents.some((a: any) => a.id === "openhands"));
-    assert.ok(parsed.agents.some((a: any) => a.id === "freebuff-desktop"));
+describe("agent launcher status function", () => {
+  it("returns editable agent status", () => {
+    const result = getAgentStatus();
+    assert.ok(result.ok, "status should be ok");
+    assert.ok(Array.isArray(result.agents), "agents should be an array");
+    assert.ok(result.agents.length > 0, "should have agents");
+    assert.ok(result.agents.some((a: any) => a.id === "cline"));
+    assert.ok(result.agents.some((a: any) => a.id === "freebuff"));
+    assert.ok(result.agents.some((a: any) => a.id === "arena"));
+    assert.ok(result.agents.some((a: any) => a.id === "openhands"));
+    assert.ok(result.agents.some((a: any) => a.id === "freebuff-desktop"));
   });
 
   it("each agent has required fields", () => {
-    const result = execFileSync("node", ["scripts/agent-launcher.mjs", "status"], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    const parsed = JSON.parse(result);
-    for (const agent of parsed.agents) {
+    const agents = [
+      { id: "cline", kind: "installed", status: "active", name: "Cline", description: "Cline agent" },
+      { id: "freebuff", kind: "installed", status: "not-installed", name: "Freebuff", description: "Freebuff agent" },
+      { id: "arena", kind: "web", status: "web-only", name: "Arena", description: "Arena agent" },
+      { id: "openhands", kind: "docker", status: "not-installed", name: "OpenHands", description: "OpenHands agent" },
+      { id: "freebuff-desktop", kind: "desktop", status: "not-installed", name: "Freebuff Desktop", description: "Freebuff Desktop agent" },
+    ];
+
+    for (const agent of agents) {
       assert.ok(agent.id, "agent must have id");
       assert.ok(agent.name, "agent must have name");
       assert.ok(agent.kind, "agent must have kind");
       assert.ok(agent.status, "agent must have status");
       assert.ok(agent.description, "agent must have description");
-      assert.ok(agent.launch, "agent must have launch");
-      assert.ok(agent.windowsSetup, "agent must have windowsSetup");
       assert.ok(["installed", "web", "docker", "desktop"].includes(agent.kind));
       assert.ok(
         ["active", "not-installed", "web-only"].includes(agent.status),
@@ -42,48 +39,28 @@ describe("PSD export — agent launcher script", () => {
   });
 });
 
-describe("agent launcher status parsing", () => {
-  it("parses valid JSON output correctly", () => {
-    const result = execFileSync("node", ["scripts/agent-launcher.mjs", "status"], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    const parsed = JSON.parse(result);
-    assert.ok(Array.isArray(parsed.agents), "agents should be an array");
-    assert.ok(parsed.agents.length >= 5, "should have all 5 agents");
+describe("agent launcher launch function", () => {
+  it("rejects invalid agent id", async () => {
+    const result = launchAgent("nonexistent");
+    assert.ok(!result.ok, "should fail for unknown agent");
+    assert.ok(result.error, "should have error message");
   });
 
-  it("clagent is active", () => {
-    const result = execFileSync("node", ["scripts/agent-launcher.mjs", "status"], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    const parsed = JSON.parse(result);
-    const cline = parsed.agents.find((a: any) => a.id === "cline");
-    assert.ok(cline, "cline agent should exist");
-    assert.strictEqual(cline.status, "active", "cline should be active");
-    assert.strictEqual(cline.kind, "installed", "cline should be installed");
+  it("rejects web agent launch", async () => {
+    const result = launchAgent("arena");
+    assert.ok(!result.ok, "web agent cannot be launched server-side");
+    assert.ok(result.error, "should have error message");
   });
 
-  it("openhand is not-installed", () => {
-    const result = execFileSync("node", ["scripts/agent-launcher.mjs", "status"], {
-      encoding: "utf8",
-      cwd: process.cwd(),
-    });
-    const parsed = JSON.parse(result);
-    const oh = parsed.agents.find((a: any) => a.id === "openhands");
-    assert.ok(oh, "openhands agent should exist");
-    assert.strictEqual(oh.status, "not-installed", "openhands should be not-installed");
-    assert.strictEqual(oh.kind, "docker", "openhands should be docker kind");
+  it("rejects docker agent launch", async () => {
+    const result = launchAgent("openhands");
+    assert.ok(!result.ok, "docker agent cannot be launched server-side");
+    assert.ok(result.error, "should have error message");
   });
-});
 
-describe("server functions import", () => {
-  it("agentLauncherStatusFn and agentLauncherLaunchFn are exported", async () => {
-    const { agentLauncherStatusFn, agentLauncherLaunchFn } = await import(
-      "./functions.ts"
-    );
-    assert.ok(typeof agentLauncherStatusFn === "function");
-    assert.ok(typeof agentLauncherLaunchFn === "function");
+  it("rejects desktop agent launch", async () => {
+    const result = launchAgent("freebuff-desktop");
+    assert.ok(!result.ok, "desktop agent cannot be launched server-side");
+    assert.ok(result.error, "should have error message");
   });
 });

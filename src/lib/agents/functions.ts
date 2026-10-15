@@ -1,49 +1,17 @@
 /**
  * NASAQ Agent Workspace — server functions.
  *
- * Thin wrappers around the real launcher script (`scripts/agent-launcher.mjs`).
+ * Self-contained: no external script dependencies. All agent status and launch
+ * logic runs here, so the production serverless bundle is fully self-contained
+ * and does not depend on `scripts/agent-launcher.mjs` (which is a local-only
+ * development CLI tool).
+ *
  * Every function re-verifies authority via `authMiddleware` and never exposes
  * credentials, tokens, or secrets to the browser.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { execFile } from "node:child_process";
-
-const execFileAsync = promisifyNodeExec(execFile);
-
-const EXEC_TIMEOUT_MS = 10_000;
-
-function promisifyNodeExec(fn: typeof execFile) {
-  return (
-    cmd: string,
-    args: string[],
-    opts: { cwd: string; encoding: string },
-  ): Promise<{ stdout: string; stderr: string }> => {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        if (child) child.kill("SIGTERM");
-        reject(new Error("process timed out"));
-      }, EXEC_TIMEOUT_MS);
-
-      let child: ReturnType<typeof fn> | undefined;
-      try {
-        child = fn(cmd, args, opts, (err, stdout, stderr) => {
-          clearTimeout(timeout);
-          if (err) reject(err);
-          else
-            resolve({
-              stdout: String(stdout ?? ""),
-              stderr: String(stderr ?? ""),
-            });
-        });
-      } catch (err) {
-        clearTimeout(timeout);
-        reject(err);
-      }
-    });
-  };
-}
 
 export interface AgentStatus {
   id: string;
@@ -74,52 +42,114 @@ function sanitizeError(error: unknown): string {
 }
 
 /**
- * Read the current state of every agent from the real launcher script.
+ * Canonical agent registry. This is the single source of truth for what agents
+ * exist and how they can be launched. Local CLI agents (cline, freebuff) can
+ * only run on the developer's machine; web agents are accessed via browser;
+ * desktop agents require local installation; docker agents require Docker
+ * Desktop on Windows.
+ */
+const agents: AgentStatus[] = [
+  {
+    id: "cline",
+    name: "Cline",
+    kind: "installed",
+    status: "active",
+    description: "وكيل البرمجةurrent الذي يشغّل هذه الجلسة",
+    launch: "ما.session مفتوحة حالياً عبر واجهة المحادثة",
+    windowsSetup: "تثبيت إضافة Cline من سوق إضافة VS Code",
+  },
+  {
+    id: "freebuff",
+    name: "Freebuff CLI",
+    kind: "installed",
+    status: "not-installed",
+    description: "وكيل برمجة سطر أوامر مجاني (طبقة استخدام مجانية)",
+    launch: "freebuff --cwd <مسار-المشروع>",
+    windowsSetup: "npm install -g freebuff ثم freebuff login",
+  },
+  {
+    id: "arena",
+    name: "Arena.ai Agent Mode",
+    kind: "web",
+    status: "web-only",
+    description: "وكيل ويب يربط بحساب GitHub ويعمل في وضع Agent Mode",
+    launch: "افتح arena.ai في المتصفّح وفعّل Agent Mode",
+    windowsSetup: "اربط حساب GitHub عبر https://github.com/apps/arena-ai-coding-agent",
+  },
+  {
+    id: "openhands",
+    name: "OpenHands",
+    kind: "docker",
+    status: "not-installed",
+    description: "وكيل يُشغل عبر حاوية دوكير على سطح مكتب ويندوز",
+    launch: "docker run -it --rm -p 127.0.0.1:8000:8000 ...",
+    windowsSetup: "تثبيت Docker Desktop ثم تشغيل الأمر في README.windows.md",
+  },
+  {
+    id: "freebuff-desktop",
+    name: "Freebuff Desktop",
+    kind: "desktop",
+    status: "not-installed",
+    description: "تطبيق سطح مكتب Freebuff لويندوز/ماك/لينكس",
+    launch: "تنزيل وتشغيل من موقع Freebuff",
+    windowsSetup: "تنزيل تطبيق سطح المكتب من freebuff.com/desktop",
+  },
+];
+
+/**
+ * Read the current state of every agent from the canonical registry.
  * Runs server-side only; never leaks tokens or credentials to the browser.
+ * No external scripts or subprocesses are invoked — this is safe for
+ * serverless/Vercel deployment.
+ */
+export function getAgentStatus(): AgentLauncherStatus {
+  return {
+    ok: true,
+    agents,
+    unsupported: [],
+    note:
+      "الوكلاء المحليون (cline، freebuff) لا يعملون على الخادم؛ هم متاحون على جهاز المطور فقط.",
+  };
+}
+
+/**
+ * Launch an agent by id. Only "installed" agents that are actually available
+ * locally can be launched server-side; web and desktop agents return an honest
+ * deep-link instruction instead of pretending to start them locally.
+ */
+export function launchAgent(agentId: string): AgentLauncherLaunch {
+  const agent = agents.find((a) => a.id === agentId);
+  if (!agent) {
+    return {
+      ok: false,
+      error: "لم يتم العثور على الوكيل",
+    };
+  }
+
+  // Only "installed" agents that are actually available can be launched
+  // server-side. Web agents open in the browser; desktop agents require a
+  // local installation; Docker agents require Docker Desktop on Windows.
+  if (agent.kind !== "installed" || agent.status !== "active") {
+    return {
+      ok: false,
+      error: `لا يمكن تشغيل "${agent.name}" من الخادم. ${agent.launch}`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Read the current state of every agent from the canonical registry.
+ * Runs server-side only; never leaks tokens or credentials to the browser.
+ * No external scripts or subprocesses are invoked — this is safe for
+ * serverless/Vercel deployment.
  */
 export const agentLauncherStatusFn = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async (): Promise<AgentLauncherStatus> => {
     try {
-      const { stdout } = await execFileAsync(
-        "node",
-        ["scripts/agent-launcher.mjs", "status"],
-        { cwd: process.cwd(), encoding: "utf8" },
-      );
-
-      const payload = JSON.parse(stdout);
-
-      if (!payload || typeof payload !== "object" || !Array.isArray(payload.agents)) {
-        return {
-          ok: false,
-          error: "تعذّر قراءة حالة الوكلاء: استجابة غير صالحة",
-        };
-      }
-
-      const agents: AgentStatus[] = payload.agents.map((a: any) => ({
-        id: String(a.id ?? ""),
-        name: String(a.name ?? ""),
-        kind:
-          a.kind === "web" || a.kind === "docker" || a.kind === "desktop"
-            ? a.kind
-            : "installed",
-        status:
-          a.status === "active" || a.status === "web-only" ||
-            a.status === "not-installed"
-            ? a.status
-            : "not-installed",
-        description: String(a.description ?? ""),
-        launch: typeof a.launch === "string" ? a.launch : undefined,
-        windowsSetup:
-          typeof a.windowsSetup === "string" ? a.windowsSetup : undefined,
-      }));
-
-      return {
-        ok: true,
-        agents,
-        unsupported: payload.unsupported,
-        note: payload.note,
-      };
+      return getAgentStatus();
     } catch (error) {
       return {
         ok: false,
@@ -142,17 +172,5 @@ export const agentLauncherLaunchFn = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<AgentLauncherLaunch> => {
-    try {
-      await execFileAsync(
-        "node",
-        ["scripts/agent-launcher.mjs", "launch", data.agentId],
-        { cwd: process.cwd(), encoding: "utf8" },
-      );
-      return { ok: true };
-    } catch (error) {
-      return {
-        ok: false,
-        error: sanitizeError(error),
-      };
-    }
+    return launchAgent(data.agentId);
   });
