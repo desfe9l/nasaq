@@ -3,8 +3,8 @@
  *
  * Renders anchor points and control handles for a selected `svg` element,
  * allowing the author to drag points and handles to reshape the path.
- * Integrates with the existing selection model: only the currently selected
- * element is editable, and changes flow through the standard update cycle.
+ * Changes are persisted through the editor store's `updateElement`, so they
+ * participate in undo/redo, save/reload, and export like any other edit.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -15,25 +15,20 @@ interface PathPoint {
   x: number;
   y: number;
   type: "M" | "L" | "C" | "Q";
-  /** For cubic curves: control point before this point. */
   cp1?: { x: number; y: number };
-  /** For cubic curves: control point after this point. */
   cp2?: { x: number; y: number };
-  /** For quadratic curves: single control point. */
   cp?: { x: number; y: number };
 }
 
 interface VectorNodeEditorProps {
   el: CanvasEl;
   selected: boolean;
-  onUpdate: (pathData: string) => void;
 }
 
 function parsePathData(d: string): PathPoint[] {
   const points: PathPoint[] = [];
   const tokens = d.match(/[MLCSQZmlcsqz]|[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g) || [];
   let i = 0;
-  let current: PathPoint | null = null;
 
   while (i < tokens.length) {
     const cmd = tokens[i];
@@ -45,14 +40,12 @@ function parsePathData(d: string): PathPoint[] {
         const x = parseFloat(tokens[i]);
         const y = parseFloat(tokens[i + 1]);
         i += 2;
-        current = { x, y, type: "M" };
-        points.push(current);
+        points.push({ x, y, type: "M" });
       } else if (upper === "L") {
         const x = parseFloat(tokens[i]);
         const y = parseFloat(tokens[i + 1]);
         i += 2;
-        current = { x, y, type: "L" };
-        points.push(current);
+        points.push({ x, y, type: "L" });
       } else if (upper === "C") {
         const cp1x = parseFloat(tokens[i]);
         const cp1y = parseFloat(tokens[i + 1]);
@@ -61,22 +54,21 @@ function parsePathData(d: string): PathPoint[] {
         const x = parseFloat(tokens[i + 4]);
         const y = parseFloat(tokens[i + 5]);
         i += 6;
-        current = { x, y, type: "C", cp1: { x: cp1x, y: cp1y }, cp2: { x: cp2x, y: cp2y } };
-        points.push(current);
+        points.push({ x, y, type: "C", cp1: { x: cp1x, y: cp1y }, cp2: { x: cp2x, y: cp2y } });
       } else if (upper === "Q") {
         const cpx = parseFloat(tokens[i]);
         const cpy = parseFloat(tokens[i + 1]);
         const x = parseFloat(tokens[i + 2]);
         const y = parseFloat(tokens[i + 3]);
         i += 4;
-        current = { x, y, type: "Q", cp: { x: cpx, y: cpy } };
-        points.push(current);
+        points.push({ x, y, type: "Q", cp: { x: cpx, y: cpy } });
       } else if (upper === "Z") {
-        current = null;
+        // close path - no point to add
       }
     } else if (/^[mlcsqz]$/.test(cmd)) {
-      // Relative commands - skip for now, treat as absolute
-      i += 2;
+      // Relative commands: skip the command and its coordinate args
+      const argCount = { m: 2, l: 2, c: 6, s: 4, q: 2, t: 2 }[cmd] || 2;
+      i += argCount;
     }
   }
   return points;
@@ -104,40 +96,49 @@ const HANDLE_COLOR = "#006c35";
 const POINT_COLOR = "#00874a";
 const HANDLE_LINE_COLOR = "#c9a86a";
 
-export function VectorNodeEditor({ el, selected, onUpdate }: VectorNodeEditorProps) {
+export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
+  const updateElement = useEditor((s) => s.updateElement);
   const [points, setPoints] = useState<PathPoint[]>([]);
-  const [dragging, setDragging] = useState<{ index: number; part: "point" | "cp1" | "cp2" | "cp" } | null>(null);
-  const store = useEditor();
+  const [dragging, setDragging] = useState<{
+    index: number;
+    part: "point" | "cp1" | "cp2" | "cp";
+  } | null>(null);
   const elRef = useRef<SVGSVGElement | null>(null);
+  const rafRef = useRef<number | null>(null);
 
-  const updatePath = useCallback(
-    (next: PathPoint[]) => {
-      setPoints(next);
-      onUpdate(pointsToPathData(next));
-    },
-    [onUpdate],
-  );
-
-  // Parse path data when element changes.
+  // Parse path data when element becomes selected or content changes.
   if (selected && (points.length === 0 || el.content)) {
     const parsed = parsePathData(el.content || "");
     if (parsed.length > 0) setPoints(parsed);
   }
 
-  if (!selected) return null;
+  // Reset points when no longer selected.
+  if (!selected && points.length > 0) {
+    setPoints([]);
+    setDragging(null);
+  }
+
+  const commitPath = useCallback(
+    (next: PathPoint[]) => {
+      setPoints(next);
+      updateElement(el.id, { content: pointsToPathData(next) }, true);
+    },
+    [el.id, updateElement],
+  );
 
   const updatePoint = useCallback(
     (index: number, part: "point" | "cp1" | "cp2" | "cp", x: number, y: number) => {
       setPoints((prev) => {
         const next = [...prev];
         const p = { ...next[index] };
+        const dx = x - next[index].x;
+        const dy = y - next[index].y;
         if (part === "point") {
           p.x = x;
           p.y = y;
-          // Keep relative handle positions.
-          if (p.cp1) { p.cp1.x += x - next[index].x; p.cp1.y += y - next[index].y; }
-          if (p.cp2) { p.cp2.x += x - next[index].x; p.cp2.y += y - next[index].y; }
-          if (p.cp) { p.cp.x += x - next[index].x; p.cp.y += y - next[index].y; }
+          if (p.cp1) { p.cp1.x += dx; p.cp1.y += dy; }
+          if (p.cp2) { p.cp2.x += dx; p.cp2.y += dy; }
+          if (p.cp) { p.cp.x += dx; p.cp.y += dy; }
         } else if (part === "cp1" && p.cp1) {
           p.cp1.x = x;
           p.cp1.y = y;
@@ -154,6 +155,57 @@ export function VectorNodeEditor({ el, selected, onUpdate }: VectorNodeEditorPro
     },
     [],
   );
+
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (!dragging) return;
+      // Convert screen coordinates to element-local coordinates.
+      // The editor SVG is positioned absolutely with width/height in mm,
+      // so we use the element's bounding box for coordinate mapping.
+      const svg = document.elementFromPoint(e.clientX, e.clientY)?.closest("svg");
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * el.w;
+      const y = ((e.clientY - rect.top) / rect.height) * el.h;
+      updatePoint(dragging.index, dragging.part, x, y);
+      // Throttle commits to the store via requestAnimationFrame.
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          commitPath(points);
+        });
+      }
+    },
+    [dragging, el.w, el.h, updatePoint, commitPath, points],
+  );
+
+  const handlePointerUp = useCallback(() => {
+    setDragging(null);
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    commitPath(points);
+  }, [points, commitPath]);
+
+  // Attach global move/up listeners while dragging.
+  // These run outside React's render cycle for smooth dragging.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const hasListeners = useRef(false);
+  if (dragging && !hasListeners.current) {
+    hasListeners.current = true;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+  if (!dragging && hasListeners.current) {
+    hasListeners.current = false;
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener("pointercancel", handlePointerUp);
+  }
+
+  if (!selected) return null;
 
   return (
     <svg
@@ -175,7 +227,6 @@ export function VectorNodeEditor({ el, selected, onUpdate }: VectorNodeEditorPro
         </marker>
       </defs>
       {points.map((p, index) => {
-        // Draw control handle lines.
         const handleEls: React.ReactNode[] = [];
         if (p.type === "C") {
           if (p.cp1) {

@@ -476,6 +476,50 @@ function ElementContent({
    * Arabic hyphenation worth trusting), and justified text keeps its closing
    * line flush to the right unless the author asks for it to stretch too.
    */
+  /* Build layer-effect CSS from ElStyle effect properties. */
+  const shadowCss = (s.shadows || [])
+    .filter((sh) => sh.type === "drop")
+    .map(
+      (sh) =>
+        `${sh.offsetX}mm ${sh.offsetY}mm ${sh.blur}mm ${sh.spread ?? 0}mm ${sh.color} ${Math.round(sh.opacity * 100)}%`,
+    )
+    .join(", ");
+  const innerShadowCss = (s.shadows || [])
+    .filter((sh) => sh.type === "inner")
+    .map(
+      (sh) =>
+        `inset ${sh.offsetX}mm ${sh.offsetY}mm ${sh.blur}mm ${sh.spread ?? 0}mm ${sh.color} ${Math.round(sh.opacity * 100)}%`,
+    )
+    .join(", ");
+  const glowCss = (s.glows || [])
+    .map(
+      (g) =>
+        `0 0 ${g.size}mm ${g.spread ?? 0}mm ${g.color} ${Math.round(g.opacity * 100)}%`,
+    )
+    .join(", ");
+  const boxShadow = [shadowCss, innerShadowCss, glowCss]
+    .filter(Boolean)
+    .join(", ");
+  const strokeCss = s.strokeStyle
+    ? `${s.strokeStyle.width}mm solid ${s.strokeStyle.color}`
+    : undefined;
+  const overlayBg = s.colorOverlay
+    ? `linear-gradient(${s.colorOverlay.color} ${Math.round((s.colorOverlay.opacity ?? 1) * 100)}%, ${s.colorOverlay.color} ${Math.round((s.colorOverlay.opacity ?? 1) * 100)}%)`
+    : undefined;
+  const gradientOverlayBg = s.gradientOverlay?.gradient
+    ? `linear-gradient(${
+        s.gradientOverlay.angle ?? 0
+      }deg, ${s.gradientOverlay.gradient.stops
+        .map(
+          (stop) =>
+            `${stop.color} ${Math.round((stop.offset ?? 0) * 100)}% ${Math.round((stop.opacity ?? 1) * 100)}%`,
+        )
+        .join(", ")})`
+    : undefined;
+  const patternOverlayBg = s.patternOverlay?.pattern
+    ? `url(${s.patternOverlay.pattern})`
+    : undefined;
+
   const textStyle: React.CSSProperties = {
     fontFamily: cssFont(s.fontFamily),
     fontSize: `${prepared.fontSize}pt`,
@@ -516,6 +560,14 @@ function ElementContent({
         : s.verticalAlignText === "sub"
           ? "sub"
           : undefined,
+    /* Layer effects — rendered as CSS on the element itself. */
+    boxShadow: boxShadow || undefined,
+    /* Stroke uses outline so it never conflicts with the explicit `border`
+     * set on box/stat elements later in their style objects. */
+    outline: strokeCss,
+    ...(overlayBg ? { backgroundImage: overlayBg } : {}),
+    ...(gradientOverlayBg ? { backgroundImage: gradientOverlayBg } : {}),
+    ...(patternOverlayBg ? { backgroundImage: patternOverlayBg } : {}),
     ...(s.textAlign === "justify" && s.justifyLastLine === "stretch"
       ? { textAlignLast: "justify" as const }
       : {}),
@@ -1060,14 +1112,7 @@ function ElementContent({
     }
     /* When selected, overlay the vector node editor for point/handle manipulation. */
     const nodeEditor = interactive ? (
-      <VectorNodeEditor
-        el={el}
-        selected={interactive}
-        onUpdate={(pathData) => {
-          // Update the element's content with the new path data.
-          // This flows through the standard editor update cycle.
-        }}
-      />
+      <VectorNodeEditor el={el} selected={interactive} />
     ) : null;
     return (
       <div

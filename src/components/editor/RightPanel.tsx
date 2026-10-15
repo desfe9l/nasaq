@@ -2409,6 +2409,188 @@ export function PropertiesPanel({
                     </div>
                   ))}
                 </Field>
+                <Field label="التوهجات (Outer / Inner Glow)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const glows = el.style.glows || [];
+                        updateStyle(el.id, {
+                          glows: [
+                            ...glows,
+                            { type: "outer", color: "#ffffff", size: 5, opacity: 0.75 },
+                          ],
+                        });
+                      }}
+                      className="text-[10px] border border-line bg-surface px-2 py-1 rounded hover:bg-surface-2"
+                    >
+                      إضافة توهج
+                    </button>
+                  </div>
+                  {(el.style.glows || []).map((glow, idx) => (
+                    <div key={idx} className="rounded-[6px] border border-line p-2 mb-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Field label="النوع">
+                          <select
+                            value={glow.type}
+                            onChange={(e) => {
+                              const glows = [...(el.style.glows || [])];
+                              glows[idx] = { ...glows[idx], type: e.target.value as "outer" | "inner" };
+                              updateStyle(el.id, { glows });
+                            }}
+                          >
+                            <option value="outer">خارجي</option>
+                            <option value="inner">داخلي</option>
+                          </select>
+                        </Field>
+                        <Field label="اللون">
+                          <input
+                            type="color"
+                            value={glow.color}
+                            onChange={(e) => {
+                              const glows = [...(el.style.glows || [])];
+                              glows[idx] = { ...glows[idx], color: e.target.value };
+                              updateStyle(el.id, { glows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="الحجم (مم)">
+                          <input
+                            type="range" min={0} max={20} step={0.5}
+                            value={glow.size}
+                            onChange={(e) => {
+                              const glows = [...(el.style.glows || [])];
+                              glows[idx] = { ...glows[idx], size: Number(e.target.value) };
+                              updateStyle(el.id, { glows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="الشفافية">
+                          <input
+                            type="range" min={0} max={100} step={1}
+                            value={Math.round(glow.opacity * 100)}
+                            onChange={(e) => {
+                              const glows = [...(el.style.glows || [])];
+                              glows[idx] = { ...glows[idx], opacity: Number(e.target.value) / 100 };
+                              updateStyle(el.id, { glows });
+                            }}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                </Field>
+                <Field label="الحد (Stroke)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.strokeStyle}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            strokeStyle: { color: "#000000", width: 1, position: "center" as const },
+                          });
+                        } else {
+                          const { strokeStyle, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                </Field>
+                <Field label="تغطية باللون (Color Overlay)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.colorOverlay}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            colorOverlay: { color: "#ffffff", opacity: 0.5 },
+                          });
+                        } else {
+                          const { colorOverlay, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                  {el.style.colorOverlay && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Field label="اللون">
+                        <input
+                          type="color"
+                          value={el.style.colorOverlay.color || "#ffffff"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              colorOverlay: { ...el.style.colorOverlay, color: e.target.value },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="الشفافية">
+                        <input
+                          type="range" min={0} max={100} step={1}
+                          value={Math.round((el.style.colorOverlay.opacity ?? 1) * 100)}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              colorOverlay: { ...el.style.colorOverlay, opacity: Number(e.target.value) / 100 },
+                            });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Field>
+                <Field label="تغطية بالتدرج (Gradient Overlay)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.gradientOverlay}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            gradientOverlay: { opacity: 0.5, style: "linear" as const },
+                          });
+                        } else {
+                          const { gradientOverlay, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                  {el.style.gradientOverlay && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Field label="النوع">
+                        <select
+                          value={el.style.gradientOverlay.style || "linear"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              gradientOverlay: { ...el.style.gradientOverlay, style: e.target.value as any },
+                            });
+                          }}
+                        >
+                          <option value="linear">خطّي</option>
+                          <option value="radial">شعاعي</option>
+                        </select>
+                      </Field>
+                      <Field label="الشفافية">
+                        <input
+                          type="range" min={0} max={100} step={1}
+                          value={Math.round((el.style.gradientOverlay.opacity ?? 1) * 100)}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              gradientOverlay: { ...el.style.gradientOverlay, opacity: Number(e.target.value) / 100 },
+                            });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Field>
             </AccordionSection>
             )}
             {/*
