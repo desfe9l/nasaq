@@ -12,6 +12,7 @@ import type { CanvasEl, ElStyle, Page, Project } from "../model";
 import { stampAssetPx } from "../import/origin";
 import { normalizeBlurMm } from "../blur";
 import { resolvePsdFont } from "./fonts";
+import { textMatrix } from "./parse";
 import type {
   AssetFinding,
   ConversionReport,
@@ -214,9 +215,11 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.h = box.h;
     stampOrigin(el, box, node);
     el.content = node.text.content;
+    const scale = textMatrix(node.text?.transform)?.scaleX ?? 1;
+    const fontSizeInPoints = node.text.fontSize * scale;
     el.style = {
       fontFamily: font.family,
-      fontSize: node.text.fontSize,
+      fontSize: fontSizeInPoints,
       fontWeight: font.weight,
       fontStyle: font.italic ? "italic" : "normal",
       underline: node.text.underline || undefined,
