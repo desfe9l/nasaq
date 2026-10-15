@@ -38,10 +38,24 @@ function channelByte(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)));
 }
 
-function rgbHex(color: { r?: number; g?: number; b?: number } | undefined, fallback = "#172033"): string {
-  if (!color || typeof color.r !== "number") return fallback;
+function rgbHex(color: { r?: number; g?: number; b?: number; c?: number; m?: number; y?: number; k?: number } | undefined, fallback = "#172033"): string {
+  if (!color) return fallback;
+  // CMYK color object (Photoshop stores some colors in CMYK space).
+  if (typeof color.c === "number" || typeof color.m === "number" || typeof color.y === "number" || typeof color.k === "number") {
+    return cmykToHex(color.c ?? 0, color.m ?? 0, color.y ?? 0, color.k ?? 0);
+  }
+  if (typeof color.r !== "number") return fallback;
   const hex = (n: number) => channelByte(n).toString(16).padStart(2, "0");
   return `#${hex(color.r)}${hex(color.g ?? 0)}${hex(color.b ?? 0)}`;
+}
+
+/** Convert CMYK (0-100) to RGB hex. Photoshop stores CMYK in some color fields. */
+function cmykToHex(c: number, m: number, y: number, k: number): string {
+  const r = Math.round(255 * (1 - c / 100) * (1 - k / 100));
+  const g = Math.round(255 * (1 - m / 100) * (1 - k / 100));
+  const b = Math.round(255 * (1 - y / 100) * (1 - k / 100));
+  const hex = (n: number) => channelByte(n).toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
 
 function unitPx(value: { value?: number; units?: string } | undefined, dpi: number): number {
