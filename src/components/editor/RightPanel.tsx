@@ -43,6 +43,7 @@ import {
   type CanvasEl,
   type EditorBlendMode,
   type ElStyle,
+  type BevelEmbossStyle,
 } from "@/lib/editor/model";
 import {
   headingDescriptionState,
@@ -2584,6 +2585,285 @@ export function PropertiesPanel({
                           onChange={(e) => {
                             updateStyle(el.id, {
                               gradientOverlay: { ...el.style.gradientOverlay, opacity: Number(e.target.value) / 100 },
+                            });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Field>
+                <Field label="تأثير النحت البارز (Bevel & Emboss)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.bevelEmboss}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            bevelEmboss: {
+                              style: "outer" as const,
+                              technique: "smooth" as const,
+                              depth: 100,
+                              direction: "up" as const,
+                              size: 2,
+                              angle: 120,
+                              altitude: 30,
+                              highlightColor: "#ffffff",
+                              shadowColor: "#000000",
+                              highlightOpacity: 0.55,
+                              shadowOpacity: 0.55,
+                            },
+                          });
+                        } else {
+                          const { bevelEmboss, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                  {el.style.bevelEmboss && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Field label="الأسلوب">
+                        <select
+                          value={el.style.bevelEmboss.style}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: {
+                                ...el.style.bevelEmboss,
+                                style: e.target.value as any,
+                              },
+                            });
+                          }}
+                        >
+                          <option value="outer">بارز خارجي</option>
+                          <option value="inner">بارز داخلي</option>
+                          <option value="pillow">وسادة</option>
+                        </select>
+                      </Field>
+                      <Field label="التقنية">
+                        <select
+                          value={el.style.bevelEmboss.technique || "smooth"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: {
+                                ...(el.style.bevelEmboss as Required<BevelEmbossStyle>),
+                                technique: e.target.value as any,
+                              },
+                            });
+                          }}
+                        >
+                          <option value="smooth">ناعمة</option>
+                          <option value="chiselHard">أداة حادة</option>
+                          <option value="chiselSoft">أداة ناعمة</option>
+                        </select>
+                      </Field>
+                      <Field label="العمق (%)">
+                        <input
+                          type="range" min={0} max={1000} step={1}
+                          value={el.style.bevelEmboss.depth ?? 100}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: { ...(el.style.bevelEmboss as Required<BevelEmbossStyle>), depth: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="الحجم (مم)">
+                        <input
+                          type="range" min={0} max={20} step={0.1}
+                          value={el.style.bevelEmboss.size ?? 2}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: { ...(el.style.bevelEmboss as Required<BevelEmbossStyle>), size: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="اتجاه الإضاءة">
+                        <select
+                          value={el.style.bevelEmboss.direction || "up"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: { ...(el.style.bevelEmboss as Required<BevelEmbossStyle>), direction: e.target.value as any },
+                            });
+                          }}
+                        >
+                          <option value="up">لأعلى</option>
+                          <option value="down">لأسفل</option>
+                        </select>
+                      </Field>
+                      <Field label="الزاوية">
+                        <input
+                          type="range" min={0} max={360} step={1}
+                          value={el.style.bevelEmboss.angle ?? 120}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              bevelEmboss: { ...(el.style.bevelEmboss as Required<BevelEmbossStyle>), angle: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Field>
+                <Field label="تأثير الساتان (Satin)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.satin}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            satin: {
+                              blendMode: "screen" as const,
+                              color: "#ffffff",
+                              opacity: 0.5,
+                              angle: 120,
+                              distance: 5,
+                              size: 5,
+                            },
+                          });
+                        } else {
+                          const { satin, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                  {el.style.satin && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Field label="نوع المزج">
+                        <select
+                          value={el.style.satin.blendMode || "screen"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, blendMode: e.target.value as any },
+                            });
+                          }}
+                        >
+                          <option value="screen">شاشة</option>
+                          <option value="multiply">تضاعف</option>
+                          <option value="overlay">تراكب</option>
+                          <option value="normal">عادي</option>
+                        </select>
+                      </Field>
+                      <Field label="اللون">
+                        <input
+                          type="color"
+                          value={el.style.satin.color || "#ffffff"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, color: e.target.value },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="الشفافية">
+                        <input
+                          type="range" min={0} max={100} step={1}
+                          value={Math.round((el.style.satin.opacity ?? 0.5) * 100)}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, opacity: Number(e.target.value) / 100 },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="الزاوية">
+                        <input
+                          type="range" min={0} max={360} step={1}
+                          value={el.style.satin.angle ?? 120}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, angle: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="المسافة (مم)">
+                        <input
+                          type="range" min={0} max={50} step={0.5}
+                          value={el.style.satin.distance ?? 5}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, distance: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="الحجم (مم)">
+                        <input
+                          type="range" min={0} max={50} step={0.5}
+                          value={el.style.satin.size ?? 5}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              satin: { ...el.style.satin, size: Number(e.target.value) },
+                            });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Field>
+                <Field label="تغطية بالنقش (Pattern Overlay)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[10px] text-muted">تفعيل</label>
+                    <input
+                      type="checkbox"
+                      checked={!!el.style.patternOverlay}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          updateStyle(el.id, {
+                            patternOverlay: {
+                              opacity: 0.5,
+                              scale: 100,
+                              blendMode: "normal" as const,
+                            },
+                          });
+                        } else {
+                          const { patternOverlay, ...rest } = el.style;
+                          updateStyle(el.id, rest);
+                        }
+                      }}
+                    />
+                  </div>
+                  {el.style.patternOverlay && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Field label="نوع المزج">
+                        <select
+                          value={el.style.patternOverlay.blendMode || "normal"}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              patternOverlay: { ...el.style.patternOverlay, blendMode: e.target.value as any },
+                            });
+                          }}
+                        >
+                          <option value="normal">عادي</option>
+                          <option value="multiply">تضاعف</option>
+                          <option value="screen">شاشة</option>
+                          <option value="overlay">تراكب</option>
+                        </select>
+                      </Field>
+                      <Field label="الشفافية">
+                        <input
+                          type="range" min={0} max={100} step={1}
+                          value={Math.round((el.style.patternOverlay.opacity ?? 1) * 100)}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              patternOverlay: { ...el.style.patternOverlay, opacity: Number(e.target.value) / 100 },
+                            });
+                          }}
+                        />
+                      </Field>
+                      <Field label="المقياس (%)">
+                        <input
+                          type="range" min={1} max={500} step={1}
+                          value={el.style.patternOverlay.scale ?? 100}
+                          onChange={(e) => {
+                            updateStyle(el.id, {
+                              patternOverlay: { ...el.style.patternOverlay, scale: Number(e.target.value) },
                             });
                           }}
                         />

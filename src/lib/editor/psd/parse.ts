@@ -1162,11 +1162,23 @@ export async function parsePsd(
     visible: comp.visible !== false,
   })) || undefined;
 
-  /* Detect ICC profile / color mode for color-managed conversion. */
+  /* Detect ICC profile / color mode for color-managed conversion.
+   * ag-psd exposes ColorMode but not embedded ICC profile bytes directly,
+   * so we warn based on the document color mode and provide CMYK→RGB
+   * conversion. Full ICC profile management would require an additional
+   * color-management library (e.g., icc.js, little-cms2 binding).
+   */
   const colorMode = psd.colorMode;
   let colorSpaceWarning: string | undefined;
-  if (colorMode === 3) {
+  if (colorMode === 4) {
+    // ColorMode.CMYK = 4
     colorSpaceWarning = "ملف PSD بوضع CMYK — تُحوّل الألوان إلى sRGB للعرض والتحرير على الويب";
+  } else if (colorMode === 9) {
+    // ColorMode.Lab = 9
+    colorSpaceWarning = "ملف PSD بوضع Lab — تُحوّل الألوان إلى sRGB للعرض والتحرير على الويب";
+  } else if (colorMode === 0 || colorMode === 7 || colorMode === 8) {
+    // Bitmap, Multichannel, Duotone — not directly renderable
+    colorSpaceWarning = "وضع الألوان هذا غير مدعوم للتحرير المباشر — تُحوّل الألوان إلى sRGB";
   }
 
   return {

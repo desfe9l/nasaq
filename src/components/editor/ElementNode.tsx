@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useId } from "react";
+import { memo, useCallback, useEffect, useRef, useId, useState } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import {
   prepareText,
@@ -33,6 +33,8 @@ import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
 import { useImageLoadState } from "@/lib/editor/use-image-load";
 import { GradientDefs } from "./GradientDefs";
 import { ShapeGlyph, ShapeParts } from "./ShapeGlyph";
+import { MaskRenderer } from "./MaskRenderer";
+import { SmartObjectEditor } from "./SmartObjectEditor";
 
 /**
  * Pointerdown shared by every in-place text body.
@@ -402,11 +404,58 @@ export const ElementNode = memo(function ElementNode({
           </defs>
         </svg>
       )}
-      {blurFilter ? (
-        <div
-          className="el-blur"
-          style={{ position: "absolute", inset: 0, filter: blurFilter }}
-        >
+      {el.mask ? (
+        <MaskRenderer mask={el.mask.mask} box={{ w: el.w, h: el.h }}>
+          {blurFilter ? (
+            <div
+              className="el-blur"
+              style={{ position: "absolute", inset: 0, filter: blurFilter }}
+            >
+              <ElementContent
+                el={view}
+                textRef={textRef}
+                onBlur={finishEdit}
+                onKeyDown={handleEditKey}
+                siblings={activeElements}
+                interactive={interactive}
+                pageRef={
+                  pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+                }
+              />
+            </div>
+          ) : (
+            <ElementContent
+              el={view}
+              textRef={textRef}
+              onBlur={finishEdit}
+              onKeyDown={handleEditKey}
+              siblings={activeElements}
+              interactive={interactive}
+              pageRef={
+                pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+              }
+            />
+          )}
+        </MaskRenderer>
+      ) : (
+        blurFilter ? (
+          <div
+            className="el-blur"
+            style={{ position: "absolute", inset: 0, filter: blurFilter }}
+          >
+            <ElementContent
+              el={view}
+              textRef={textRef}
+              onBlur={finishEdit}
+              onKeyDown={handleEditKey}
+              siblings={activeElements}
+              interactive={interactive}
+              pageRef={
+                pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+              }
+            />
+          </div>
+        ) : (
           <ElementContent
             el={view}
             textRef={textRef}
@@ -418,19 +467,7 @@ export const ElementNode = memo(function ElementNode({
               pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
             }
           />
-        </div>
-      ) : (
-        <ElementContent
-          el={view}
-          textRef={textRef}
-          onBlur={finishEdit}
-          onKeyDown={handleEditKey}
-          siblings={activeElements}
-          interactive={interactive}
-          pageRef={
-            pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
-          }
-        />
+        )
       )}
     </div>
   );
@@ -455,6 +492,11 @@ function ElementContent({
 }) {
   const s = el.style || {};
   const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const updateElement = useEditor((s) => s.updateElement);
+  /** Per-run text edits while editing a rich-text element. Keyed by run index. */
+  const [runEdits, setRunEdits] = useState<Record<number, string>>({});
+  /** Which run index currently has focus for editing. */
+  const [focusedRun, setFocusedRun] = useState<number | null>(null);
   const gradientId = `paint-${rawId}`;
   /** One stable local id for this element's image frame clip. */
   const frameClipId = `frame-${rawId}`;
@@ -582,16 +624,18 @@ function ElementContent({
       ? el.content || ""
       : prepared.text || fallback;
 
-  /** Render rich-text runs as spans, each with its own style overrides. */
+  /** Render rich-text runs as editable spans, each with its own style overrides. */
   const renderTextRuns = () => {
     const runs = el.textRuns;
     const content = el.content || "";
     if (!runs || runs.length === 0) {
       return <span>{renderText("")}</span>;
     }
+    const isEditing = textRef.current?.isContentEditable;
     const spans: React.ReactNode[] = [];
     let lastEnd = 0;
-    for (const run of runs) {
+    for (let i = 0; i < runs.length; i++) {
+      const run = runs[i]!;
       // Emit any text before this run with base style.
       if (run.start > lastEnd) {
         spans.push(
@@ -601,7 +645,7 @@ function ElementContent({
         );
       }
       // Emit the run with its style overrides.
-      const runText = content.slice(run.start, run.end);
+      const runText = runEdits[i] ?? content.slice(run.start, run.end);
       const runStyle: React.CSSProperties = {
         fontFamily: run.fontFamily ? cssFont(run.fontFamily) : undefined,
         fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
@@ -623,7 +667,31 @@ function ElementContent({
             ? run.textTransform
             : undefined,
       };
-      spans.push(<span key={`run-${run.start}-${run.end}`} style={runStyle}>{runText}</span>);
+      spans.push(
+        isEditing ? (
+          <span
+            key={`run-${run.start}-${run.end}`}
+            style={runStyle}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => {
+              const target = e.target as HTMLDivElement;
+              setRunEdits((prev: Record<number, string>) => ({ ...prev, [i]: target.innerText }));
+              setFocusedRun(i);
+            }}
+            onFocus={() => setFocusedRun(i)}
+            onBlur={() => {
+              if (focusedRun === i) setFocusedRun(null);
+            }}
+          >
+            {runText}
+          </span>
+        ) : (
+          <span key={`run-${run.start}-${run.end}`} style={runStyle}>
+            {runText}
+          </span>
+        ),
+      );
       lastEnd = run.end;
     }
     // Emit any remaining text after the last run.
@@ -633,14 +701,90 @@ function ElementContent({
     return <>{spans}</>;
   };
 
+  /** Commit pending run edits back to the element model. Merges adjacent
+   *  runs that now share identical formatting. */
+  const commitRunEdits = () => {
+    const runs = el.textRuns;
+    const content = el.content || "";
+    if (!runs || runs.length === 0 || Object.keys(runEdits).length === 0) return;
+
+    const nextRuns = [...runs];
+    let changed = false;
+    for (const [idx, text] of Object.entries(runEdits)) {
+      const i = Number(idx);
+      const run = nextRuns[i]!;
+      const existingText = content.slice(run.start, run.end);
+      if (existingText !== text) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      setRunEdits({});
+      return;
+    }
+
+    // Rebuild content string with run edits applied.
+    let nextContent = content;
+    const sortedIndices = Object.keys(runEdits)
+      .map(Number)
+      .sort((a, b) => b - a); // Apply from end to start to preserve indices
+    for (const i of sortedIndices) {
+      const run = nextRuns[i]!;
+      const newText = runEdits[i]!;
+      nextContent = nextContent.slice(0, run.start) + newText + nextContent.slice(run.end);
+      // Update run bounds to match new text length
+      nextRuns[i] = {
+        ...run,
+        start: run.start,
+        end: run.start + newText.length,
+      };
+    }
+
+    // Merge adjacent runs with identical formatting.
+    const merged: typeof nextRuns = [];
+    for (const run of nextRuns) {
+      const last = merged[merged.length - 1];
+      if (
+        last &&
+        last.fontFamily === run.fontFamily &&
+        last.fontSize === run.fontSize &&
+        last.fontWeight === run.fontWeight &&
+        last.fontStyle === run.fontStyle &&
+        last.underline === run.underline &&
+        last.color === run.color &&
+        last.letterSpacing === run.letterSpacing &&
+        last.baselineShift === run.baselineShift &&
+        last.verticalAlignText === run.verticalAlignText &&
+        last.textTransform === run.textTransform
+      ) {
+        last.end = run.end;
+      } else {
+        merged.push({ ...run });
+      }
+    }
+
+    updateElement(el.id, {
+      content: nextContent,
+      textRuns: merged.length > 0 ? merged : undefined,
+    }, true);
+    setRunEdits({});
+    setFocusedRun(null);
+  };
+
   if (el.type === "text") {
+    const isEditing = textRef.current?.isContentEditable;
     return (
       <div
         ref={textRef}
         className="el-text"
         style={textStyle}
         onPointerDown={textPointerDown}
-        onBlur={onBlur}
+        onBlur={(e) => {
+          onBlur();
+          if (isEditing && Object.keys(runEdits).length > 0) {
+            commitRunEdits();
+          }
+        }}
         onKeyDown={onKeyDown}
       >
         {el.textRuns && el.textRuns.length > 0 ? renderTextRuns() : renderText("")}
@@ -1074,16 +1218,34 @@ function ElementContent({
           <span className="el-image-empty" />
         </div>
       );
-      return frameParts ? (
+      const content = frameParts ? (
         <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
           {plate}
         </FrameClip>
       ) : (
         plate
       );
+      return el.smartObject ? (
+        <div className="relative h-full w-full">
+          {content}
+          <SmartObjectEditor el={el} selected={interactive} />
+        </div>
+      ) : content;
     }
-    if (!frameParts) return artwork;
-    return (
+    if (!frameParts) return el.smartObject ? (
+      <div className="relative h-full w-full">
+        {artwork}
+        <SmartObjectEditor el={el} selected={interactive} />
+      </div>
+    ) : artwork;
+    return el.smartObject ? (
+      <div className="relative h-full w-full">
+        <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
+          {artwork}
+        </FrameClip>
+        <SmartObjectEditor el={el} selected={interactive} />
+      </div>
+    ) : (
       <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
         {artwork}
       </FrameClip>

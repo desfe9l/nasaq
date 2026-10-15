@@ -204,15 +204,6 @@ function elementToPsdLayer(el: CanvasEl, dpi: number): any {
 
     case "shape":
     case "svg": {
-      layer.vectorMask = {
-        disable: false,
-        paths: [
-          {
-            kind: "rectangle" as const,
-            bounds: { left: 0, top: 0, right: mmToPx(el.w), bottom: mmToPx(el.h) },
-          },
-        ],
-      };
       if (s.fill) {
         layer.fill = {
           enabled: true,
@@ -236,6 +227,50 @@ function elementToPsdLayer(el: CanvasEl, dpi: number): any {
         height: Math.max(1, mmToPx(el.h)),
         data: new Uint8ClampedArray(Math.max(1, mmToPx(el.w)) * Math.max(1, mmToPx(el.h)) * 4),
       };
+  }
+
+  // Apply layer mask (true layer mask, separate from clipping masks).
+  if (el.mask) {
+    const m = el.mask.mask;
+    layer.mask = {
+      left: mmToPx(m.x),
+      top: mmToPx(m.y),
+      right: mmToPx(m.x + m.w),
+      bottom: mmToPx(m.y + m.h),
+      defaultColor: m.inverted ? 0 : 255,
+      disabled: m.disabled,
+      positionRelativeToLayer: true,
+      userMaskDensity: m.opacity,
+      userMaskFeather: 0,
+      vectorMaskDensity: 1,
+      vectorMaskFeather: 0,
+    };
+    if (m.kind === "vector" && m.pathData) {
+      layer.vectorMask = {
+        invert: m.inverted,
+        disable: m.disabled,
+        paths: [
+          {
+            open: false,
+            operation: "add" as const,
+            knots: [], // Simplified - path data not converted to knots
+            fillRule: "non-zero" as const,
+          },
+        ],
+      };
+    }
+  }
+
+  // Apply smart object data.
+  if (el.smartObject) {
+    layer.placedLayer = {
+      id: el.smartObject.sourceLayerId || "smart-object",
+      placed: el.smartObject.linked ? "1" : undefined,
+      type: "raster" as const,
+      transform: el.smartObject.sourceTransform || [1, 0, 0, 1, 0, 0],
+      width: mmToPx(el.w),
+      height: mmToPx(el.h),
+    };
   }
 
   // Apply layer effects.
