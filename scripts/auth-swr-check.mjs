@@ -51,9 +51,13 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.localStorage = dom.window.localStorage;
 globalThis.sessionStorage = dom.window.sessionStorage;
-// `navigator` is a getter-only global in Node 22; the online flag is all the
-// auth modules read from it (`storage-owner-sync`).
-if (!globalThis.navigator?.onLine === undefined) {
+/*
+ * Node 22 exposes a read-only `navigator` that has no `onLine`, so it is defined
+ * here with one: `storage-owner-sync` reads `navigator.onLine === false` to
+ * decide whether it may open the remembered library, and `undefined` would
+ * silently mean "online" rather than exercising the offline branch.
+ */
+if (typeof globalThis.navigator?.onLine !== "boolean") {
   Object.defineProperty(globalThis, "navigator", {
     value: { onLine: true, userAgent: "nasaq-auth-swr-check" },
     configurable: true,
