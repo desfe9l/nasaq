@@ -154,6 +154,25 @@ export interface PsdNode {
     height: number;
     hash: string;
   };
+  /** Layer mask parsed from the PSD (separate from clipping masks). */
+  mask?: {
+    kind: "raster" | "vector";
+    dataUrl?: string;
+    pathData?: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    opacity: number;
+    disabled?: boolean;
+  };
+  /** Smart object source data — embedded or linked PSD content. */
+  smartObject?: {
+    linked: boolean;
+    embeddedPsd?: string;
+    sourceLayerId?: string;
+    sourceTransform?: number[];
+  };
   effects: PsdEffectNotes;
   /** Why this node cannot be a fully native element, if any. */
   issues: string[];
@@ -178,6 +197,8 @@ export interface PsdDocument {
   compositeDataUrl?: string;
   /** Layer comps (named visibility states) from the source PSD. */
   layerComps?: { name: string; caption?: string; layerIds: string[]; visible: boolean }[];
+  /** Color space warning for ICC/CMYK profiles detected during import. */
+  colorSpaceWarning?: string;
   pages: PsdPage[];
 }
 

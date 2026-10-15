@@ -214,6 +214,23 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     if (node.blendMode === "pass through") {
       el.source = { ...el.source!, reason: el.source?.reason };
     }
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
     acc.native += 1;
     if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
     return el;
@@ -238,6 +255,23 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     };
     stampOrigin(el, box, node);
     applyCommonStyle(el, node);
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
     acc.shapeCount += 1;
     acc.native += 1;
     if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
@@ -286,6 +320,23 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       verticalAlignText: node.text.verticalAlignText ?? undefined,
     };
     applyCommonStyle(el, node);
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
     acc.textCount += 1;
     acc.native += 1;
     if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
@@ -306,6 +357,23 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       el.style.svgStrokeWidth = Math.max(0.1, (node.effects.strokeWidthMm * acc.dpi) / 25.4);
     }
     applyCommonStyle(el, node);
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
     acc.shapeCount += 1;
     acc.native += 1;
     if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
@@ -331,6 +399,23 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       gradient: node.shape.gradient,
     };
     applyCommonStyle(el, node);
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
     acc.shapeCount += 1;
     acc.native += 1;
     if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
@@ -356,6 +441,27 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       flipY: node.flipY || undefined,
     };
     applyCommonStyle(el, node);
+    /* Map PSD layer mask to NASAQ element mask. */
+    if (node.mask) {
+      el.mask = {
+        mask: {
+          kind: node.mask.kind,
+          dataUrl: node.mask.dataUrl,
+          pathData: node.mask.pathData,
+          x: pxToMm(node.mask.x, acc.dpi),
+          y: pxToMm(node.mask.y, acc.dpi),
+          w: pxToMm(node.mask.w, acc.dpi),
+          h: pxToMm(node.mask.h, acc.dpi),
+          opacity: node.mask.opacity,
+          disabled: node.mask.disabled,
+        },
+        linked: true,
+      };
+    }
+    /* Map PSD smart object to NASAQ element smart object. */
+    if (node.smartObject) {
+      el.smartObject = node.smartObject;
+    }
     acc.imageCount += 1;
     acc.assets.push({
       hash: node.image.hash,

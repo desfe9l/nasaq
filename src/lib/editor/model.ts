@@ -521,6 +521,84 @@ export type TextBoxMode = "free" | "autoHeight" | "fixed" | "autoWidth" | "fit";
 /** Types whose box can auto-size to their text. */
 export const AUTO_TEXT_TYPES: ElType[] = ["text", "box", "stat", "stamp"];
 
+/** A single rich-text run within a text element. */
+export interface TextRun {
+  /** Start character offset (inclusive) within the element's content. */
+  start: number;
+  /** End character offset (exclusive) within the element's content. */
+  end: number;
+  /** Font family override for this run. */
+  fontFamily?: string;
+  /** Font size override in points. */
+  fontSize?: number;
+  /** Font weight override. */
+  fontWeight?: number | string;
+  /** Font style override. */
+  fontStyle?: string;
+  /** Underline override. */
+  underline?: boolean;
+  /** Text color override (hex). */
+  color?: string;
+  /** Letter spacing override in mm. */
+  letterSpacing?: number;
+  /** Baseline shift override in mm. */
+  baselineShift?: number;
+  /** Superscript/subscript override. */
+  verticalAlignText?: "baseline" | "super" | "sub";
+  /** Text transform override. */
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize" | "small-caps";
+}
+
+/** True layer mask — separate from clipping masks. Non-destructive. */
+export interface LayerMask {
+  /** Mask kind: raster (pixel data) or vector (path). */
+  kind: "raster" | "vector";
+  /** Raster mask data URL (for kind "raster"). */
+  dataUrl?: string;
+  /** Vector mask path data (for kind "vector"). */
+  pathData?: string;
+  /** Mask position relative to the masked element's box, in mm. */
+  x: number;
+  /** Mask position relative to the masked element's box, in mm. */
+  y: number;
+  /** Mask width in mm. */
+  w: number;
+  /** Mask height in mm. */
+  h: number;
+  /** Mask opacity 0-1. */
+  opacity: number;
+  /** Whether the mask is inverted. */
+  inverted?: boolean;
+  /** Whether the mask is disabled. */
+  disabled?: boolean;
+  /** Mask blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Whether mask applies to effects as well as fill/content. */
+  affectsEffects?: boolean;
+}
+
+/** Smart object source data — embedded or linked. */
+export interface SmartObjectSource {
+  /** Embedded PSD bytes as data URL. */
+  embeddedPsd?: string;
+  /** Linked external file reference. */
+  linkedFile?: string;
+  /** Source layer id within the embedded/linked PSD. */
+  sourceLayerId?: string;
+  /** Original transform matrix from the source document. */
+  sourceTransform?: number[];
+  /** Whether the smart object is linked (vs embedded). */
+  linked: boolean;
+}
+
+/** Raster or vector layer mask applied to a masked element. */
+export interface ElementMask {
+  /** The mask definition. */
+  mask: LayerMask;
+  /** Whether the mask is linked to the element (moves together). */
+  linked: boolean;
+}
+
 export type ElementSourceKind = "psd" | "docx" | "pptx" | "pdf" | "xlsx" | "image";
 
 export interface CanvasEl {
@@ -561,9 +639,15 @@ export interface CanvasEl {
   /** Shared movement relationship; unlike a group, linked elements remain independent. */
   linkId?: string;
   content?: string;
+  /** Rich-text runs for mixed formatting within a single text element. */
+  textRuns?: TextRun[];
   src?: string;
   icon?: string;
   style: ElStyle;
+  /** True layer mask (raster or vector), separate from clipping masks. */
+  mask?: ElementMask;
+  /** Smart object source data — embedded or linked PSD content. */
+  smartObject?: SmartObjectSource;
   /**
    * `group` members, positioned relative to the group.
    *

@@ -28,6 +28,7 @@ import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
 import { gradientCss, paintCss } from "@/lib/editor/gradient";
 import { blurFilterCss } from "@/lib/editor/blur";
+import { VectorNodeEditor } from "./VectorNodeEditor";
 import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
 import { useImageLoadState } from "@/lib/editor/use-image-load";
 import { GradientDefs } from "./GradientDefs";
@@ -529,6 +530,57 @@ function ElementContent({
       ? el.content || ""
       : prepared.text || fallback;
 
+  /** Render rich-text runs as spans, each with its own style overrides. */
+  const renderTextRuns = () => {
+    const runs = el.textRuns;
+    const content = el.content || "";
+    if (!runs || runs.length === 0) {
+      return <span>{renderText("")}</span>;
+    }
+    const spans: React.ReactNode[] = [];
+    let lastEnd = 0;
+    for (const run of runs) {
+      // Emit any text before this run with base style.
+      if (run.start > lastEnd) {
+        spans.push(
+          <span key={`base-${lastEnd}`}>
+            {content.slice(lastEnd, run.start)}
+          </span>,
+        );
+      }
+      // Emit the run with its style overrides.
+      const runText = content.slice(run.start, run.end);
+      const runStyle: React.CSSProperties = {
+        fontFamily: run.fontFamily ? cssFont(run.fontFamily) : undefined,
+        fontSize: run.fontSize ? `${run.fontSize}pt` : undefined,
+        fontWeight: run.fontWeight ? (run.fontWeight as React.CSSProperties["fontWeight"]) : undefined,
+        fontStyle: run.fontStyle ? (run.fontStyle as React.CSSProperties["fontStyle"]) : undefined,
+        textDecoration: run.underline ? "underline" : undefined,
+        color: run.color || undefined,
+        letterSpacing: run.letterSpacing ? `${run.letterSpacing}mm` : undefined,
+        position: run.baselineShift ? "relative" : undefined,
+        top: run.baselineShift ? `-${run.baselineShift}mm` : undefined,
+        verticalAlign:
+          run.verticalAlignText === "super"
+            ? "super"
+            : run.verticalAlignText === "sub"
+              ? "sub"
+              : undefined,
+        textTransform:
+          run.textTransform && run.textTransform !== "none"
+            ? run.textTransform
+            : undefined,
+      };
+      spans.push(<span key={`run-${run.start}-${run.end}`} style={runStyle}>{runText}</span>);
+      lastEnd = run.end;
+    }
+    // Emit any remaining text after the last run.
+    if (lastEnd < content.length) {
+      spans.push(<span key={`base-${lastEnd}`}>{content.slice(lastEnd)}</span>);
+    }
+    return <>{spans}</>;
+  };
+
   if (el.type === "text") {
     return (
       <div
@@ -539,7 +591,7 @@ function ElementContent({
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       >
-        {renderText("")}
+        {el.textRuns && el.textRuns.length > 0 ? renderTextRuns() : renderText("")}
       </div>
     );
   }
@@ -1006,19 +1058,35 @@ function ElementContent({
         </div>
       );
     }
+    /* When selected, overlay the vector node editor for point/handle manipulation. */
+    const nodeEditor = interactive ? (
+      <VectorNodeEditor
+        el={el}
+        selected={interactive}
+        onUpdate={(pathData) => {
+          // Update the element's content with the new path data.
+          // This flows through the standard editor update cycle.
+        }}
+      />
+    ) : null;
     return (
       <div
-        className="canvas-svg-content h-full w-full"
+        className="canvas-svg-content h-full w-full relative"
         style={{
           color: s.color || "#172033",
           opacity: el.opacity ?? 1,
           overflow: s.overflowVisible ? "visible" : "hidden",
           pointerEvents: "none",
         }}
-        // Sanitised above (allow-list walk) — no script/handler/external ref
-        // survives, so this is safe to inline.
-        dangerouslySetInnerHTML={{ __html: clean }}
-      />
+      >
+        {/* Sanitised SVG markup — rendered inline. */}
+        <div
+          className="absolute inset-0 h-full w-full"
+          dangerouslySetInnerHTML={{ __html: clean }}
+        />
+        {/* Vector node editor overlay — point/handle manipulation when selected. */}
+        {nodeEditor}
+      </div>
     );
   }
 

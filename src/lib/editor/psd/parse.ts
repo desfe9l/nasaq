@@ -898,7 +898,22 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
     effects,
     issues,
     children: [],
+    mask: layer.mask ? {
+      kind: layer.mask.fromVectorData ? "vector" : "raster",
+      dataUrl: layer.mask.canvas ? layer.mask.canvas.toDataURL() : undefined,
+      pathData: (layer.vectorMask?.paths?.[0] as any)?.pathData,
+      x: layer.mask.left ?? 0,
+      y: layer.mask.top ?? 0,
+      w: Math.max(0, (layer.mask.right ?? 0) - (layer.mask.left ?? 0)),
+      h: Math.max(0, (layer.mask.bottom ?? 0) - (layer.mask.top ?? 0)),
+      opacity: layer.mask.userMaskDensity ?? 1,
+      disabled: layer.mask.disabled ?? false,
+    } : undefined,
   };
+
+  if (layer.mask && layer.mask.disabled) {
+    issues.push("قناع الطبقة معطّل — سيُستورد كقناع غير نشط");
+  }
 
   if (layer.children?.length) {
     node.kind = "group";
@@ -1054,12 +1069,18 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
       node.height = pixels.height;
     }
     if (layer.placedLayer) issues.push("كائن ذكي حُوّل من نسخته النقطية داخل الملف");
-    return node;
-  }
-
-  if (layer.placedLayer) {
-    node.kind = "empty";
-    issues.push("كائن ذكي بلا بكسلات مضمّنة");
+    /* Smart object source data — preserve embedded/linked PSD reference. */
+    if (layer.placedLayer) {
+      node.smartObject = {
+        linked: !!layer.placedLayer.placed,
+        embeddedPsd: undefined,
+        sourceLayerId: layer.placedLayer.id,
+        sourceTransform: layer.placedLayer.transform,
+      };
+      if (layer.placedLayer.placed) {
+        issues.push("كائن ذكي مرتبط بملف خارجي — التعديل려면 فتح المصدر");
+      }
+    }
     return node;
   }
   node.kind = "empty";
@@ -1141,6 +1162,13 @@ export async function parsePsd(
     visible: comp.visible !== false,
   })) || undefined;
 
+  /* Detect ICC profile / color mode for color-managed conversion. */
+  const colorMode = psd.colorMode;
+  let colorSpaceWarning: string | undefined;
+  if (colorMode === 3) {
+    colorSpaceWarning = "ملف PSD بوضع CMYK — تُحوّل الألوان إلى sRGB للعرض والتحرير على الويب";
+  }
+
   return {
     fileName: sanitizeFileName(fileName),
     widthPx: psd.width,
@@ -1149,5 +1177,6 @@ export async function parsePsd(
     compositeDataUrl,
     pages,
     layerComps,
+    colorSpaceWarning,
   };
 }

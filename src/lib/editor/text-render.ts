@@ -135,15 +135,21 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
   const innerW = Math.max(1, el.w - padding * 2);
   const innerH = Math.max(1, el.h - padding * 2);
   const mode = textBoxMode(el);
-  const lineHeight = resolveLineHeight(el, spaced, innerW, base);
+  /* When rich-text runs exist, use the largest font size among runs for sizing. */
+  const runMaxFontSize = (el.textRuns || []).reduce(
+    (max: number, r) => Math.max(max, Number(r.fontSize) || 0),
+    base,
+  );
+  const effectiveFontSize = Math.max(runMaxFontSize, base);
+  const lineHeight = resolveLineHeight(el, spaced, innerW, effectiveFontSize);
   const justified = s.kashida
-    ? justifyText(spaced, innerW, base, s.justifyLastLine !== "stretch")
+    ? justifyText(spaced, innerW, effectiveFontSize, s.justifyLastLine !== "stretch")
     : spaced;
 
   if (!FIT_TYPES.has(el.type)) {
     return {
       text: justified,
-      fontSize: base,
+      fontSize: effectiveFontSize,
       lineHeight,
       overflow: false,
       neededHeight: el.h,
@@ -156,17 +162,17 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
   // `textFit` values map onto it so projects authored before this existed keep
   // their behaviour: `shrink`/`grow` were an explicit authorial choice.
   const legacyFit = s.textFit || "clip";
-  const fontSize =
+  const fontSize: number =
     mode === "fit" || legacyFit === "shrink" || legacyFit === "grow"
       ? fitFontSize(
           justified,
           { w: innerW, h: innerH },
-          base,
+          effectiveFontSize,
           lineHeight,
           legacyFit,
           paragraphSpacing,
         )
-      : base;
+      : effectiveFontSize;
 
   const neededHeight =
     measureTextHeight(

@@ -178,12 +178,13 @@ export function PropertiesPanel({
   const [savingAsset, setSavingAsset] = useState(false);
   /* Core properties start open; infrequent tools remain collapsible. */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade"
+    "dimensions" | "text" | "background" | "fade" | "layer-effects"
   >("properties", {
     dimensions: true,
     text: true,
     background: true,
     fade: false,
+    "layer-effects": false,
   });
 
   /**
@@ -2320,6 +2321,96 @@ export function PropertiesPanel({
             </AccordionSection>
             )}
 
+            {/* Effects panel — shadows, glows, strokes, overlays. */}
+            {el.type !== "table" && (
+              <AccordionSection
+                title="تأثيرات الطبقة (Layer Effects)"
+                id="layer-effects"
+                open={accordions.isOpen("layer-effects", false)}
+                onToggle={() => accordions.toggle("layer-effects")}
+              >
+                <Field label="الظلال (Drop / Inner Shadow)">
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const shadows = el.style.shadows || [];
+                        updateStyle(el.id, {
+                          shadows: [
+                            ...shadows,
+                            { type: "drop", color: "#000000", offsetX: 3, offsetY: 3, blur: 4, opacity: 0.5 },
+                          ],
+                        });
+                      }}
+                      className="text-[10px] border border-line bg-surface px-2 py-1 rounded hover:bg-surface-2"
+                    >
+                      إضافة ظل
+                    </button>
+                  </div>
+                  {(el.style.shadows || []).map((shadow, idx) => (
+                    <div key={idx} className="rounded-[6px] border border-line p-2 mb-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Field label="اللون">
+                          <input
+                            type="color"
+                            value={shadow.color}
+                            onChange={(e) => {
+                              const shadows = [...(el.style.shadows || [])];
+                              shadows[idx] = { ...shadows[idx], color: e.target.value };
+                              updateStyle(el.id, { shadows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="الإزاحة X">
+                          <input
+                            type="range" min={-20} max={20} step={0.5}
+                            value={shadow.offsetX}
+                            onChange={(e) => {
+                              const shadows = [...(el.style.shadows || [])];
+                              shadows[idx] = { ...shadows[idx], offsetX: Number(e.target.value) };
+                              updateStyle(el.id, { shadows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="الإزاحة Y">
+                          <input
+                            type="range" min={-20} max={20} step={0.5}
+                            value={shadow.offsetY}
+                            onChange={(e) => {
+                              const shadows = [...(el.style.shadows || [])];
+                              shadows[idx] = { ...shadows[idx], offsetY: Number(e.target.value) };
+                              updateStyle(el.id, { shadows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="التمويه">
+                          <input
+                            type="range" min={0} max={30} step={0.5}
+                            value={shadow.blur}
+                            onChange={(e) => {
+                              const shadows = [...(el.style.shadows || [])];
+                              shadows[idx] = { ...shadows[idx], blur: Number(e.target.value) };
+                              updateStyle(el.id, { shadows });
+                            }}
+                          />
+                        </Field>
+                        <Field label="الشفافية">
+                          <input
+                            type="range" min={0} max={100} step={1}
+                            value={Math.round(shadow.opacity * 100)}
+                            onChange={(e) => {
+                              const shadows = [...(el.style.shadows || [])];
+                              shadows[idx] = { ...shadows[idx], opacity: Number(e.target.value) / 100 };
+                              updateStyle(el.id, { shadows });
+                            }}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                </Field>
+            </AccordionSection>
+            )}
             {/*
              * Step 8 — طبقة التلاشي. Only the image family can carry one, so
              * the whole section is hidden elsewhere; inside, the four gradient
