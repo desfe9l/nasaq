@@ -7,7 +7,7 @@
  * and sizing per the mask definition.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { type LayerMask } from "@/lib/editor/model";
 
 interface MaskRendererProps {
@@ -22,10 +22,12 @@ export function MaskRenderer({
   children,
 }: MaskRendererProps): React.ReactNode {
   const { disabled } = mask;
-  if (disabled) return children;
 
+  // Hooks must be called unconditionally at the top level — before any early return.
   const [maskId] = useState(() => `vector-mask-${crypto.randomUUID()}`);
   const { kind, dataUrl, pathData, opacity, inverted, x, y, w, h } = mask;
+
+  if (disabled) return children;
 
   /* Build the mask CSS. */
   let maskImage: string | undefined;
