@@ -1,5 +1,6 @@
 import { setStorageOwner } from "@/lib/editor/storage-owner";
-import { authEnabled, getSession } from "./client";
+import { authEnabled, getSession, getSessionSnapshot, revalidateSession } from "./client";
+import { cachedSessionUserId } from "./session-cache";
 import { DEV_USER } from "./use-current-user";
 
 /**
@@ -17,6 +18,11 @@ import { DEV_USER } from "./use-current-user";
  *
  * Called at every identity boundary: `hydrate()` in the editor store (each
  * page load) and the sign-in/sign-out sequences in `client.ts`.
+ *
+ * The owner is resolved from the CACHED session when one is on hand
+ * (`session-cache.ts`), so this bridge never sits on the editor's open path
+ * waiting for a request; the probe that follows in the background only ever
+ * corrects the answer.
  */
 
 /** Coalesces bursts of syncs (several components hydrate on one mount). */
@@ -70,6 +76,30 @@ async function dropStaleOwnerCache(previousOwner: string): Promise<void> {
   }
 }
 
+/**
+ * Adopt a session the background probe resolved that disagrees with the owner
+ * we opened with (the cache said account A, the server says account B — a
+ * sign-in or sign-out that happened in another tab, or a revoked session).
+ *
+ * The probe is the SESSION STORE's own (`revalidateSession`), not a second
+ * `/get-session` of its own: the store already shares one request between every
+ * consumer on the page, so the library's owner check costs nothing extra and, if
+ * the server has disowned the session, the store's revocation path takes over
+ * from here.
+ */
+function reconcileOwnerInBackground(currentOwner: string): void {
+  void revalidateSession()
+    .then(() => {
+      const id = getSessionSnapshot().data?.user?.id ?? null;
+      if (!id || id === currentOwner) return;
+      void dropStaleOwnerCache(currentOwner);
+      rememberOwner(id);
+      setStorageOwner(id);
+      window.dispatchEvent(new CustomEvent("nasaq:owner-changed"));
+    })
+    .catch(() => undefined);
+}
+
 async function resolveOwnerId(): Promise<string | null> {
   if (!authEnabled) return DEV_USER.id;
   // Never probe a session during SSR — the client library is browser-only.
@@ -79,6 +109,22 @@ async function resolveOwnerId(): Promise<string | null> {
   // A local document must open without a session round-trip. Offline (and a
   // hung session probe) keep the last owner so IndexedDB stays readable.
   if (offline && remembered) return remembered;
+
+  /*
+   * Stale-While-Revalidate: the cached session already names the owner, so the
+   * library opens NOW. The session probe that used to hold this decision (up to
+   * `SESSION_BUDGET_MS`) still runs — in the background — and re-pins the owner
+   * if the server disagrees. This is the editor's open path: waiting here for a
+   * round trip delayed the first painted document on every page load.
+   */
+  const cachedOwner = cachedSessionUserId();
+  if (cachedOwner) {
+    if (remembered && remembered !== cachedOwner) void dropStaleOwnerCache(remembered);
+    rememberOwner(cachedOwner);
+    reconcileOwnerInBackground(cachedOwner);
+    return cachedOwner;
+  }
+
   try {
     const { data } = await withDeadline(getSession(), SESSION_BUDGET_MS);
     const id = data?.user?.id ?? null;

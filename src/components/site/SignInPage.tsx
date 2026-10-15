@@ -2,6 +2,7 @@ import { Navigate } from "@tanstack/react-router";
 import { BRAND } from "@/lib/brand";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { SIGN_UP_ROUTE } from "@/lib/site-routes";
+import { sessionEndedNotice, type SessionEndReason } from "@/lib/auth/session-recovery";
 import { EmailAuthForm } from "./EmailAuthForm";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
@@ -11,10 +12,18 @@ import { SiteFooter, SiteHeader } from "./SiteChrome";
  *
  * Waits out `isPending` before deciding anything: acting on `user === null` while
  * the session is still resolving would bounce an already-signed-in visitor back
- * here on every hard reload.
+ * here on every hard reload. With a cached session that wait is the first paint
+ * only — the visitor is recognised before any request is made.
+ *
+ * `ended` explains WHY the visitor is here when the background revalidation sent
+ * them (expired, revoked, suspended) — see `@/lib/auth/session-recovery`.
  */
-export function SignInPage({ redirect }: { redirect?: string } = {}) {
+export function SignInPage({
+  redirect,
+  ended,
+}: { redirect?: string; ended?: SessionEndReason } = {}) {
   const { user, isPending } = useCurrentUserState();
+  const notice = sessionEndedNotice(ended);
 
   if (isPending) {
     return (
@@ -46,6 +55,16 @@ export function SignInPage({ redirect }: { redirect?: string } = {}) {
           <p className="mt-2 text-[13px] leading-6 text-muted">
             سجّل الدخول للوصول إلى حسابك، ومشاريعك، والمحرر، وأدوات الذكاء الاصطناعي.
           </p>
+
+          {notice && (
+            <p
+              role="status"
+              data-session-ended={ended}
+              className="mt-4 rounded-[10px] border border-line bg-paper px-3 py-2 text-[12px] leading-6 font-semibold text-ink"
+            >
+              {notice}
+            </p>
+          )}
 
           <EmailAuthForm mode="sign-in" redirect={redirect} />
 

@@ -1632,32 +1632,19 @@ export const useEditor = create<EditorStore>((set, get) => {
   const refreshEntitlementsInBackground = (owner: string) => {
     void (async () => {
       try {
-        const { getLicenseStatusFn } = await import("@/lib/license/functions");
-        const status = await getLicenseStatusFn();
-        if (getStorageOwner() !== owner) return;
+        /*
+         * Through the SHARED licence loader (`license/client.ts`), not
+         * `getLicenseStatusFn` directly: the answer the licence hooks asked for a
+         * moment ago is reused instead of paid for twice, its in-flight request
+         * is joined rather than duplicated, and the same call persists the
+         * server's answer into the licence snapshot AND the offline entitlement
+         * cache for the next open. The document open itself never waits for any
+         * of this — it runs on the cached grace value.
+         */
+        const { loadLicenseStatus } = await import("@/lib/license/client");
+        const status = await loadLicenseStatus(owner);
+        if (!status || getStorageOwner() !== owner) return;
         const resolved = status.entitlements ?? { ...LICENSE_ENTITLEMENTS.FREE };
-        try {
-          const { cacheEntitlement } =
-            await import("@/lib/offline/entitlement-cache");
-          const typed = status as unknown as {
-            license?: { expiresAt?: string | null };
-            expiresAt?: string | null;
-          };
-          await cacheEntitlement({
-            ownerId: owner,
-            entitlements: resolved,
-            validatedAt: Date.now(),
-            expiresAt: typed.license?.expiresAt ?? typed.expiresAt ?? null,
-            isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
-            isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
-            isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
-            hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
-            source: "server",
-          });
-        } catch {
-          /* the cache is best-effort; the live value below still applies */
-        }
-        if (getStorageOwner() !== owner) return;
         get().setEntitlements(resolved, owner);
         /*
          * An edit made while access was still unresolved was never scheduled
