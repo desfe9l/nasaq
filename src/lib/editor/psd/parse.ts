@@ -1129,6 +1129,15 @@ export async function parsePsd(
   const pages = artboardPages(nodes, psd.width, psd.height) || [
     { name: "الصفحة 1", widthPx: psd.width, heightPx: psd.height, nodes },
   ];
+
+  /* Extract layer comps (named visibility states). */
+  const layerComps = psd.imageResources?.layerComps?.list?.map((comp: any) => ({
+    name: comp.name || `مجموعة طبقات ${comp.id}`,
+    caption: comp.caption,
+    layerIds: comp.layers?.map((l: any) => String(l.layerId)) || [],
+    visible: comp.visible !== false,
+  })) || undefined;
+
   return {
     fileName: sanitizeFileName(fileName),
     widthPx: psd.width,
@@ -1136,5 +1145,6 @@ export async function parsePsd(
     dpi,
     compositeDataUrl,
     pages,
+    layerComps,
   };
 }

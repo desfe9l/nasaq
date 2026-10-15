@@ -158,6 +158,8 @@ export interface PsdDocument {
   dpi: number;
   /** Flattened PSD composite, when small enough to preview. */
   compositeDataUrl?: string;
+  /** Layer comps (named visibility states) from the source PSD. */
+  layerComps?: { name: string; caption?: string; layerIds: string[]; visible: boolean }[];
   pages: PsdPage[];
 }
 
