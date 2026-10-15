@@ -17,7 +17,7 @@ describe("agent launcher status function", () => {
 
   it("each agent has required fields", () => {
     const agents = [
-      { id: "cline", kind: "installed", status: "active", name: "Cline", description: "Cline agent" },
+      { id: "cline", kind: "installed", status: "not-installed", name: "Cline", description: "Cline agent" },
       { id: "freebuff", kind: "installed", status: "not-installed", name: "Freebuff", description: "Freebuff agent" },
       { id: "arena", kind: "web", status: "web-only", name: "Arena", description: "Arena agent" },
       { id: "openhands", kind: "docker", status: "not-installed", name: "OpenHands", description: "OpenHands agent" },

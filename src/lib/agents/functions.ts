@@ -53,9 +53,9 @@ const agents: AgentStatus[] = [
     id: "cline",
     name: "Cline",
     kind: "installed",
-    status: "active",
+    status: "not-installed",
     description: "وكيل البرمجةurrent الذي يشغّل هذه الجلسة",
-    launch: "ما.session مفتوحة حالياً عبر واجهة المحادثة",
+    launch: "افتح نافذة المحادثة الحالية في المحرر",
     windowsSetup: "تثبيت إضافة Cline من سوق إضافة VS Code",
   },
   {
