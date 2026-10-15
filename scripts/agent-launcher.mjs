@@ -76,26 +76,19 @@ const AGENTS = [
   },
 ];
 
-export function status() {
-  console.log("🤖 NASAQ Agent Workspace Status\n");
-  console.log(`الفرع الحالي: ${sh("git branch --show-current")}`);
-  console.log(`الدليل الجذر: ${ROOT}\n`);
+const AGENT_BY_ID = new Map(AGENTS.map((a) => [a.id, a]));
 
-  for (const a of AGENTS) {
-    const statusIcon =
-      a.status === "active" ? "✅" : a.status === "web-only" ? "🌐" : "❌";
-    console.log(`${statusIcon} ${a.name} (${a.id})`);
-    console.log(`   النوع: ${a.kind}`);
-    console.log(`   الحالة: ${a.status}`);
-    console.log(`   الوصف: ${a.description}`);
-    console.log(`   التشغيل: ${a.launch}`);
-    console.log(`   الإعداد على ويندوز: ${a.windowsSetup}`);
-    console.log("");
-  }
+export function status() {
+  const out = {
+    agents: AGENTS,
+    branch: sh("git branch --show-current"),
+    root: ROOT,
+  };
+  console.log(JSON.stringify(out));
 }
 
 export function launch(id) {
-  const a = AGENTS.find((x) => x.id === id);
+  const a = AGENT_BY_ID.get(id);
   if (!a) {
     console.error(`لم يتم العثور على الوكيل: ${id}`);
     console.log("الوكلاء المتوفّرون: " + AGENTS.map((x) => x.id).join(", "));
