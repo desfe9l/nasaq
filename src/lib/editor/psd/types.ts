@@ -30,8 +30,20 @@ export interface PsdTextRun {
   /** Millimetres. */
   letterSpacingMm: number;
   direction: "rtl" | "ltr";
+  /** Photoshop transform matrix applied to the text layer. */
+  transform?: number[];
   /** For rich text: character-level formatting overrides. */
   runs?: PsdTextCharRun[];
+  /** Space after paragraph, in points. */
+  paragraphSpacingAfter?: number;
+  /** Space before paragraph, in points. */
+  paragraphSpacingBefore?: number;
+  /** Text transform: uppercase, lowercase, capitalize, small-caps. */
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize" | "small-caps";
+  /** Baseline shift in points. */
+  baselineShift?: number;
+  /** Vertical alignment: baseline, super, sub. */
+  verticalAlignText?: "baseline" | "super" | "sub";
 }
 
 /** Single character run within a rich-text layer. */
@@ -67,6 +79,12 @@ export interface PsdEffectNotes {
   blurMm?: number;
   strokeColor?: string;
   strokeWidthMm?: number;
+  /** Brightness/contrast/saturation/hue/sharpness from adjustment layers. */
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+  hue?: number;
+  sharpness?: number;
   /** Gradient fill/overlay retained as a native multi-stop NASAQ paint. */
   gradient?: Gradient;
   gradientOverlay?: boolean;

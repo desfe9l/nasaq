@@ -127,6 +127,11 @@ function applyCommonStyle(el: CanvasEl, node: PsdNode): void {
   if (node.effects.strokeColor && node.effects.strokeWidthMm) {
     el.style.stroke = node.effects.strokeWidthMm;
     el.style.borderColor = node.effects.strokeColor;
+    el.style.strokeStyle = {
+      color: node.effects.strokeColor,
+      width: node.effects.strokeWidthMm,
+      position: "center",
+    };
   }
   /* Bevel and emboss. */
   if (node.effects.bevelEmboss) el.style.bevelEmboss = node.effects.bevelEmboss;
@@ -224,7 +229,6 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.h = box.h;
     el.style = {
       fill: "#ffffff",
-      opacity: node.opacity,
       blendMode: node.cssBlend as ElStyle["blendMode"],
       brightness: node.effects.brightness,
       contrast: node.effects.contrast,

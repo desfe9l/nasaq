@@ -11,8 +11,8 @@ import { initializeCanvas, readPsd, type Layer, type PixelArray } from "ag-psd";
 import { resolvePsdFont, textDirection } from "./fonts";
 import { pngDataUrl, sha256Hex, uniformColor } from "./image-codec";
 import { assertPsdBytes, asUint8, sanitizeFileName, sanitizeLayerName } from "./security";
-import type { PsdDocument, PsdEffectNotes, PsdNode, PsdPage, PsdProgress, PsdTextRun } from "./types";
-import type { LayerShadow, LayerGlow, BevelEmbossStyle, SatinStyle, ColorOverlayStyle, GradientOverlayStyle, PatternOverlayStyle } from "../model";
+import type { PsdDocument, PsdEffectNotes, PsdNode, PsdPage, PsdProgress, PsdTextRun, PsdTextCharRun } from "./types";
+import type { LayerShadow, LayerGlow, BevelEmbossStyle, SatinStyle, ColorOverlayStyle, GradientOverlayStyle, PatternOverlayStyle, EditorBlendMode } from "../model";
 import { buildShadow } from "../shadow";
 
 let canvasReady = false;
@@ -248,7 +248,7 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
       const color = rgbHex(shadow.color && "r" in shadow.color ? shadow.color : undefined, "#000000");
       const alpha = typeof shadow.opacity === "number" ? shadow.opacity : 0.75;
       const spread = typeof shadow.choke === "number" ? mm(shadow.choke) : undefined;
-      const noise = typeof shadow.noise === "number" ? shadow.noise : undefined;
+      const noise = typeof (shadow as any).noise === "number" ? (shadow as any).noise : undefined;
       shadows.push({
         type: "drop",
         color,
@@ -315,25 +315,25 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
       const hColor = rgbHex(fx.bevel.highlightColor && "r" in fx.bevel.highlightColor ? fx.bevel.highlightColor : undefined, "#ffffff");
       const sColor = rgbHex(fx.bevel.shadowColor && "r" in fx.bevel.shadowColor ? fx.bevel.shadowColor : undefined, "#000000");
       const bevel: BevelEmbossStyle = {
-        style: (fx.bevel.style === "inner" || fx.bevel.style === "pillow" || fx.bevel.style === "strokeEmboss") ? fx.bevel.style : "outer",
-        technique: fx.bevel.technique === "chiselHard" || fx.bevel.technique === "chiselSoft" ? fx.bevel.technique : "smooth",
-        depth: fx.bevel.depth ?? 100,
-        direction: fx.bevel.direction === "down" ? "down" : "up",
+        style: ((fx.bevel.style as any) === "inner" || (fx.bevel.style as any) === "pillow" || (fx.bevel.style as any) === "strokeEmboss") ? (fx.bevel.style as any) : "outer",
+        technique: ((fx.bevel.technique as any) === "chiselHard" || (fx.bevel.technique as any) === "chiselSoft") ? (fx.bevel.technique as any) : "smooth",
+        depth: (fx.bevel as any).depth ?? 100,
+        direction: (fx.bevel.direction as any) === "down" ? "down" : "up",
         size,
         soften: typeof fx.bevel.soften === "number" ? mm(fx.bevel.soften) : undefined,
         useGlobalLight: fx.bevel.useGlobalLight ?? true,
         angle: fx.bevel.angle ?? 120,
         altitude: fx.bevel.altitude ?? 30,
-        highlightMode: CSS_BLEND[String(fx.bevel.highlightMode || "screen").toLowerCase()] as EditorBlendMode | undefined,
+        highlightMode: CSS_BLEND[String((fx.bevel as any).highlightMode || "screen").toLowerCase()] as EditorBlendMode | undefined,
         highlightColor: hColor,
-        highlightOpacity: fx.bevel.highlightOpacity ?? 0.55,
-        shadowMode: CSS_BLEND[String(fx.bevel.shadowMode || "multiply").toLowerCase()] as EditorBlendMode | undefined,
+        highlightOpacity: (fx.bevel as any).highlightOpacity ?? 0.55,
+        shadowMode: CSS_BLEND[String((fx.bevel as any).shadowMode || "multiply").toLowerCase()] as EditorBlendMode | undefined,
         shadowColor: sColor,
-        shadowOpacity: fx.bevel.shadowOpacity ?? 0.55,
+        shadowOpacity: (fx.bevel as any).shadowOpacity ?? 0.55,
       };
       notes.bevelEmboss = bevel;
-      cssShadows.push(cssShadowRow(-size / 2, -size / 2, size, hColor, bevel.highlightOpacity, true));
-      cssShadows.push(cssShadowRow(size / 2, size / 2, size, sColor, bevel.shadowOpacity, true));
+      cssShadows.push(cssShadowRow(-size / 2, -size / 2, size, hColor, bevel.highlightOpacity ?? 0.55, true));
+      cssShadows.push(cssShadowRow(size / 2, size / 2, size, sColor, bevel.shadowOpacity ?? 0.55, true));
       notes.mapped.push("Bevel / Emboss");
     }
     if (fx.satin?.enabled) {
@@ -519,10 +519,12 @@ function textOf(layer: Layer): PsdTextRun | null {
   // Build rich-text character runs from styleRuns.
   const runs: PsdTextCharRun[] = [];
   const styleRuns = text.styleRuns || [];
+  let charOffset = 0;
   for (let i = 0; i < styleRuns.length; i++) {
     const sr = styleRuns[i]!;
-    const start = typeof sr.start === "number" ? sr.start : 0;
-    const end = typeof sr.end === "number" ? sr.end : content.length;
+    const start = charOffset;
+    const end = charOffset + (typeof sr.length === "number" ? sr.length : 0);
+    charOffset = end;
     if (end <= start) continue;
     const rs = sr.style || {};
     const rFontName = rs.font?.name || style.font?.name || "Unknown";
@@ -532,7 +534,7 @@ function textOf(layer: Layer): PsdTextRun | null {
         : typeof style.fontSize === "number" && style.fontSize > 0
           ? style.fontSize
           : rawSize;
-    const rScale = textMatrix(rs.transform || text.transform)?.scaleY ?? scale;
+    const rScale = textMatrix((rs as any).transform || text.transform)?.scaleY ?? scale;
     const rFontSize = rRawSize * rScale;
     const rResolved = resolvePsdFont(rFontName, !!(rs.fauxBold || style.fauxBold), !!(rs.fauxItalic || style.fauxItalic));
     const rFill = rs.fillColor && "r" in rs.fillColor ? rs.fillColor : fill;
@@ -540,7 +542,7 @@ function textOf(layer: Layer): PsdTextRun | null {
       typeof rs.leading === "number" && rs.leading > 0
         ? rs.leading
         : rawLeading;
-    const rTracking = typeof rs.tracking === "number" ? rs.tracking : tracking;
+    const rTracking = typeof (rs as any).tracking === "number" ? (rs as any).tracking : tracking;
     const rFillHex = rgbHex(rFill);
     runs.push({
       start,
@@ -552,9 +554,9 @@ function textOf(layer: Layer): PsdTextRun | null {
       underline: !!(rs.underline || style.underline),
       color: rFillHex,
       tracking: rTracking,
-      baselineShift: typeof rs.baselineShift === "number" ? rs.baselineShift : undefined,
-      verticalAlign: rs.verticalAlign ?? undefined,
-      textTransform: rs.textTransform ?? undefined,
+      baselineShift: typeof (rs as any).baselineShift === "number" ? (rs as any).baselineShift : undefined,
+      verticalAlign: (rs as any).verticalAlign ?? undefined,
+      textTransform: (rs as any).textTransform ?? undefined,
     });
   }
   return {
@@ -572,9 +574,9 @@ function textOf(layer: Layer): PsdTextRun | null {
     runs: runs.length ? runs : undefined,
     paragraphSpacingBefore: typeof paragraphStyle.spaceBefore === "number" ? paragraphStyle.spaceBefore : undefined,
     paragraphSpacingAfter: typeof paragraphStyle.spaceAfter === "number" ? paragraphStyle.spaceAfter : undefined,
-    textTransform: paragraphStyle.textTransform ?? undefined,
-    verticalAlignText: paragraphStyle.verticalAlign ?? undefined,
-    baselineShift: typeof paragraphStyle.baselineShift === "number" ? paragraphStyle.baselineShift : undefined,
+    textTransform: (paragraphStyle as any).textTransform ?? undefined,
+    verticalAlignText: (paragraphStyle as any).verticalAlign ?? undefined,
+    baselineShift: typeof (paragraphStyle as any).baselineShift === "number" ? (paragraphStyle as any).baselineShift : undefined,
   };
 }
 
@@ -917,14 +919,15 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
     const adj = layer.adjustment;
     const adjType = String(adj.type || "").toLowerCase();
     // Map Photoshop adjustment types to NASAQ editable color properties.
+    const a = adj as any;
     if (adjType.includes("brightness") || adjType.includes("contrast")) {
-      if (typeof adj.brightness === "number") node.effects.brightness = adj.brightness;
-      if (typeof adj.contrast === "number") node.effects.contrast = adj.contrast;
+      if (typeof a.brightness === "number") node.effects.brightness = a.brightness;
+      if (typeof a.contrast === "number") node.effects.contrast = a.contrast;
       issues.push("تعديل السطوع والتباين");
     } else if (adjType.includes("hue") || adjType.includes("saturation")) {
-      if (typeof adj.hue === "number") node.effects.hue = adj.hue;
-      if (typeof adj.saturation === "number") node.effects.saturation = adj.saturation;
-      if (typeof adj.lightness === "number") node.effects.brightness = adj.lightness;
+      if (typeof a.hue === "number") node.effects.hue = a.hue;
+      if (typeof a.saturation === "number") node.effects.saturation = a.saturation;
+      if (typeof a.lightness === "number") node.effects.brightness = a.lightness;
       issues.push("تعديل التشبع واللون");
     } else if (adjType.includes("levels")) {
       issues.push("تعديل المستويات");

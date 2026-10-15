@@ -193,8 +193,8 @@ export interface ElStyle {
   shadows?: LayerShadow[];
   /** Layer glows (outer/inner). */
   glows?: LayerGlow[];
-  /** Stroke for text and shapes. */
-  stroke?: StrokeStyle;
+  /** Stroke for text and shapes (rich stroke style). */
+  strokeStyle?: StrokeStyle;
   /** Bevel and emboss effect. */
   bevelEmboss?: BevelEmbossStyle;
   /** Satin effect. */
