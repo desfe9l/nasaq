@@ -128,7 +128,8 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
     punctuation: s.arabicPunctuation,
   });
   const base = Number(s.fontSize) || 14;
-  const paragraphSpacing = s.paragraphSpacing || 0;
+  /* Paragraph spacing: after + before, combined for line counting. */
+  const paragraphSpacing = (s.paragraphSpacing || s.paragraphSpacingAfter || 0) + (s.paragraphSpacingBefore || 0);
   const spaced = withParagraphSpacing(normalized, paragraphSpacing);
   const padding = textPadding(el);
   const innerW = Math.max(1, el.w - padding * 2);
@@ -314,4 +315,24 @@ function roundMm(value: number): number {
 /** Writing direction for an element's text, as a CSS value. */
 export function textDirection(): "rtl" {
   return "rtl";
+}
+
+/** Apply Photoshop text-transform to the content before measuring/rendering. */
+function applyTextTransform(content: string, transform?: string): string {
+  if (!content || !transform || transform === "none") return content;
+  switch (transform) {
+    case "uppercase":
+      return content.toLocaleUpperCase();
+    case "lowercase":
+      return content.toLocaleLowerCase();
+    case "capitalize":
+      return content
+        .split(/\s+/)
+        .map((w) => (w ? w[0]!.toLocaleUpperCase() + w.slice(1) : w))
+        .join(" ");
+    case "small-caps":
+      return content.replace(/[a-z]/g, (c) => c.toUpperCase());
+    default:
+      return content;
+  }
 }

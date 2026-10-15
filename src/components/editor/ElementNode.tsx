@@ -489,6 +489,8 @@ function ElementContent({
     lineHeight: prepared.lineHeight,
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}mm` : undefined,
     textShadow: s.textShadow || "none",
+    textTransform:
+      s.textTransform && s.textTransform !== "none" ? s.textTransform : undefined,
     direction: s.direction === "ltr" ? "ltr" : "rtl",
     writingMode: vertical ? "vertical-rl" : undefined,
     textOrientation: vertical ? "mixed" : undefined,
@@ -502,6 +504,16 @@ function ElementContent({
         ? "center"
         : s.verticalAlign === "bottom"
           ? "flex-end"
+          : undefined,
+    /* Baseline shift: position relative with adjusted top. */
+    position: s.baselineShift ? "relative" : undefined,
+    top: s.baselineShift ? `-${s.baselineShift}mm` : undefined,
+    /* Superscript / subscript vertical alignment. */
+    verticalAlign:
+      s.verticalAlignText === "super"
+        ? "super"
+        : s.verticalAlignText === "sub"
+          ? "sub"
           : undefined,
     ...(s.textAlign === "justify" && s.justifyLastLine === "stretch"
       ? { textAlignLast: "justify" as const }
