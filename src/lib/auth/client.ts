@@ -8,6 +8,9 @@ import {
   validateSignUpInput,
   type CredentialInput,
 } from "./credentials";
+import { SESSION_CACHE_KEY, clearCachedSession } from "./session-cache";
+import { createSessionStore, type SessionSnapshot } from "./session-store";
+import { SESSION_CHANGED_EVENT, notifySessionEnded } from "./session-recovery";
 
 /**
  * First-party auth client for this React SPA (browser-side).
@@ -19,11 +22,31 @@ import {
  * see `signIn`). Every request below attaches that token when present; when
  * deployed (cookie auth) no token is stored, so nothing changes.
  *
- * The session store is intentionally tiny: `/api/auth/get-session` is the single
- * source of truth, and `useSession()` (a `useSyncExternalStore` subscription)
- * exposes it to React. There is no client-side session state that could disagree
- * with the server — which is the bug class that used to render a signed-in
- * visitor as signed out (or vice versa).
+ * THE SESSION STORE — Stale-While-Revalidate
+ *
+ * The server stays the single source of truth: `/api/auth/get-session` is asked
+ * on every identity boundary and its answer is what ends up in the store. What
+ * changed is that the FIRST PAINT no longer waits for it.
+ *
+ *   · STALE — the last answer the server gave is persisted (`session-cache.ts`).
+ *     Opening any page reads it back synchronously, so `useSession()` already
+ *     reports the signed-in account on the first render: no gate loader, no
+ *     flash of a signed-out shell, no per-page request.
+ *   · WHILE — `useSession()` subscribes, which fires the revalidation; the page
+ *     has long since painted and nothing on screen waits for the network.
+ *   · REVALIDATE — the answer silently replaces the snapshot when it differs
+ *     (profile edit, new expiry, rotated session), or ENDS the session when the
+ *     server no longer recognises it (`notifySessionEnded` → the root
+ *     `SessionWatch` clears this browser's identity state and routes to sign-in
+ *     with the address the visitor was on).
+ *
+ * A non-OK answer (e.g. 503 while identity storage is unreachable) is NEVER read
+ * as "signed out": the last known session stands, so a flaky identity store can
+ * not sign a visitor out of their own workspace. Only a completed 200 with no
+ * user is authoritative — and that is exactly what the revocation path needs.
+ *
+ * The store is shared: every page and every hook reads this one snapshot, so an
+ * internal navigation never asks the server for the session again.
  */
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
@@ -129,76 +152,106 @@ function toClientError(data: unknown, status: number): AuthClientError {
   };
 }
 
-// ── Session store ────────────────────────────────────────────────────────────
+// ── Session store (Stale-While-Revalidate) ───────────────────────────────────
+//
+// The RULES live in `session-store.ts`, where they are unit-tested without a
+// browser: what a cached session lets us paint, when a revalidation is silent,
+// when a probe is skipped, and — the one that matters — that only a COMPLETED
+// answer with no user signs anyone out.
+//
+// What lives HERE is the wiring: the real transport (`authFetch`), the real
+// storage (through `session-cache.ts`), the revocation announcement the root
+// `SessionWatch` turns into "clear local state and go to sign-in", and the
+// cross-tab adoption of a cache another document wrote.
 
-type SessionSnapshot = { data: SessionPayload | null; isPending: boolean };
+const sessionStore = createSessionStore({
+  enabled: authEnabled,
+  fetchSession: () => authFetch("get-session"),
+  onSessionEnded: (reason, userId) => notifySessionEnded(reason, userId),
+});
 
+/** What the server snapshot resolves to during SSR: nothing known, still loading. */
 const SERVER_SNAPSHOT: SessionSnapshot = { data: null, isPending: true };
 
-let snapshot: SessionSnapshot = { data: null, isPending: authEnabled };
-let fetchInFlight: Promise<void> | null = null;
-let lastFetchedAt = 0;
-const listeners = new Set<() => void>();
+/**
+ * Cross-tab adoption. The browser fires `storage` for writes made by OTHER
+ * documents, so a sign-in or sign-out in one tab reaches every other tab with no
+ * request of its own; `SESSION_CHANGED_EVENT` is the same ping for callers
+ * inside this document. Attached once, on the first subscriber.
+ */
+let detachGlobalListeners: (() => void) | null = null;
 
-/** Refetch when a mount finds the store older than this (cheap freshness bound). */
-const REFRESH_AFTER_MS = 30_000;
-
-function publish(next: SessionSnapshot): void {
-  snapshot = next;
-  for (const listener of listeners) listener();
-}
-
-function storeSession(data: SessionPayload | null): void {
-  lastFetchedAt = Date.now();
-  const changed =
-    (data?.user?.id ?? null) !== (snapshot.data?.user?.id ?? null) ||
-    (data?.session?.expiresAt ?? null) !== (snapshot.data?.session?.expiresAt ?? null) ||
-    snapshot.isPending;
-  if (changed) publish({ data, isPending: false });
-}
-
-/** Read the session from the server into the store. Coalesces concurrent calls. */
-function refreshSession(force = false): Promise<void> {
-  if (!authEnabled) return Promise.resolve();
-  if (typeof window === "undefined") return Promise.resolve();
-  if (fetchInFlight) return fetchInFlight;
-  if (!force && lastFetchedAt && Date.now() - lastFetchedAt < REFRESH_AFTER_MS) {
-    return Promise.resolve();
-  }
-  fetchInFlight = authFetch("get-session")
-    .then(({ ok, data }) => {
-      // A non-OK answer (e.g. 503 while identity storage is unreachable) must
-      // NOT read as "signed out" — keep the last known session and let the next
-      // probe decide. Rendering a signed-in visitor as signed out is the exact
-      // failure this store exists to avoid.
-      if (!ok) return;
-      const payload = data as SessionPayload | null;
-      storeSession(payload && payload.user ? payload : null);
-    })
-    .catch(() => {
-      /* offline or aborted — keep the previous answer, `isPending` resolves below */
-      if (snapshot.isPending) publish({ data: snapshot.data, isPending: false });
-    })
-    .finally(() => {
-      fetchInFlight = null;
-    });
-  return fetchInFlight;
-}
-
-function subscribeSession(listener: () => void): () => void {
-  listeners.add(listener);
-  void refreshSession();
-  return () => {
-    listeners.delete(listener);
+function attachGlobalListeners(): void {
+  if (detachGlobalListeners || typeof window === "undefined") return;
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== SESSION_CACHE_KEY) return;
+    sessionStore.adoptCached();
+  };
+  const onChanged = () => sessionStore.adoptCached();
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(SESSION_CHANGED_EVENT, onChanged);
+  detachGlobalListeners = () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(SESSION_CHANGED_EVENT, onChanged);
+    detachGlobalListeners = null;
   };
 }
 
+function subscribeSession(listener: () => void): () => void {
+  attachGlobalListeners();
+  return sessionStore.subscribe(listener);
+}
+
 function sessionSnapshot(): SessionSnapshot {
-  return snapshot;
+  return sessionStore.snapshot();
 }
 
 function serverSessionSnapshot(): SessionSnapshot {
   return SERVER_SNAPSHOT;
+}
+
+/** Adopt an answer into the store (persisting it for the next page load). */
+function storeSession(
+  data: SessionPayload | null,
+  options: { fromServer?: boolean } = {},
+): void {
+  sessionStore.set(data, options);
+}
+
+/**
+ * The store's current state without subscribing — for imperative callers that
+ * need the session NOW (the storage-owner bridge, the session watcher) instead
+ * of opening a request. `data` may be a cached session; the source of truth is
+ * still the server's next answer.
+ */
+export function getSessionSnapshot(): SessionSnapshot {
+  return sessionStore.snapshot();
+}
+
+/** How often an open page re-checks the session in the background. */
+export const SESSION_REVALIDATE_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * Force a background revalidation now (window focus, reconnect, the periodic
+ * tick, or an explicit refresh). Resolves when the probe finished — callers
+ * still must not block a render on it.
+ */
+export function revalidateSession(options: { force?: boolean } = {}): Promise<void> {
+  return sessionStore.revalidate(options.force === true);
+}
+
+/**
+ * Announce that the shared session cache changed, so every tab (and every
+ * listener in this one) re-reads it. Used after an identity boundary in a flow
+ * that does not go through `storeSession`.
+ */
+export function notifySessionChanged(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+  } catch {
+    /* No DOM to announce to (SSR): nothing is listening. */
+  }
 }
 
 // ── Session API ──────────────────────────────────────────────────────────────
@@ -227,7 +280,7 @@ export async function getSession(): Promise<ClientResult<SessionPayload | null>>
   if (!ok) return { data: null, error: toClientError(data, status) };
   const payload = data as SessionPayload | null;
   const session = payload && payload.user ? payload : null;
-  storeSession(session);
+  storeSession(session, { fromServer: true });
   return { data: session, error: null };
 }
 
@@ -240,7 +293,11 @@ export async function getSession(): Promise<ClientResult<SessionPayload | null>>
 export async function revokeSession(): Promise<{ data: null; error: AuthClientError | null }> {
   try {
     const { ok, status, data } = await authFetch("sign-out", { method: "POST" });
+    // A LOCAL clear: the visitor asked for it, so the cache goes and this tab is
+    // signed out at once — but nothing announces a "session ended" revocation
+    // (see `storeSession`), and the other tabs adopt the cleared cache.
     storeSession(null);
+    notifySessionChanged();
     if (!ok) return { data: null, error: toClientError(data, status) };
     return { data: null, error: null };
   } catch (error) {
@@ -395,14 +452,38 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
  * Drop every piece of CLIENT state tied to the outgoing identity.
  *
  * The session clear alone is not enough: the editor library (projects, assets,
- * custom vectors) lives in Zustand + IndexedDB and the licence key cache in
- * localStorage, all of which outlive the session. This resets the storage
- * owner to signed-out — so persisted reads fail closed against the previous
- * account's rows — wipes the in-memory user-scoped store slices, and clears
- * the cached licence key. Best effort: a module that never loaded has no
- * state to clear, and the sign-out itself must not fail on a cache hiccup.
+ * custom vectors) lives in Zustand + IndexedDB, and the caches this app keeps
+ * for its instant start-up — the session snapshot (`session-cache.ts`), every
+ * account's licence snapshot (`license-cache.ts`) and the browser-stored
+ * licence key — all outlive a session and belong to the account that held it.
+ *
+ * This resets the storage owner to signed-out (so persisted reads fail closed
+ * against the previous account's rows), wipes the in-memory user-scoped store
+ * slices, clears the bearer token, and drops every cache above. Best effort: a
+ * module that never loaded has no state to clear, and no call site — sign-out,
+ * account switch, or a session the server has disowned — may fail on a cache
+ * hiccup.
+ *
+ * Exported because `SessionWatch` (the root revalidator) runs exactly this on a
+ * revoked session before routing the visitor to sign-in.
  */
-async function clearLocalIdentityState(): Promise<void> {
+export async function clearLocalIdentityState(): Promise<void> {
+  try {
+    clearCachedSession();
+  } catch {
+    /* the cache is a convenience; an unreadable store has nothing to drop */
+  }
+  try {
+    const { clearAllLicenseCaches } = await import("@/lib/license/license-cache");
+    clearAllLicenseCaches();
+  } catch {
+    /* licence snapshot cache unavailable — nothing to sweep */
+  }
+  try {
+    setBearerToken(null);
+  } catch {
+    /* sessionStorage unavailable (private mode): there is no token to drop */
+  }
   try {
     localStorage.removeItem("nasaq-last-owner");
   } catch {
@@ -461,6 +542,8 @@ async function applyNewSessionToClientState(): Promise<void> {
   } catch {
     /* store unavailable on this page — nothing to refresh */
   }
+  // Other documents (tabs) adopt the freshly written session cache silently.
+  notifySessionChanged();
 }
 
 /**

@@ -418,6 +418,45 @@ Verify with:
   a localStorage mirror so a private window still opens, but data URLs make that
   path a last resort — surface the failure as a toast rather than throwing.
 
+### Auth, session and licence contracts (Stale-While-Revalidate)
+
+The first paint never waits for `/api/auth/get-session` or `getLicenseStatusFn`.
+The last answer the server gave is persisted (session in
+`src/lib/auth/session-cache.ts`, licence in `src/lib/license/license-cache.ts`),
+read back synchronously, and revalidated in the background. Keep these
+invariants when touching any of it:
+
+- **The pure decision modules are the contract.** `session-store.ts`,
+  `session-recovery.ts`, `license/state.ts`, `license-cache.ts` and
+  `status-loader.ts` hold every rule and are unit-tested; `client.ts`
+  (`src/lib/auth`, `src/lib/license`) only wires them to transport, storage and
+  React. Change a rule there, not in a component.
+- **Only a COMPLETED answer with no user signs anyone out.** A 500, a 503, an
+  offline fetch and a thrown request all keep the last known session. Never read
+  `!ok` as "signed out" — that is how a flaky identity store logs a visitor out
+  of their own workspace.
+- **A cached answer is bounded, never authoritative.** Expiry, the cache age
+  ceiling, suspension and revocation are checked in `isCachedSessionUsable` /
+  `isCachedLicenseStatusUsable`; a suspended or revoked licence is never painted
+  as valid, not even for one frame.
+- **Revocation ends the session.** `notifySessionEnded` → the root
+  `SessionWatch` clears local identity state (editor slices, storage owner,
+  both snapshots, preview bearer) and routes to `signInRedirectFor(...)` with
+  the current address. Gate-materialized sessions are left alone (the next
+  request re-mints them) and auth screens are never redirected to themselves.
+- **One request per page, not one per consumer.** `createSessionStore` and
+  `createLicenseStatusLoader` coalesce concurrent probes into one request and
+  skip probes inside their freshness window; do not call
+  `/api/auth/get-session` or `getLicenseStatusFn` directly from a component —
+  go through `useSession()` / `useLicense()` / `loadLicenseStatus()`.
+- **Every identity boundary clears the caches.** Sign-out, account switch and
+  the pre-sign-in reset go through `clearLocalIdentityState()`; a new boundary
+  added elsewhere must clear both snapshots too, or the next visitor on that
+  browser reads the previous account's plan.
+
+Operational detail and the verification record live in
+`docs/auth-swr-verification.md`.
+
 ### NASAQ template design (`.grok/skills/nasaq-media/SKILL.md`)
 
 Template and document work is art direction, not a component dump. Before

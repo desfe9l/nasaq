@@ -1,9 +1,11 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
 import { GOOGLE_PROVIDER_ID, authEnabled, signIn, signOut } from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
+import { SIGN_IN_PATH } from "./session-recovery";
+import { cachedAdminHint } from "@/lib/license/license-cache";
 
 const subscribeToNothing = () => () => {};
 const noGateSessionOnServer = () => false;
@@ -18,8 +20,14 @@ const noGateSessionOnServer = () => false;
  * render nothing so there's no signed-out flash on hard reload.
  */
 
-/** Where `RedirectToSignIn` sends signed-out visitors. Create this route. */
-export const SIGN_IN_PATH = "/login";
+/**
+ * Where `RedirectToSignIn` sends signed-out visitors. The constant lives in
+ * `session-recovery.ts` — the module that also builds the sign-in address a
+ * REVOKED session is routed to — so the guarded-route redirect and the
+ * background-revalidation redirect can never disagree about the destination.
+ * Re-exported here because this is where callers have always imported it.
+ */
+export { SIGN_IN_PATH };
 
 /** Render children only when a user is present (real session, or the disabled-auth dev user). */
 export function SignedIn({ children }: { children: ReactNode }) {
@@ -101,9 +109,24 @@ export function RequireSignedIn({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Administrator-only content.
+ *
+ * The server decides — `amIAdmin()` (and every admin server function behind
+ * this) re-checks the caller — but the FIRST paint does not wait for that
+ * round trip when the cached licence answer already says this account is an
+ * administrator or the platform owner (`license-cache.ts`). That hint is itself
+ * a server answer, only ever used to show the console early; the check that
+ * matters forces a denial the moment it disagrees, and the hint can never show
+ * this screen to an account the server would refuse a single admin call to.
+ */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { user, isPending } = useCurrentUserState();
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const hint = useMemo(() => cachedAdminHint(user?.id), [user?.id]);
+  // The server's answer always wins over the hint (`??`): a `false` from
+  // `amIAdmin()` replaces the optimistic render below.
+  const decided = allowed ?? (hint === true ? true : null);
 
   useEffect(() => {
     if (isPending || !user) return;
@@ -122,7 +145,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     };
   }, [isPending, user]);
 
-  if (isPending || allowed === null) {
+  if (isPending || decided === null) {
     if (!user && !isPending) return <RedirectToSignIn />;
     return <SessionGateLoader note="جارٍ التحقق من صلاحية الإدارة…" />;
   }
