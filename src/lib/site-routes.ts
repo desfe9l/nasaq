@@ -133,6 +133,8 @@ export const ADMIN_ROUTES = {
   audit: "/admin/audit",
   /** Template import service (PSD / package intake). */
   import: "/admin/import",
+  /** Agent workspace: coding-agent control surface (Cline, Freebuff, OpenHands, Arena). */
+  agents: "/admin/agents",
 } as const;
 
 export type AdminSectionId = keyof typeof ADMIN_ROUTES;
@@ -288,6 +290,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     label: "سجل الإجراءات",
     description: "كل إجراء إداري، ومن نفّذه، ومتى.",
     group: "identity",
+  },
+  {
+    id: "agents",
+    to: ADMIN_ROUTES.agents,
+    label: "وكلاء البرمجة",
+    description: "مساحة عمل وكلاء البرمجة (Cline، Freebuff، OpenHands، Arena) — الحالة، الإطلاق، والتحكم.",
+    group: "operations",
   },
 ] as const;
 

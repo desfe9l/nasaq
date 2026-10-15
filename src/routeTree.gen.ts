@@ -39,6 +39,7 @@ import { Route as TrainingRouteImport } from './routes/training'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAgentsRouteImport } from './routes/admin/agents'
 import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
@@ -233,6 +234,11 @@ const Char1575Char1604Char1607Char1608Char1610Char1577Route =
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAgentsRoute = AdminAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAiRoute = AdminAiRouteImport.update({
@@ -489,6 +495,7 @@ export interface FileRoutesByFullPath {
   '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/agents': typeof AdminAgentsRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -562,6 +569,7 @@ export interface FileRoutesByTo {
   '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/agents': typeof AdminAgentsRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -639,6 +647,7 @@ export interface FileRoutesById {
   '/training': typeof TrainingRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/agents': typeof AdminAgentsRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -717,6 +726,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/workspace'
     | '/الهوية'
+    | '/admin/agents'
     | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
@@ -790,6 +800,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/workspace'
     | '/الهوية'
+    | '/admin/agents'
     | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
@@ -866,6 +877,7 @@ export interface FileRouteTypes {
     | '/training'
     | '/workspace'
     | '/الهوية'
+    | '/admin/agents'
     | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
@@ -1171,6 +1183,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/agents': {
+      id: '/admin/agents'
+      path: '/agents'
+      fullPath: '/admin/agents'
+      preLoaderRoute: typeof AdminAgentsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/ai': {
@@ -1485,6 +1504,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAgentsRoute: typeof AdminAgentsRoute
   AdminAiRoute: typeof AdminAiRoute
   AdminAssetsRoute: typeof AdminAssetsRoute
   AdminAuditRoute: typeof AdminAuditRoute
@@ -1508,6 +1528,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAgentsRoute: AdminAgentsRoute,
   AdminAiRoute: AdminAiRoute,
   AdminAssetsRoute: AdminAssetsRoute,
   AdminAuditRoute: AdminAuditRoute,
