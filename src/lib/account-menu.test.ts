@@ -8,7 +8,12 @@ import {
   ACCOUNT_MENU_MIN_HEIGHT,
   ACCOUNT_MENU_MIN_WIDTH,
   anchorBarBottom,
+  createMenuFrameScheduler,
+  installAccountMenuDismiss,
+  isDismissalPress,
   placeAccountMenu,
+  sameMenuPlacement,
+  shouldDismissAccountMenu,
   type MenuAnchorRect,
   type MenuTriggerLike,
 } from "./account-menu.ts";
@@ -146,6 +151,164 @@ test("anchorBarBottom measures the bar, falling back to the trigger alone", () =
   assert.equal(anchorBarBottom(orphan, RTL_CHIP), RTL_CHIP.bottom);
 });
 
+/* ------------------------------------------------------ the dismiss half ---- */
+
+/*
+ * The rule asks one thing of an element — `contains` — so the fakes below are
+ * structural: a press is a `{ id }` box and a surface is the set of ids inside
+ * it. No DOM, no jsdom, and the whole dismissal contract is exercised on the
+ * same page the geometry tests run on.
+ */
+type PressBox = { id: string };
+
+/** A press that landed on `name`. */
+const press = (name: string): EventTarget => ({ id: name }) as unknown as EventTarget;
+
+/** An element whose subtree holds exactly `names`. */
+function hit(...names: string[]) {
+  return {
+    contains: (other: EventTarget | null) =>
+      other !== null && names.includes((other as unknown as PressBox).id),
+  };
+}
+
+test("a press is a dismissal only when it lands outside the card and the chip", () => {
+  const panel = hit("panel", "row", "padding", "identity", "subscription");
+  const trigger = hit("chip", "chip-badge");
+
+  // Anywhere INSIDE the card keeps it open — including the padding, the gap
+  // between rows and the identity block, which a blanket window listener used
+  // to treat as "outside".
+  for (const inside of ["panel", "row", "padding", "identity", "subscription"]) {
+    assert.equal(
+      shouldDismissAccountMenu({ press: press(inside), panel, trigger }),
+      false,
+      `a press on "${inside}" is the author using the card, not leaving it`,
+    );
+  }
+  // The chip owns its toggle: dismissing here would fight (and re-open in) the tap.
+  assert.equal(shouldDismissAccountMenu({ press: press("chip"), panel, trigger }), false);
+  assert.equal(shouldDismissAccountMenu({ press: press("chip-badge"), panel, trigger }), false);
+  // Anything else is an explicit press outside the card, and closes it.
+  assert.equal(shouldDismissAccountMenu({ press: press("page"), panel, trigger }), true);
+  assert.equal(shouldDismissAccountMenu({ press: press("toolbar-button"), panel, trigger }), true);
+  assert.equal(shouldDismissAccountMenu({ press: null, panel, trigger }), true);
+  // No card on screen: there is nothing to dismiss.
+  assert.equal(shouldDismissAccountMenu({ press: press("page"), panel: null, trigger }), false);
+});
+
+/** A `window` that records what was installed, so the wiring itself is testable. */
+function fakeEvents() {
+  type Slot = { listener: EventListener; capture: boolean };
+  const bound = new Map<string, Slot[]>();
+  const events = {
+    addEventListener: (type: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+      const capture = options === true || (typeof options === "object" && options.capture === true);
+      const slot = { listener, capture };
+      bound.set(type, [...(bound.get(type) ?? []), slot]);
+    },
+    removeEventListener: (type: string, listener: EventListener) => {
+      bound.set(type, (bound.get(type) ?? []).filter((slot) => slot.listener !== listener));
+    },
+  };
+  const fire = (type: string, event: Record<string, unknown>) => {
+    for (const slot of bound.get(type) ?? []) {
+      (slot.listener as (payload: unknown) => void)({ type, ...event } as Event);
+    }
+  };
+  return { events, fire, captureOf: (type: string) => bound.get(type)?.some((slot) => slot.capture) ?? false, count: (type: string) => (bound.get(type) ?? []).length };
+}
+
+test("what is installed on the window is exactly: a capture press listener and Escape", () => {
+  const { events, captureOf, count } = fakeEvents();
+  let closes = 0;
+  const teardown = installAccountMenuDismiss({
+    events,
+    panel: () => hit("panel", "row"),
+    trigger: () => hit("chip"),
+    onClose: () => {
+      closes += 1;
+    },
+  });
+  // Capture, so a portal cannot hide the press from the rule.
+  assert.equal(captureOf("pointerdown"), true);
+  assert.equal(count("click"), 0, "a click listener is how the card used to vanish on its own padding");
+  assert.equal(count("scroll"), 0, "a scroll re-measures; it must never dismiss");
+  assert.equal(count("resize"), 0, "a resize (a phone's URL bar) must never dismiss either");
+
+  // Teardown detaches both, so a closed card leaves no listener behind.
+  teardown();
+  assert.equal(count("pointerdown"), 0);
+  assert.equal(count("keydown"), 0);
+  assert.equal(closes, 0);
+});
+
+test("installed listeners: outside press and Escape close; nothing else does", () => {
+  const { events, fire } = fakeEvents();
+  const closed: string[] = [];
+  installAccountMenuDismiss({
+    events,
+    panel: () => hit("panel", "row", "subscription"),
+    trigger: () => hit("chip"),
+    onClose: () => closed.push("close"),
+  });
+
+  fire("pointerdown", { target: { id: "row" } });
+  fire("pointerdown", { target: { id: "subscription" } });
+  fire("pointerdown", { target: { id: "chip" } });
+  fire("pointerdown", { target: { id: "somewhere" }, pointerType: "mouse", button: 2 });
+  fire("keydown", { key: "Enter" });
+  fire("keydown", { key: "Tab" });
+  assert.deepEqual(closed, [], "a press inside the card, on the chip, a secondary button, or an ordinary key is not an exit");
+
+  fire("pointerdown", { target: { id: "page" } });
+  fire("keydown", { key: "Escape" });
+  assert.deepEqual(closed, ["close", "close"], "an outside press and Escape are the exits");
+});
+
+test("a secondary mouse button is never a dismissal, a touch always is", () => {
+  assert.equal(isDismissalPress({ target: null, pointerType: "mouse", button: 2 }), false);
+  assert.equal(isDismissalPress({ target: null, pointerType: "mouse", button: 0 }), true);
+  assert.equal(isDismissalPress({ target: null, pointerType: "touch" }), true);
+  assert.equal(isDismissalPress({ target: null }), true);
+});
+
+test("re-measures are coalesced into one frame, and cancelling drops them", () => {
+  const queue: (() => void)[] = [];
+  let measures = 0;
+  const frames = createMenuFrameScheduler({
+    measure: () => {
+      measures += 1;
+    },
+    requestFrame: (callback) => {
+      queue.push(callback);
+      return queue.length;
+    },
+    cancelFrame: () => {
+      queue.length = 0;
+    },
+  });
+
+  /* A scroll burst is 20 events per frame, not 20 layout reads. */
+  for (let i = 0; i < 20; i += 1) frames.schedule();
+  assert.equal(queue.length, 1, "one measurement per frame");
+  queue.shift()?.();
+  assert.equal(measures, 1);
+
+  frames.schedule();
+  frames.cancel();
+  assert.equal(queue.length, 0, "a frame that never paints is dropped on unmount");
+});
+
+test("a re-measure that changed nothing never re-renders the card", () => {
+  const first = placeAccountMenu({ anchor: RTL_CHIP, bar: HEADER_BOTTOM, viewport: DESKTOP });
+  const same = { ...first };
+  assert.ok(sameMenuPlacement(first, same), "scroll/resize re-measures must be equality-checked");
+  assert.ok(!sameMenuPlacement(first, { ...first, top: first.top + 1 }), "a real move is a real update");
+  assert.ok(!sameMenuPlacement(null, first));
+  assert.ok(sameMenuPlacement(null, null));
+});
+
 /* --------------------------------------------------------- the CSS half ---- */
 
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
@@ -179,12 +342,98 @@ test("the card's CSS carries the required sizing, wrapping and layering", () => 
   assert.match(rule(".account-menu-panel-inline"), /position: static/);
 });
 
+test("the card floats on one shared layer, never on a per-surface number", () => {
+  /*
+   * The layer is what keeps the card off every other element on the page: fixed
+   * (so the measured viewport geometry means what it says), on the dropdown
+   * elevation (above the header, the panels and the mobile docks; below a
+   * dialog), and pointer-transparent (so it is not a scrim the page dies under).
+   */
+  const layer = rule(".account-menu-layer");
+  assert.match(layer, /position: fixed/);
+  assert.match(layer, /inset: 0/);
+  assert.match(layer, /z-index: var\(--z-dropdown\)/, "one token, both surfaces");
+  assert.match(layer, /pointer-events: none/, "outside presses fall through to the page");
+
+  /* The reserved row and the explicit close button, styled once. */
+  assert.match(styles, /\.account-menu-close\s*\{[^}]*width: 26px/, "the card carries its own close control");
+  assert.match(styles, /\.account-menu-row-skeleton\s*\{[^}]*pointer-events: none/);
+});
+
+test("the subscription section is laid out to be re-painted, not re-sized", () => {
+  /*
+   * The "shaking حسابي والاشتراك field" was a section that grew rows and lost
+   * its meter as the server answered. Every box that holds a value is sized in
+   * CSS, so only the text changes: four equal rows, a hint line that always
+   * occupies its row, and a skeleton that fits inside the same box.
+   */
+  const field = rule(".subscription-field");
+  assert.match(field, /min-height: 56px/, "a field row never collapses or grows");
+  assert.match(field, /grid-template-columns|display: grid|align-content: start/);
+  assert.match(rule(".subscription-field-hint"), /min-height: 14px/, "the hint keeps its line");
+  assert.match(rule(".subscription-status"), /min-width: 96px/, "the status pill is one width in every state");
+  assert.match(rule(".subscription-status"), /min-height: 21px/);
+  assert.match(rule(".subscription-meter"), /height: 6px/);
+  assert.match(rule(".subscription-countdown-value"), /min-height: 16px/);
+  assert.match(rule(".account-control .account-badge"), /min-width: 74px/);
+  assert.match(rule(".subscription-skeleton-block"), /min-height: 132px/);
+
+  /* A placeholder that pulses beside stable text is the flicker being removed. */
+  const loading = rule(".subscription-skeleton");
+  assert.doesNotMatch(loading, /animation/, "loading states are static blocks, not a shimmer");
+  assert.match(loading, /background: var\(--color-skeleton\)/);
+});
+
 test("the elevation shadow is a themed token, never a hardcoded colour", () => {
   const theme = styles.slice(styles.indexOf("@theme {"), styles.indexOf("\n}", styles.indexOf("@theme {")));
   assert.match(theme, /--shadow-dropdown:\s*0 10px 15px -3px rgba\(0, 0, 0, 0\.1\)/);
 
   const dark = styles.slice(styles.indexOf("html.dark {"), styles.indexOf("\n}", styles.indexOf("html.dark {")));
   assert.match(dark, /--shadow-dropdown:/, "Dark needs its own elevation value");
+});
+
+test("nothing but an outside press, Escape or the close button dismisses the card", () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const card = read("../components/site/AccountMenuPanel.tsx");
+  const site = read("../components/site/SiteChrome.tsx");
+  const editor = read("../components/editor/EditorAccountMenu.tsx");
+
+  // One shared rule, applied on the capture phase, on both surfaces.
+  assert.match(card, /export function useAccountMenuDismiss/);
+  assert.match(card, /installAccountMenuDismiss\(\{/, "both surfaces share one installer");
+  for (const surface of [site, editor]) {
+    assert.match(surface, /useAccountMenuDismiss\(\{ open, panelRef, triggerRef: buttonRef, onClose: closeMenu \}\)/);
+    assert.match(surface, /panelRef=\{panelRef\}/, "the card hands its element to the containment rule");
+    assert.match(surface, /onClose=\{closeMenu\}/, "the card carries its own explicit close");
+    // The three bugs that made the card vanish on a touch: a window click
+    // listener, a full-viewport sheet that swallows presses, and closing on a
+    // scroll or a resize (a phone's URL bar collapsing is both).
+    assert.doesNotMatch(surface, /addEventListener\("click", closeMenu\)/);
+    assert.doesNotMatch(surface, /addEventListener\("(scroll|resize)", closeMenu/);
+    assert.doesNotMatch(surface, /onPointerDown=\{closeMenu\}/);
+    assert.doesNotMatch(surface, /pointer-events-none fixed inset-0/);
+    // And it re-measures instead of closing when the bar under it moves.
+    assert.match(card, /addEventListener\("scroll", schedule, true\)/);
+    assert.match(card, /new ResizeObserver\(schedule\)/);
+  }
+});
+
+test("the surfaces open the subscription section with the card, not after it", () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+  for (const surface of ["../components/site/SiteChrome.tsx", "../components/editor/EditorAccountMenu.tsx"]) {
+    const text = read(surface);
+    assert.match(text, /<AccountSubscriptionCard user=\{user\} variant="menu" \/>/);
+    // A row that appears later moves the rows under it: every tier-gated block
+    // holds its own slot while the answer is pending.
+    assert.match(text, /AccountMenuRowSlot/);
+  }
+  const slots = read("../components/site/AccountMenuPanel.tsx");
+  assert.match(slots, /export function AccountMenuRowSlot/);
+  // The section itself: fixed fields in a fixed order, no local arithmetic.
+  const card = read("../components/site/AccountSubscriptionCard.tsx");
+  assert.match(card, /detail\.fields\.map/);
+  assert.match(card, /subscriptionDetail|useAccountSubscription/);
+  assert.doesNotMatch(card, /Date\.now\(\)|setInterval/, "the countdown is derived once, never ticked in the view");
 });
 
 test("both surfaces render the shared card instead of their own", () => {

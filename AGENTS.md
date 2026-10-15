@@ -457,6 +457,46 @@ invariants when touching any of it:
 Operational detail and the verification record live in
 `docs/auth-swr-verification.md`.
 
+- **`useCurrentUserState().user` is a stable object until the store publishes.**
+  It is memoised on the session snapshot on purpose: 40+ components keep `user`
+  in a `useEffect` dependency list, and a fresh literal per render turns every
+  one of them into a per-render fetch (the account page re-loaded itself in a
+  loop that way, and its subscription card visibly shook). Derive further views
+  with `useMemo`, never by rebuilding the object in the hook body; and where an
+  effect only cares about WHICH account it is, key it on `user?.id`.
+
+### Floating surfaces and the account card (`src/lib/account-menu.ts`)
+
+The identity card behind the account chip is shared by the site header and the
+editor toolbar, and both are allowed to disagree about nothing that matters:
+
+- **Geometry and dismissal are pure rules in `src/lib/account-menu.ts`**
+  (`placeAccountMenu`, `shouldDismissAccountMenu`, `sameMenuPlacement`,
+  `installAccountMenuDismiss`, `createMenuFrameScheduler`), unit-tested in
+  `src/lib/account-menu.test.ts`. The card is measured from the bottom edge of
+  the BAR that owns the chip, never the chip itself, and clamped inside the
+  viewport with a 16px gutter.
+- **The only exits are a primary press outside the card, Escape, and the card's
+  own close button.** Dismissal is `pointerdown` + containment on the capture
+  phase, because the card is portalled. A `window` `click` listener closes the
+  card when its author taps its own padding; a full-viewport sheet makes the
+  page beneath it dead; and closing on `scroll`/`resize` throws the card away
+  when a phone collapses its URL bar or the author scrolls inside the card.
+  While open, those events RE-MEASURE (one coalesced frame, and a measurement
+  that changed nothing must not re-render — `sameMenuPlacement`).
+- **One layer, one elevation token.** Both surfaces portal into
+  `.account-menu-layer` (`position: fixed; inset: 0; z-index: var(--z-dropdown);
+  pointer-events: none`) with `.account-menu-panel-floating` switching the card
+  itself back on. Never hand-roll `z-[…]`/`inset-0` on a portal: the ordered
+  scale in `src/styles.css` is what keeps a dropdown over the panels it opened
+  from and under the dialog that outranks it.
+- **A licence-gated row reserves its own slot** (`AccountMenuRowSlot`) while the
+  server answers, and the account's standing is rendered by
+  `AccountSubscriptionCard` from `src/lib/account/subscription.ts` — one derived
+  shape (four fixed fields, a calendar-day countdown, a clamped meter) for the
+  header card, the editor card, the settings dialog and `/account`. Status text
+  written per-surface is how the same account ended up described four ways.
+
 ### NASAQ template design (`.grok/skills/nasaq-media/SKILL.md`)
 
 Template and document work is art direction, not a component dump. Before

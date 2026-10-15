@@ -24,6 +24,7 @@ import type {
   Plan,
 } from "@/lib/commercial/types";
 import { cn } from "@/lib/utils";
+import { AccountSubscriptionCard } from "./AccountSubscriptionCard";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 import { ADMIN_ROUTES, OWNER_VAULT_ROUTE } from "@/lib/site-routes";
 
@@ -90,10 +91,17 @@ export function AccountPage() {
     }
   }, []);
 
+  /*
+   * Keyed on the account id, never on the session object. A derived object
+   * changes identity on every render, so depending on it turns this effect into
+   * a loop: load → setData → render → load. That loop is what made this section
+   * visibly shake and hammered the account endpoint on every paint.
+   */
+  const accountId = user?.id ?? null;
   useEffect(() => {
-    if (isPending || !user) return;
+    if (isPending || !accountId) return;
     void load();
-  }, [isPending, user, load]);
+  }, [isPending, accountId, load]);
 
   if (isPending) return <AccountShell />;
   if (!user) return <RedirectToSignIn />;
@@ -126,7 +134,16 @@ export function AccountPage() {
           )}
         </div>
 
-        {loading && <p className="text-[13px] text-muted">جارٍ التحميل…</p>}
+        {/*
+         * The account's standing is licensing state, not payment state, so it
+         * does not wait for the commercial payload below: it renders at once,
+         * with its own fixed-size loading rows.
+         */}
+        <div className="mb-6">
+          <AccountSubscriptionCard user={user} variant="page" />
+        </div>
+
+        {loading && <AccountOverviewSkeleton />}
 
         {error && (
           <p
@@ -169,6 +186,28 @@ export function AccountPage() {
         )}
       </main>
       <SiteFooter />
+    </div>
+  );
+}
+
+/**
+ * The loading shape of the payment/account blocks.
+ *
+ * A placeholder that occupies roughly the box it will be replaced by, instead
+ * of a single line of text that the real section then pushes down from: the
+ * replacement is a swap, not a jump.
+ */
+function AccountOverviewSkeleton() {
+  return (
+    <div className="grid gap-6" aria-hidden>
+      <div className="subscription-skeleton-block">
+        <span className="subscription-skeleton subscription-skeleton-wide" />
+        <span className="subscription-skeleton" />
+      </div>
+      <div className="subscription-skeleton-block">
+        <span className="subscription-skeleton subscription-skeleton-wide" />
+        <span className="subscription-skeleton" />
+      </div>
     </div>
   );
 }
@@ -223,13 +262,22 @@ function AdminAccessCard() {
   );
 }
 
+/**
+ * The payment record: what an administrator has (or has not) verified yet.
+ *
+ * The plan, its activation date, its expiry and the days left are NOT repeated
+ * here — they are the standing of the account, and `AccountSubscriptionCard`
+ * above prints them from the server's single entitlement answer (which already
+ * includes a manually approved subscription). Two cards naming the same dates
+ * is how the two halves of this page started to disagree.
+ */
 function StatusCard({ account }: { account: CustomerAccount }) {
   const meta = ACCOUNT_STATUS_META[account.status] ?? ACCOUNT_STATUS_META.FREE;
   return (
     <section className="rounded-[14px] border border-line bg-surface p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-[13px] font-extrabold text-muted">حالة الحساب</h2>
+          <h2 className="text-[13px] font-extrabold text-muted">حالة الدفع والتحقق</h2>
           <span
             className={cn(
               "mt-2 inline-block rounded-full px-3 py-1 text-[12px] font-extrabold",
@@ -249,30 +297,10 @@ function StatusCard({ account }: { account: CustomerAccount }) {
             عرض حالة الترخيص والتحقق من التفعيل
           </a>
         </div>
-        <dl className="grid gap-3 text-[12px]">
-          <div>
-            <dt className="text-muted">الباقة الحالية</dt>
-            <dd className="font-extrabold">
-              {account.planArabicName ?? account.planName ?? "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">تاريخ التفعيل</dt>
-            <dd className="font-extrabold">{formatDate(account.activatedAt)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted">تاريخ الانتهاء</dt>
-            <dd className="font-extrabold">{formatDate(account.expiresAt)}</dd>
-          </div>
-          {account.status === "ACTIVE" && account.daysRemaining !== null && (
-            <div>
-              <dt className="text-muted">المتبقي</dt>
-              <dd className="font-extrabold tabular-nums">
-                {account.daysRemaining} يوم
-              </dd>
-            </div>
-          )}
-        </dl>
+        <p className="max-w-xs text-[11px] leading-5 text-muted">
+          مدة الباقة وتواريخها تُعرض أعلاه في «الحساب والاشتراك»، من قراءة الخادم
+          لحالة الترخيص — ولا تُكرَّر هنا لتبقى مصدرًا واحدًا للحقيقة.
+        </p>
       </div>
     </section>
   );

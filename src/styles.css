@@ -5443,8 +5443,492 @@ button.license-badge-locked:focus-visible {
   color: var(--color-muted);
 }
 
+/*
+ * The layer a floating card is portalled into.
+ *
+ * One rule for both surfaces, because this is where "the menu is under
+ * something" is decided. It is `fixed` and full-viewport so the card inside it
+ * is positioned in viewport pixels (the geometry `placeAccountMenu` measures),
+ * never relative to a scrolling toolbar strip; it sits on `--z-dropdown` (70)
+ * — above the sticky site header (40), the editor panels (30) and the mobile
+ * bottom docks (60) — while a dialog (`--z-dialog`, 90) still owns the screen
+ * above it. `pointer-events: none` is the other half of the contract: the layer
+ * is NOT a scrim, an outside press falls through to the page and the shared
+ * dismissal rule decides whether the card leaves.
+ */
+.account-menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dropdown);
+  pointer-events: none;
+}
+
+/* The explicit exit: ✕ in the card's own header. */
+.account-menu-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-inline-start: auto;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.account-menu-close:hover {
+  background-color: var(--color-line-2);
+  color: var(--color-ink);
+}
+
+.account-menu-close:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+/*
+ * A tier-gated row, before the server has answered.
+ *
+ * It carries the exact height of `.account-menu-item`, so the rows under it do
+ * not slide up and back down when the licence resolves — and the card opens at
+ * the size it will keep.
+ */
+.account-menu-row-skeleton {
+  pointer-events: none;
+}
+
+.account-menu-row-skeleton > span {
+  display: block;
+  width: 58%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-skeleton);
+}
+
+/* The identity row keeps its own line for the close button. */
+.account-menu-identity > .account-menu-close {
+  margin-inline-start: 0.25rem;
+  align-self: flex-start;
+}
+
+/* =====================================================================
+ * ACCOUNT & SUBSCRIPTION — the standing of this account, in one section.
+ *
+ * Rendered twice from one component (`AccountSubscriptionCard`): compact inside
+ * the identity card, full on `/account`. The section is deliberately INERT
+ * against re-layout: four fixed rows in a fixed order, a meter row that exists
+ * in every one of its three states, and a skeleton that occupies the same box
+ * as the value it replaces. Nothing here animates on a loop and no number ticks
+ * — a placeholder that pulses or a countdown that repaints is what reads as a
+ * shaking field.
+ * ===================================================================== */
+
+.subscription-summary {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.subscription-summary-compact {
+  padding-bottom: 0.625rem;
+  margin-bottom: 0.125rem;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.subscription-summary-page {
+  gap: 0.875rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.subscription-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.subscription-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+}
+
+.subscription-summary-page .subscription-title {
+  font-size: 13px;
+}
+
+/*
+ * `min-width` is what stops the pill resizing the section when a state resolves;
+ * the label set is short on purpose, so one width fits every state.
+ */
+.subscription-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 96px;
+  min-height: 21px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.subscription-status-loading,
+.subscription-status-free {
+  border-color: var(--color-line);
+  background: var(--color-line-2);
+  color: var(--color-muted);
+}
+
+.subscription-status-licensed {
+  border-color: color-mix(in srgb, var(--color-ok) 28%, transparent);
+  background: color-mix(in srgb, var(--color-ok) 12%, transparent);
+  color: var(--color-success);
+}
+
+.subscription-status-trial {
+  border-color: color-mix(in srgb, var(--color-gold) 45%, transparent);
+  background: color-mix(in srgb, var(--color-gold) 16%, transparent);
+  color: var(--color-warning);
+}
+
+.subscription-status-lapsed,
+.subscription-status-restricted {
+  border-color: color-mix(in srgb, var(--color-danger) 32%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-error);
+}
+
+.subscription-plan {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-ink);
+}
+
+.subscription-summary-page .subscription-plan {
+  font-size: 15px;
+}
+
+.subscription-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.375rem;
+  margin: 0;
+}
+
+.subscription-summary-page .subscription-fields {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+/* A fixed row box: the same height empty, loading, or holding a long date. */
+.subscription-field {
+  display: grid;
+  align-content: start;
+  gap: 0.125rem;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-line-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.subscription-summary-page .subscription-field {
+  min-height: 74px;
+  padding: 0.625rem 0.75rem;
+}
+
+.subscription-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.subscription-field-value {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--color-ink);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.subscription-summary-page .subscription-field-value {
+  font-size: 13px;
+}
+
+/* The hint line keeps its row whether or not there is a hint to print. */
+.subscription-field-hint {
+  min-height: 14px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
+.subscription-skeleton {
+  display: inline-block;
+  width: 52px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--color-skeleton);
+}
+
+.subscription-skeleton-wide {
+  width: 104px;
+  height: 14px;
+}
+
+/* The payment/account blocks, before the server has answered: their own box. */
+.subscription-skeleton-block {
+  display: grid;
+  gap: 0.625rem;
+  align-content: start;
+  min-height: 132px;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.subscription-countdown {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.subscription-countdown-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
+.subscription-countdown-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The page variant separates the table of dates from the meter above it. */
+.subscription-countdown-full {
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-line);
+}
+
+.subscription-countdown-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  min-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.subscription-summary-page .subscription-countdown-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The page variant separates the table of dates from the meter above it. */
+.subscription-countdown-full {
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-line);
+}
+
+.subscription-countdown-value {
+  min-height: 22px;
+  font-size: 13px;
+}
+
+.subscription-days {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-navy);
+}
+
+.subscription-summary-page .subscription-days {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.subscription-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-line-2);
+}
+
+.subscription-meter > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-navy);
+}
+
+.subscription-summary-page .subscription-meter {
+  height: 8px;
+}
+
+.subscription-meter-open > i {
+  background: color-mix(in srgb, var(--color-ok) 60%, var(--color-navy));
+}
+
+.subscription-meter-empty > i {
+  background: var(--color-line);
+}
+
+.subscription-meter-lapsed > i {
+  background: var(--color-danger);
+}
+
+.subscription-note,
+.subscription-key {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.subscription-summary-page .subscription-note {
+  font-size: 12px;
+}
+
+/* The administrator/owner view: system standing, and the doors to manage it. */
+.subscription-admin {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 26%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-navy) 6%, transparent);
+}
+
+.subscription-admin-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: 10.5px;
+  line-height: 1.6;
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.subscription-admin-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.subscription-admin-link {
+  padding: 3px 7px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--color-ink);
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.subscription-admin-link:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-hover);
+}
+
+.subscription-admin-link:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+/* Which build the administrator is looking at — a fact, styled as one. */
+.subscription-admin-build {
+  align-self: center;
+  padding: 3px 7px;
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.subscription-action {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-ink);
+}
+
+.subscription-action:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-hover);
+}
+
+/*
+ * The chip's status pill keeps ONE width.
+ *
+ * The compact pill is inside the chip, and the chip is inside a flex bar: a pill
+ * that grows when «جارٍ التحقق» resolves to «مشترك» moves every neighbouring
+ * action in the header, and a card that was measured against the old position is
+ * left sitting off the chip that opened it. One reserved width, in every state.
+ */
+.account-control .account-badge {
+  min-width: 74px;
+  justify-content: center;
+}
+
+@media (pointer: coarse) {
+  .account-menu-close {
+    width: 34px;
+    height: 34px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .account-menu-item {
+  .account-menu-item,
+  .account-menu-close,
+  .subscription-admin-link,
+  .subscription-meter > i {
     transition: none;
   }
 }

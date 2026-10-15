@@ -15,6 +15,12 @@
  * and clamped into the viewport with a 16px gutter, honouring the document
  * direction. The numbers live here, once, because the site chrome and the
  * editor open the same card; `account-menu.test.ts` pins the invariants.
+ *
+ * The module also owns the two rules that decide when the card LEAVES, because
+ * both surfaces used to answer that question differently (and wrongly): a
+ * press-only dismissal rule (`shouldDismissAccountMenu`) and a re-measure
+ * equality check (`sameMenuPlacement`) that lets a card follow the bar it came
+ * from — instead of being closed by — a scroll, a rotation or a toolbar reflow.
  */
 
 /**
@@ -69,6 +75,120 @@ export interface MenuPlacement {
   maxHeight: number;
 }
 
+/** The press event, reduced to what the dismissal rule actually reads. */
+export interface MenuPressEvent {
+  target: EventTarget | null;
+  pointerType?: string;
+  button?: number;
+}
+
+/**
+ * Whether this press is a dismissal candidate at all.
+ *
+ * The secondary buttons are not: a right-click that opens the browser's context
+ * menu, or a middle-click, must not throw the card away — the author is still
+ * looking at it. Touch and pen presses carry no button, so they always count.
+ */
+export function isDismissalPress(event: MenuPressEvent): boolean {
+  return !(event.pointerType === "mouse" && (event.button ?? 0) !== 0);
+}
+
+/**
+ * The `window`-shaped thing the listeners are installed on. Typed against the
+ * DOM's own listener aliases so the real `window` satisfies it directly, and a
+ * two-line fake satisfies it in tests.
+ */
+export interface MenuEventSource {
+  addEventListener(type: string, listener: EventListener, options?: boolean | AddEventListenerOptions): void;
+  removeEventListener(type: string, listener: EventListener, options?: boolean | AddEventListenerOptions): void;
+}
+
+/**
+ * Install the two listeners an open card needs, and hand back their teardown.
+ *
+ * This is the whole dismissal contract for BOTH surfaces, kept out of React so
+ * it can be tested as the rule it is:
+ *
+ *   • `pointerdown` on the CAPTURE phase — the card lives in a portal, so a
+ *     bubble-phase listener would depend on every surface and every row
+ *     remembering to stop propagation (that dependency is what used to break).
+ *     Capture means the answer comes from containment alone: a press inside the
+ *     card can never be misread as a press outside it, which is exactly the
+ *     "menu vanished when I tapped anything" bug;
+ *   • `keydown` for Escape only;
+ *   • nothing else. No `click` on the window (it fired for the card's own
+ *     padding), no `scroll` and no `resize` (a phone collapsing its URL bar
+ *     fires both, and the author reads that as a random close).
+ */
+export function installAccountMenuDismiss({
+  events,
+  panel,
+  trigger,
+  onClose,
+}: {
+  events: MenuEventSource;
+  /** Read at press time, so a card that is not mounted cannot be "left". */
+  panel: () => MenuHitTarget | null;
+  trigger: () => MenuHitTarget | null;
+  onClose: () => void;
+}): () => void {
+  const onPointerDown = (event: MenuPressEvent) => {
+    if (!isDismissalPress(event)) return;
+    if (!shouldDismissAccountMenu({ press: event.target, panel: panel(), trigger: trigger() })) return;
+    onClose();
+  };
+  const onKeyDown = (event: { key?: string }) => {
+    if (event.key === "Escape") onClose();
+  };
+  const press = onPointerDown as EventListener;
+  const key = onKeyDown as EventListener;
+  events.addEventListener("pointerdown", press, { capture: true });
+  events.addEventListener("keydown", key);
+  return () => {
+    events.removeEventListener("pointerdown", press, { capture: true });
+    events.removeEventListener("keydown", key);
+  };
+}
+
+/**
+ * Coalesce "the bar under the card may have moved" into one re-measure.
+ *
+ * A scroll burst or a ResizeObserver callback fires far more often than a layout
+ * actually changes. Measuring once per frame — and never at all when a frame is
+ * already queued — is what lets an open card FOLLOW the toolbar it came from
+ * instead of being closed by it, at zero extra paint cost.
+ */
+export function createMenuFrameScheduler({
+  measure,
+  requestFrame = (callback) => setTimeout(callback, 16),
+  cancelFrame = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+}: {
+  measure: () => void;
+  /** `requestAnimationFrame` in the app, `setTimeout` by default, a queue in tests. */
+  requestFrame?: (callback: () => void) => unknown;
+  cancelFrame?: (handle: unknown) => void;
+}): { schedule: () => void; cancel: () => void } {
+  let queued = false;
+  let handle: unknown = null;
+  return {
+    schedule() {
+      if (queued) return;
+      queued = true;
+      handle = requestFrame(() => {
+        queued = false;
+        handle = null;
+        measure();
+      });
+    },
+    cancel() {
+      if (!queued) return;
+      queued = false;
+      cancelFrame(handle);
+      handle = null;
+    },
+  };
+}
+
 /**
  * The element a trigger belongs to, as far as measurement is concerned. Declared
  * structurally (not as `Element`) so the placement rules stay unit-testable
@@ -85,6 +205,64 @@ export interface MenuTriggerLike {
  * inside a bar (a bare button in a page body), so the card still opens under
  * whatever opened it.
  */
+/** The part of the page an outside press may or may not have landed on. */
+export interface MenuHitTarget {
+  contains(node: EventTarget | null): boolean;
+}
+
+/**
+ * Whether a press should dismiss the open card.
+ *
+ * The card may only be closed by a press that lands clearly OUTSIDE it (plus
+ * Escape and the card's own close button). Two failure modes this rule removes:
+ *
+ *   • a blanket `window` click listener closes the card when the author taps
+ *     the card's own padding, its identity block or the gap between two rows —
+ *     the menu "vanishing on any touch";
+ *   • a press that STARTS inside the card (a scroll or a text selection that
+ *     the finger leaves inside) ends on a different element, so judging the
+ *     dismissal by the release target dismisses the card mid-gesture. The press
+ *     target is the only honest answer, which is why dismissal is wired to
+ *     `pointerdown` and evaluated here.
+ *
+ * A press on the trigger is not a dismissal either: the chip owns its own
+ * toggle, and closing here would fight it (and re-open in the same tap).
+ */
+export function shouldDismissAccountMenu({
+  press,
+  panel,
+  trigger,
+}: {
+  /** The element the press landed on (`PointerEvent.target`). */
+  press: EventTarget | null;
+  /** The card, or `null` when it is not on screen. */
+  panel: MenuHitTarget | null;
+  /** The chip that opened it. */
+  trigger: MenuHitTarget | null;
+}): boolean {
+  if (!panel) return false;
+  if (panel.contains(press)) return false;
+  if (trigger?.contains(press)) return false;
+  return true;
+}
+
+/**
+ * Whether two measurements place the card in the same pixels.
+ *
+ * Repositioning runs on every scroll frame and on every toolbar reflow; without
+ * this, a re-measure that changed nothing still re-renders the card — and a card
+ * that repaints for no visible reason is exactly the flicker being fixed.
+ */
+export function sameMenuPlacement(a: MenuPlacement | null, b: MenuPlacement | null): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.top === b.top &&
+    a.insetInlineEnd === b.insetInlineEnd &&
+    a.maxWidth === b.maxWidth &&
+    a.maxHeight === b.maxHeight
+  );
+}
+
 export function anchorBarBottom(
   trigger: MenuTriggerLike | null | undefined,
   fallback: MenuAnchorRect,

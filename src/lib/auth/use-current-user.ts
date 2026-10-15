@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { authEnabled, useSession } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -64,31 +65,51 @@ export type CurrentUserState = {
  *
  * `authEnabled` is a module-level constant fixed at load, so the guarded hook
  * call keeps a stable hook order across every render of a given component.
+ *
+ * `user` keeps the SAME object identity until the session store actually
+ * publishes a different answer — see the memo below for why consumers are
+ * allowed to put it in a dependency list.
  */
+/**
+ * `authEnabled === false` has exactly one answer, forever. A module constant so
+ * the auth-off shell keeps a stable state object across every render (see the
+ * memo note below) instead of handing out a fresh literal each time.
+ */
+const DEV_USER_STATE: CurrentUserState = { user: DEV_USER, isPending: false };
+
 export function useCurrentUserState(): CurrentUserState {
   // Unconditional hook call: `authEnabled` is a module constant fixed at load,
   // so the guard below can never change the hook order between renders.
   const { data, isPending } = useSession();
-  if (!authEnabled) return { user: DEV_USER, isPending: false };
-  const user = data?.user;
-  return {
-    user: user
-      ? {
-          id: user.id,
-          displayName: user.name ?? null,
-          primaryEmail: user.email ?? null,
-          profileImageUrl: user.image ?? null,
-          isDevFallback: false,
-          // The session's own account fields — the same row the server verifies
-          // against, so createdAt/emailVerified can never disagree with the DB.
-          createdAt: (user as { createdAt?: unknown }).createdAt
-            ? String((user as { createdAt?: unknown }).createdAt)
-            : null,
-          emailVerified: (user as { emailVerified?: unknown }).emailVerified === true,
-        }
-      : null,
-    isPending,
-  };
+  /*
+   * The derived `AppUser` is MEMOISED on the store's snapshot on purpose.
+   * `data` is the session store's own object and only ever changes when the
+   * store publishes, so memoising here makes the account identity stable for
+   * the same span. That stability is load-bearing, not cosmetic: dozens of
+   * consumers keep `user` in a `useEffect` dependency list, and a fresh object
+   * on every render makes each of those effects re-run on every render — the
+   * account page then re-requests its own data, re-renders, and re-requests
+   * again. That loop is what made the subscription row visibly shake.
+   */
+  const user = useMemo<AppUser | null>(() => {
+    const sessionUser = data?.user;
+    if (!sessionUser) return null;
+    return {
+      id: sessionUser.id,
+      displayName: sessionUser.name ?? null,
+      primaryEmail: sessionUser.email ?? null,
+      profileImageUrl: sessionUser.image ?? null,
+      isDevFallback: false,
+      // The session's own account fields — the same row the server verifies
+      // against, so createdAt/emailVerified can never disagree with the DB.
+      createdAt: (sessionUser as { createdAt?: unknown }).createdAt
+        ? String((sessionUser as { createdAt?: unknown }).createdAt)
+        : null,
+      emailVerified: (sessionUser as { emailVerified?: unknown }).emailVerified === true,
+    };
+  }, [data]);
+  const state = useMemo<CurrentUserState>(() => ({ user, isPending }), [user, isPending]);
+  return authEnabled ? state : DEV_USER_STATE;
 }
 
 /**
