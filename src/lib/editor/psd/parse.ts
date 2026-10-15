@@ -12,6 +12,7 @@ import { resolvePsdFont, textDirection } from "./fonts";
 import { pngDataUrl, sha256Hex, uniformColor } from "./image-codec";
 import { assertPsdBytes, asUint8, sanitizeFileName, sanitizeLayerName } from "./security";
 import type { PsdDocument, PsdEffectNotes, PsdNode, PsdPage, PsdProgress, PsdTextRun } from "./types";
+import type { LayerShadow, LayerGlow, BevelEmbossStyle, SatinStyle, ColorOverlayStyle, GradientOverlayStyle, PatternOverlayStyle } from "../model";
 import { buildShadow } from "../shadow";
 
 let canvasReady = false;
@@ -219,76 +220,135 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
   const notes: PsdEffectNotes = { mapped: [], unsupported: [] };
   const fx = layer.effects;
   const mm = (px: number) => (px * 25.4) / dpi;
-  const shadows: string[] = [];
+  const cssShadows: string[] = [];
+  const shadows: LayerShadow[] = [];
+  const glows: LayerGlow[] = [];
   if (fx && !fx.disabled) {
     const dropShadows = (fx.dropShadow || []).filter((s) => s.enabled !== false && s.present !== false);
-    if (dropShadows.length > 4) notes.unsupported.push("تجاوزت الظلال الخارجية الأربعة المحوّلة");
-    for (const shadow of dropShadows.slice(0, 4)) {
+    if (dropShadows.length > 8) notes.unsupported.push("تجاوزت الظلال الخارجية الثمانية المحوّلة");
+    for (const shadow of dropShadows.slice(0, 8)) {
       const distance = unitPx(shadow.distance, dpi);
       const blur = unitPx(shadow.size, dpi);
       const angle = typeof shadow.angle === "number" ? shadow.angle : 120;
       const rad = ((180 - angle) * Math.PI) / 180;
       const color = rgbHex(shadow.color && "r" in shadow.color ? shadow.color : undefined, "#000000");
       const alpha = typeof shadow.opacity === "number" ? shadow.opacity : 0.75;
+      const spread = typeof shadow.choke === "number" ? mm(shadow.choke) : undefined;
+      const noise = typeof shadow.noise === "number" ? shadow.noise : undefined;
+      shadows.push({
+        type: "drop",
+        color,
+        offsetX: Math.cos(rad) * mm(distance),
+        offsetY: Math.sin(rad) * mm(distance),
+        blur: mm(blur),
+        spread,
+        opacity: alpha,
+        blendMode: CSS_BLEND[String(shadow.blendMode || "normal").toLowerCase()] as EditorBlendMode | undefined,
+        contour: shadow.contour ? String(shadow.contour) : undefined,
+        noise,
+      });
       const rendered = buildShadow({ x: Math.cos(rad) * mm(distance), y: Math.sin(rad) * mm(distance), blur: mm(blur), color, alpha });
-      if (rendered) shadows.push(rendered);
-      if ((shadow.blendMode && shadow.blendMode !== "normal") || shadow.contour || shadow.choke) {
-        notes.unsupported.push("مزج أو محيط الظل الخارجي ممثل تقريبياً");
-      }
+      if (rendered) cssShadows.push(rendered);
     }
-    if (shadows.length) notes.mapped.push("ظل خارجي");
 
     const innerShadows = (fx.innerShadow || []).filter((s) => s.enabled !== false && s.present !== false);
-    if (innerShadows.length > 2) notes.unsupported.push("تجاوزت الظلال الداخلية اثنين محوّلين");
-    for (const shadow of innerShadows.slice(0, 2)) {
+    if (innerShadows.length > 8) notes.unsupported.push("تجاوزت الظلال الداخلية الثمانية المحوّلة");
+    for (const shadow of innerShadows.slice(0, 8)) {
       const distance = unitPx(shadow.distance, dpi);
       const blur = unitPx(shadow.size, dpi);
       const angle = typeof shadow.angle === "number" ? shadow.angle : 120;
       const rad = ((180 - angle) * Math.PI) / 180;
-      shadows.push(cssShadowRow(Math.cos(rad) * mm(distance), Math.sin(rad) * mm(distance), mm(blur), rgbHex(shadow.color && "r" in shadow.color ? shadow.color : undefined, "#000000"), typeof shadow.opacity === "number" ? shadow.opacity : 0.5, true));
+      const color2 = rgbHex(shadow.color && "r" in shadow.color ? shadow.color : undefined, "#000000");
+      const alpha2 = typeof shadow.opacity === "number" ? shadow.opacity : 0.5;
+      shadows.push({
+        type: "inner",
+        color: color2,
+        offsetX: Math.cos(rad) * mm(distance),
+        offsetY: Math.sin(rad) * mm(distance),
+        blur: mm(blur),
+        opacity: alpha2,
+        clip: true,
+        blendMode: CSS_BLEND[String(shadow.blendMode || "normal").toLowerCase()] as EditorBlendMode | undefined,
+      });
     }
     if (innerShadows.length) {
-      notes.mapped.push("ظل داخلي تقريبي");
+      notes.mapped.push("ظل داخلي");
       if (innerShadows.some((s) => (s.blendMode && s.blendMode !== "normal") || s.contour || s.choke || s.layerConceals === false)) {
         notes.unsupported.push("تفاصيل الظل الداخلي ممثلة تقريبياً");
       }
     }
 
-    const glow = fx.outerGlow;
-    if (glow?.enabled) {
-      shadows.push(cssShadowRow(0, 0, mm(unitPx(glow.size, dpi)), rgbHex(glow.color && "r" in glow.color ? glow.color : undefined, "#ffffff"), typeof glow.opacity === "number" ? glow.opacity : 0.75));
-      notes.mapped.push("توهج خارجي تقريبي");
-      notes.unsupported.push("توهج خارجي ممثل تقريبياً بظل CSS");
+    const outerGlow = fx.outerGlow;
+    if (outerGlow?.enabled) {
+      const size = mm(unitPx(outerGlow.size, dpi));
+      const color = rgbHex(outerGlow.color && "r" in outerGlow.color ? outerGlow.color : undefined, "#ffffff");
+      const opacity = typeof outerGlow.opacity === "number" ? outerGlow.opacity : 0.75;
+      glows.push({ type: "outer", color, size, opacity, blendMode: CSS_BLEND[String(outerGlow.blendMode || "screen").toLowerCase()] as EditorBlendMode | undefined });
+      cssShadows.push(cssShadowRow(0, 0, size, color, opacity));
+      notes.mapped.push("توهج خارجي");
     }
     const innerGlow = fx.innerGlow;
     if (innerGlow?.enabled) {
-      shadows.push(cssShadowRow(0, 0, mm(unitPx(innerGlow.size, dpi)), rgbHex(innerGlow.color && "r" in innerGlow.color ? innerGlow.color : undefined, "#ffffff"), typeof innerGlow.opacity === "number" ? innerGlow.opacity : 0.5, true));
-      notes.mapped.push("توهج داخلي تقريبي");
-      notes.unsupported.push("توهج داخلي ممثل تقريبياً بظل CSS");
+      const size = mm(unitPx(innerGlow.size, dpi));
+      const color = rgbHex(innerGlow.color && "r" in innerGlow.color ? innerGlow.color : undefined, "#ffffff");
+      const opacity = typeof innerGlow.opacity === "number" ? innerGlow.opacity : 0.5;
+      glows.push({ type: "inner", color, size, opacity, source: innerGlow.source === "center" ? "center" : "edge", blendMode: CSS_BLEND[String(innerGlow.blendMode || "screen").toLowerCase()] as EditorBlendMode | undefined });
+      cssShadows.push(cssShadowRow(0, 0, size, color, opacity, true));
+      notes.mapped.push("توهج داخلي");
     }
     if (fx.bevel?.enabled) {
       const size = mm(unitPx(fx.bevel.size, dpi));
-      shadows.push(cssShadowRow(-size / 2, -size / 2, size, rgbHex(fx.bevel.highlightColor && "r" in fx.bevel.highlightColor ? fx.bevel.highlightColor : undefined, "#ffffff"), fx.bevel.highlightOpacity ?? 0.55, true));
-      shadows.push(cssShadowRow(size / 2, size / 2, size, rgbHex(fx.bevel.shadowColor && "r" in fx.bevel.shadowColor ? fx.bevel.shadowColor : undefined, "#000000"), fx.bevel.shadowOpacity ?? 0.55, true));
-      notes.mapped.push("Bevel / Emboss تقريبي");
-      notes.unsupported.push("Bevel / Emboss ممثل تقريبياً بظلال داخلية");
+      const hColor = rgbHex(fx.bevel.highlightColor && "r" in fx.bevel.highlightColor ? fx.bevel.highlightColor : undefined, "#ffffff");
+      const sColor = rgbHex(fx.bevel.shadowColor && "r" in fx.bevel.shadowColor ? fx.bevel.shadowColor : undefined, "#000000");
+      const bevel: BevelEmbossStyle = {
+        style: (fx.bevel.style === "inner" || fx.bevel.style === "pillow" || fx.bevel.style === "strokeEmboss") ? fx.bevel.style : "outer",
+        technique: fx.bevel.technique === "chiselHard" || fx.bevel.technique === "chiselSoft" ? fx.bevel.technique : "smooth",
+        depth: fx.bevel.depth ?? 100,
+        direction: fx.bevel.direction === "down" ? "down" : "up",
+        size,
+        soften: typeof fx.bevel.soften === "number" ? mm(fx.bevel.soften) : undefined,
+        useGlobalLight: fx.bevel.useGlobalLight ?? true,
+        angle: fx.bevel.angle ?? 120,
+        altitude: fx.bevel.altitude ?? 30,
+        highlightMode: CSS_BLEND[String(fx.bevel.highlightMode || "screen").toLowerCase()] as EditorBlendMode | undefined,
+        highlightColor: hColor,
+        highlightOpacity: fx.bevel.highlightOpacity ?? 0.55,
+        shadowMode: CSS_BLEND[String(fx.bevel.shadowMode || "multiply").toLowerCase()] as EditorBlendMode | undefined,
+        shadowColor: sColor,
+        shadowOpacity: fx.bevel.shadowOpacity ?? 0.55,
+      };
+      notes.bevelEmboss = bevel;
+      cssShadows.push(cssShadowRow(-size / 2, -size / 2, size, hColor, bevel.highlightOpacity, true));
+      cssShadows.push(cssShadowRow(size / 2, size / 2, size, sColor, bevel.shadowOpacity, true));
+      notes.mapped.push("Bevel / Emboss");
     }
-    if (fx.satin?.enabled) notes.unsupported.push("Satin");
+    if (fx.satin?.enabled) {
+      notes.satin = {
+        blendMode: CSS_BLEND[String(fx.satin.blendMode || "screen").toLowerCase()] as EditorBlendMode | undefined,
+        color: rgbHex(fx.satin.color && "r" in fx.satin.color ? fx.satin.color : undefined, "#ffffff"),
+        opacity: fx.satin.opacity ?? 0.5,
+        angle: fx.satin.angle ?? 120,
+        distance: typeof fx.satin.distance === "number" ? mm(fx.satin.distance) : undefined,
+        size: typeof fx.satin.size === "number" ? mm(fx.satin.size) : undefined,
+        contour: fx.satin.contour ? String(fx.satin.contour) : undefined,
+      };
+      notes.mapped.push("Satin");
+    }
 
-    const stroke = fx.stroke?.find((s) => s.enabled !== false && s.present !== false);
-    if (stroke) {
-      const width = unitPx(stroke.size, dpi);
-      const color = stroke.color && "r" in stroke.color ? rgbHex(stroke.color, "#172033") : undefined;
+    const strokeLayer = fx.stroke?.find((s) => s.enabled !== false && s.present !== false);
+    if (strokeLayer) {
+      const width = unitPx(strokeLayer.size, dpi);
+      const color = strokeLayer.color && "r" in strokeLayer.color ? rgbHex(strokeLayer.color, "#172033") : undefined;
       if (width > 0 && color) {
         notes.strokeWidthMm = mm(width);
         notes.strokeColor = color;
         notes.mapped.push("حد الطبقة");
-        if ((stroke.position && stroke.position !== "inside") || (typeof stroke.opacity === "number" && stroke.opacity < 1) || (stroke.blendMode && stroke.blendMode !== "normal")) {
+        if ((strokeLayer.position && strokeLayer.position !== "inside") || (typeof strokeLayer.opacity === "number" && strokeLayer.opacity < 1) || (strokeLayer.blendMode && strokeLayer.blendMode !== "normal")) {
           notes.unsupported.push("موضع أو شفافية أو مزج الحد ممثل تقريبياً");
         }
-      } else if (stroke.fillType === "gradient" && stroke.gradient) {
+      } else if (strokeLayer.fillType === "gradient" && strokeLayer.gradient) {
         notes.unsupported.push("حد بتدرج لوني");
-      } else if (stroke.fillType === "pattern") {
+      } else if (strokeLayer.fillType === "pattern") {
         notes.unsupported.push("حد بنقش Pattern");
       }
     }
@@ -301,6 +361,17 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
       }
       const blend = CSS_BLEND[String(gradientLayer.blendMode || "normal").toLowerCase()];
       if (blend) notes.gradientBlendMode = blend;
+      notes.gradientOverlayStyle = {
+        gradient: notes.gradient,
+        blendMode: blend as EditorBlendMode | undefined,
+        opacity: typeof gradientLayer.opacity === "number" ? gradientLayer.opacity : 1,
+        angle: typeof gradientLayer.angle === "number" ? gradientLayer.angle : undefined,
+        scale: typeof gradientLayer.scale === "number" ? gradientLayer.scale : undefined,
+        style: gradientLayer.type ? (["linear", "radial", "angle", "reflected", "diamond"].includes(String(gradientLayer.type)) ? gradientLayer.type : "linear") : "linear",
+        reverse: gradientLayer.reverse ?? undefined,
+        dither: gradientLayer.dither ?? undefined,
+        alignWithLayer: true,
+      };
       if (notes.gradient) {
         notes.mapped.push("تدرج لوني فوق الطبقة");
         if (["angle", "diamond", "reflected"].includes(String(gradientLayer.type))) {
@@ -316,10 +387,20 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
         notes.unsupported.push(`مزج التدرج «${gradientLayer.blendMode}» غير مدعوم`);
       }
     }
-    if (fx.patternOverlay?.enabled) notes.unsupported.push("نقش Pattern");
+
+    if (fx.patternOverlay?.enabled) {
+      notes.patternOverlay = {
+        opacity: typeof fx.patternOverlay.opacity === "number" ? fx.patternOverlay.opacity : 1,
+        blendMode: CSS_BLEND[String(fx.patternOverlay.blendMode || "normal").toLowerCase()] as EditorBlendMode | undefined,
+        scale: typeof fx.patternOverlay.scale === "number" ? fx.patternOverlay.scale : undefined,
+      };
+      notes.mapped.push("نقش Pattern فوق الطبقة");
+    }
     if (fx.solidFill?.some((f) => f.enabled !== false)) notes.unsupported.push("تعبئة لون فوق الطبقة");
   }
-  notes.shadow = shadows.length ? shadows.join(", ") : undefined;
+  notes.shadow = cssShadows.length ? cssShadows.join(", ") : undefined;
+  notes.shadows = shadows.length ? shadows : undefined;
+  notes.glows = glows.length ? glows : undefined;
   smartFilterBlur(layer, dpi, notes);
 
   return notes;
@@ -395,7 +476,6 @@ function textOf(layer: Layer): PsdTextRun | null {
         ? run.fontSize
         : 16;
   // Photoshop's UI size is the stored size times the text-matrix scale.
-  // Without it a 22px label arrives as 1.5pt and the line no longer fits its box.
   const scale = textMatrix(text.transform)?.scaleY ?? 1;
   const fontSize = rawSize * scale;
   const resolved = resolvePsdFont(fontName, !!(style.fauxBold || run?.fauxBold), !!(style.fauxItalic || run?.fauxItalic));
@@ -419,10 +499,50 @@ function textOf(layer: Layer): PsdTextRun | null {
     : run?.fillColor && "r" in run.fillColor
       ? run.fillColor
       : undefined;
-  // PSD text layers embed ETX (\u0003) as a paragraph/field terminator; the
-  // strip is intentional, hence the control-regex allowance on this line only.
-  // eslint-disable-next-line no-control-regex
+  const paragraphStyle = text.paragraphStyle || {};
+  // PSD text layers embed ETX (\u0003) as a paragraph/field terminator.
   const content = text.text.replace(/\r\n?/g, "\n").replace(/\u0003/g, "").replace(/\n+$/g, "");
+  // Build rich-text character runs from styleRuns.
+  const runs: PsdTextCharRun[] = [];
+  const styleRuns = text.styleRuns || [];
+  for (let i = 0; i < styleRuns.length; i++) {
+    const sr = styleRuns[i]!;
+    const start = typeof sr.start === "number" ? sr.start : 0;
+    const end = typeof sr.end === "number" ? sr.end : content.length;
+    if (end <= start) continue;
+    const rs = sr.style || {};
+    const rFontName = rs.font?.name || style.font?.name || "Unknown";
+    const rRawSize =
+      typeof rs.fontSize === "number" && rs.fontSize > 0
+        ? rs.fontSize
+        : typeof style.fontSize === "number" && style.fontSize > 0
+          ? style.fontSize
+          : rawSize;
+    const rScale = textMatrix(rs.transform || text.transform)?.scaleY ?? scale;
+    const rFontSize = rRawSize * rScale;
+    const rResolved = resolvePsdFont(rFontName, !!(rs.fauxBold || style.fauxBold), !!(rs.fauxItalic || style.fauxItalic));
+    const rFill = rs.fillColor && "r" in rs.fillColor ? rs.fillColor : fill;
+    const rLeading =
+      typeof rs.leading === "number" && rs.leading > 0
+        ? rs.leading
+        : rawLeading;
+    const rTracking = typeof rs.tracking === "number" ? rs.tracking : tracking;
+    const rFillHex = rgbHex(rFill);
+    runs.push({
+      start,
+      end,
+      fontName: rResolved.fontName,
+      fontSize: rFontSize,
+      fauxBold: !!(rs.fauxBold || style.fauxBold),
+      fauxItalic: !!(rs.fauxItalic || style.fauxItalic),
+      underline: !!(rs.underline || style.underline),
+      color: rFillHex,
+      tracking: rTracking,
+      baselineShift: typeof rs.baselineShift === "number" ? rs.baselineShift : undefined,
+      verticalAlign: rs.verticalAlign ?? undefined,
+      textTransform: rs.textTransform ?? undefined,
+    });
+  }
   return {
     content,
     fontName: resolved.fontName,
@@ -435,6 +555,12 @@ function textOf(layer: Layer): PsdTextRun | null {
     lineHeight: Math.min(4, Math.max(0.8, leading / fontSize)),
     letterSpacingMm: (tracking / 1000) * emMm,
     direction: textDirection(content),
+    runs: runs.length ? runs : undefined,
+    paragraphSpacingBefore: typeof paragraphStyle.spaceBefore === "number" ? paragraphStyle.spaceBefore : undefined,
+    paragraphSpacingAfter: typeof paragraphStyle.spaceAfter === "number" ? paragraphStyle.spaceAfter : undefined,
+    textTransform: paragraphStyle.textTransform ?? undefined,
+    verticalAlignText: paragraphStyle.verticalAlign ?? undefined,
+    baselineShift: typeof paragraphStyle.baselineShift === "number" ? paragraphStyle.baselineShift : undefined,
   };
 }
 

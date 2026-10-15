@@ -119,6 +119,25 @@ function applyCommonStyle(el: CanvasEl, node: PsdNode): void {
       el.style.gradientBlendMode = node.effects.gradientBlendMode as ElStyle["blendMode"];
     }
   }
+  /* Editable drop / inner shadows (array, not legacy CSS string). */
+  if (node.effects.shadows) el.style.shadows = node.effects.shadows;
+  /* Editable glows (outer / inner). */
+  if (node.effects.glows) el.style.glows = node.effects.glows;
+  /* Editable stroke for text and shapes. */
+  if (node.effects.strokeColor && node.effects.strokeWidthMm) {
+    el.style.stroke = node.effects.strokeWidthMm;
+    el.style.borderColor = node.effects.strokeColor;
+  }
+  /* Bevel and emboss. */
+  if (node.effects.bevelEmboss) el.style.bevelEmboss = node.effects.bevelEmboss;
+  /* Satin. */
+  if (node.effects.satin) el.style.satin = node.effects.satin;
+  /* Color overlay. */
+  if (node.effects.colorOverlay) el.style.colorOverlay = node.effects.colorOverlay;
+  /* Gradient overlay. */
+  if (node.effects.gradientOverlayStyle) el.style.gradientOverlay = node.effects.gradientOverlayStyle;
+  /* Pattern overlay. */
+  if (node.effects.patternOverlay) el.style.patternOverlay = node.effects.patternOverlay;
 }
 
 function placeBox(node: PsdNode, dpi: number): { x: number; y: number; w: number; h: number } {
@@ -231,10 +250,12 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       textBoxMode: "fixed",
       overflowVisible: true,
       verticalAlign: "top",
+      paragraphSpacing: node.text.paragraphSpacingAfter ? Math.round(node.text.paragraphSpacingAfter * 100) / 100 : undefined,
+      paragraphSpacingBefore: node.text.paragraphSpacingBefore ? Math.round(node.text.paragraphSpacingBefore * 100) / 100 : undefined,
+      textTransform: node.text.textTransform ?? undefined,
+      baselineShift: node.text.baselineShift ? Math.round(node.text.baselineShift * 100) / 100 : undefined,
+      verticalAlignText: node.text.verticalAlignText ?? undefined,
     };
-    if (node.effects.strokeColor && node.effects.strokeWidthMm) {
-      el.style.textShadow = `0 0 ${node.effects.strokeWidthMm}mm ${node.effects.strokeColor}`;
-    }
     applyCommonStyle(el, node);
     acc.textCount += 1;
     acc.native += 1;

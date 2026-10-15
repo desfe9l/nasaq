@@ -177,7 +177,35 @@ export interface ElStyle {
   letterSpacing?: number;
   /** Gap between paragraphs, in mm. Blank lines in the content become this gap. */
   paragraphSpacing?: number;
+  /** Space before paragraph, in mm. */
+  paragraphSpacingBefore?: number;
+  /** Space after paragraph, in mm. */
+  paragraphSpacingAfter?: number;
+  /** Text transform: uppercase, lowercase, capitalize, small-caps. */
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize" | "small-caps";
+  /** Baseline shift in mm. Positive raises, negative lowers. */
+  baselineShift?: number;
+  /** Superscript or subscript. */
+  verticalAlignText?: "baseline" | "super" | "sub";
+  /** CSS text-shadow for drop shadow on text. */
   textShadow?: string;
+  /** Layer shadows (drop/inner) as array for multiple effects. */
+  shadows?: LayerShadow[];
+  /** Layer glows (outer/inner). */
+  glows?: LayerGlow[];
+  /** Stroke for text and shapes. */
+  stroke?: StrokeStyle;
+  /** Bevel and emboss effect. */
+  bevelEmboss?: BevelEmbossStyle;
+  /** Satin effect. */
+  satin?: SatinStyle;
+  /** Color overlay. */
+  colorOverlay?: ColorOverlayStyle;
+  /** Gradient overlay. */
+  gradientOverlay?: GradientOverlayStyle;
+  /** Pattern overlay. */
+  patternOverlay?: PatternOverlayStyle;
+  /** Legacy single shadow string (kept for backward compat). */
   shadow?: string;
   /**
    * تمويه الطبقة (Layer Blur / Smart Filter blur), in millimetres; 0/unset is
@@ -314,6 +342,176 @@ export interface ElStyle {
   padding?: number;
   /** Manual extra height added on top of measured text (mm, autoHeight only). */
   slackMm?: number;
+}
+
+/** Layer shadow (drop shadow or inner shadow). */
+export interface LayerShadow {
+  /** "drop" or "inner". */
+  type: "drop" | "inner";
+  /** Shadow color. */
+  color: string;
+  /** Offset X in mm. */
+  offsetX: number;
+  /** Offset Y in mm. */
+  offsetY: number;
+  /** Blur radius in mm. */
+  blur: number;
+  /** Spread in mm (positive expands, negative contracts). */
+  spread?: number;
+  /** Opacity 0-1. */
+  opacity: number;
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Whether shadow is clipped to layer bounds (inner shadow). */
+  clip?: boolean;
+  /** Contour curve (simplified as string reference). */
+  contour?: string;
+  /** Noise percentage 0-100. */
+  noise?: number;
+}
+
+/** Layer glow (outer or inner glow). */
+export interface LayerGlow {
+  /** "outer" or "inner". */
+  type: "outer" | "inner";
+  /** Glow color. */
+  color: string;
+  /** Blur/size in mm. */
+  size: number;
+  /** Spread/choke in mm. */
+  spread?: number;
+  /** Opacity 0-1. */
+  opacity: number;
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Contour curve reference. */
+  contour?: string;
+  /** Noise percentage 0-100. */
+  noise?: number;
+  /** For inner glow: source (center or edge). */
+  source?: "center" | "edge";
+}
+
+/** Stroke style for text and shapes. */
+export interface StrokeStyle {
+  /** Stroke color. */
+  color: string;
+  /** Stroke width in mm. */
+  width: number;
+  /** Position: "inside", "outside", "center". */
+  position?: "inside" | "outside" | "center";
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Opacity 0-1. */
+  opacity?: number;
+  /** Dash pattern (array of dash/gap lengths in mm). */
+  dashArray?: number[];
+}
+
+/** Bevel and emboss effect. */
+export interface BevelEmbossStyle {
+  /** "outer" or "inner" bevel. */
+  style: "outer" | "inner" | "pillow" | "strokeEmboss";
+  /** Technique: "smooth" | "chiselHard" | "chiselSoft". */
+  technique?: "smooth" | "chiselHard" | "chiselSoft";
+  /** Depth percentage. */
+  depth?: number;
+  /** Direction: "up" | "down". */
+  direction?: "up" | "down";
+  /** Size in mm. */
+  size?: number;
+  /** Soften in mm. */
+  soften?: number;
+  /** Use global light. */
+  useGlobalLight?: boolean;
+  /** Angle in degrees. */
+  angle?: number;
+  /** Altitude in degrees. */
+  altitude?: number;
+  /** Highlight mode. */
+  highlightMode?: EditorBlendMode;
+  /** Highlight color. */
+  highlightColor?: string;
+  /** Highlight opacity 0-1. */
+  highlightOpacity?: number;
+  /** Shadow mode. */
+  shadowMode?: EditorBlendMode;
+  /** Shadow color. */
+  shadowColor?: string;
+  /** Shadow opacity 0-1. */
+  shadowOpacity?: number;
+  /** Contour for highlight/shadow. */
+  contour?: string;
+}
+
+/** Satin effect. */
+export interface SatinStyle {
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Color. */
+  color?: string;
+  /** Opacity 0-1. */
+  opacity?: number;
+  /** Angle in degrees. */
+  angle?: number;
+  /** Distance in mm. */
+  distance?: number;
+  /** Size in mm. */
+  size?: number;
+  /** Contour reference. */
+  contour?: string;
+}
+
+/** Color overlay effect. */
+export interface ColorOverlayStyle {
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Color. */
+  color?: string;
+  /** Opacity 0-1. */
+  opacity?: number;
+}
+
+/** Gradient overlay effect. */
+export interface GradientOverlayStyle {
+  /** Gradient definition. */
+  gradient?: Gradient;
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Opacity 0-1. */
+  opacity?: number;
+  /** Angle in degrees. */
+  angle?: number;
+  /** Scale percentage. */
+  scale?: number;
+  /** Offset X/Y as fraction of layer bounds. */
+  offsetX?: number;
+  offsetY?: number;
+  /** Reverse gradient. */
+  reverse?: boolean;
+  /** Dither. */
+  dither?: boolean;
+  /** Style: "linear" | "radial" | "angle" | "reflected" | "diamond". */
+  style?: "linear" | "radial" | "angle" | "reflected" | "diamond";
+  /** Align with layer. */
+  alignWithLayer?: boolean;
+}
+
+/** Pattern overlay effect. */
+export interface PatternOverlayStyle {
+  /** Pattern image data URL. */
+  pattern?: string;
+  /** Blend mode. */
+  blendMode?: EditorBlendMode;
+  /** Opacity 0-1. */
+  opacity?: number;
+  /** Scale percentage. */
+  scale?: number;
+  /** Offset X/Y as fraction of layer bounds. */
+  offsetX?: number;
+  offsetY?: number;
+  /** Link with layer (moves with layer). */
+  linkWithLayer?: boolean;
 }
 
 export type TextBoxMode = "free" | "autoHeight" | "fixed" | "autoWidth" | "fit";

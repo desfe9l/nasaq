@@ -1,4 +1,5 @@
 import type { Gradient } from "../gradient";
+import type { LayerShadow, LayerGlow, BevelEmbossStyle, SatinStyle, ColorOverlayStyle, GradientOverlayStyle, PatternOverlayStyle } from "../model";
 
 /**
  * Intermediate PSD document and the NASAQ conversion report.
@@ -29,6 +30,30 @@ export interface PsdTextRun {
   /** Millimetres. */
   letterSpacingMm: number;
   direction: "rtl" | "ltr";
+  /** For rich text: character-level formatting overrides. */
+  runs?: PsdTextCharRun[];
+}
+
+/** Single character run within a rich-text layer. */
+export interface PsdTextCharRun {
+  /** Start character index (inclusive). */
+  start: number;
+  /** End character index (exclusive). */
+  end: number;
+  fontName: string;
+  fontSize: number;
+  fauxBold: boolean;
+  fauxItalic: boolean;
+  underline: boolean;
+  color: string;
+  /** Tracking in 1/1000 em. */
+  tracking?: number;
+  /** Baseline shift in points. */
+  baselineShift?: number;
+  /** Superscript/subscript. */
+  verticalAlign?: "baseline" | "super" | "sub";
+  /** Text transform. */
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize" | "small-caps";
 }
 
 export interface PsdEffectNotes {
@@ -46,6 +71,20 @@ export interface PsdEffectNotes {
   gradient?: Gradient;
   gradientOverlay?: boolean;
   gradientBlendMode?: string;
+  /** Multiple drop/inner shadows. */
+  shadows?: LayerShadow[];
+  /** Multiple outer/inner glows. */
+  glows?: LayerGlow[];
+  /** Bevel and emboss. */
+  bevelEmboss?: BevelEmbossStyle;
+  /** Satin. */
+  satin?: SatinStyle;
+  /** Color overlay. */
+  colorOverlay?: ColorOverlayStyle;
+  /** Gradient overlay. */
+  gradientOverlayStyle?: GradientOverlayStyle;
+  /** Pattern overlay. */
+  patternOverlay?: PatternOverlayStyle;
   mapped: string[];
   unsupported: string[];
 }
