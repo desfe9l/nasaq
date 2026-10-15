@@ -24,10 +24,9 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  if (!smartObject || !selected) return null;
-
   const openSmartObject = useCallback(() => {
     setEditError(null);
+    if (!smartObject) return;
     if (smartObject.embeddedPsd) {
       // Open embedded PSD content for nested editing.
       // In a full implementation this would launch a nested editor instance
@@ -45,6 +44,7 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
 
   const saveSmartObject = useCallback(
     (nextContent: string) => {
+      if (!smartObject) return;
       // Save edited content back to the smart object's embedded data.
       updateElement(
         el.id,
@@ -65,6 +65,9 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
     setEditing(false);
     setEditError(null);
   }, []);
+
+  // Hooks stay unconditional; the null guard runs after them.
+  if (!smartObject || !selected) return null;
 
   return (
     <div

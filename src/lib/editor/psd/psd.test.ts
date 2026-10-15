@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { initializeCanvas, readPsd, writePsd, type Layer } from "ag-psd";
 
+// Mock localStorage for storage tests
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+Object.defineProperty(globalThis, "localStorage", { value: localStorageMock });
+
+// Mock IndexedDB for storage tests
+import "fake-indexeddb/auto";
+
 import {
   applyAssetDecisions,
   assertEditablePsdValidation,
@@ -752,4 +773,5 @@ describe("PSD → NASAQ", () => {
     assert.equal(el.style.blur, 12.7, "the blur reaches the element as an editable style");
     assert.equal(el.content, "عنوان");
   });
+
 });
