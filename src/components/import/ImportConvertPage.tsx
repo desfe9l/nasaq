@@ -170,10 +170,12 @@ export function ImportConvertPage() {
     setFile(next);
     // الزائر يُطلَع على الخدمة، لكن التحويل يحتاج جلسة وحق استيراد.
     if (!user) {
+      setError("سجّل الدخول لبدء استيراد الملف وتحويله إلى مستند قابل للتحرير.");
       setPhase("blocked");
       return;
     }
     if (!entitled) {
+      setError("التحويل يتطلب خطة تشمل «استيراد البيانات». راجع الخطط والأسعار للاشتراك.");
       setPhase("blocked");
       return;
     }

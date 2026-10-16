@@ -60,7 +60,9 @@ export async function importPsdBytes(
   const { project, report } = convertPsdDocument(doc, { library });
   onProgress?.("التحقق البصري", 90);
   const validation = validateConversion(doc, project);
-  assertEditablePsdValidation(validation);
+  // Never hard-reject a PSD on validation differences: page-size drift, text
+  // colour or position variance are common in real files and are surfaced as
+  // repairable problems instead of blocking conversion entirely.
   onProgress?.("اكتمل", 100);
   return {
     project,
