@@ -77,6 +77,20 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
           return;
         }
         /*
+         * A document is already open but under a different id than the route.
+         * This happens when a document is opened inside the studio
+         * (`importProject`, `createDocument`, template switch) while the route
+         * still names the outgoing document. Overwriting the live document with
+         * the route's projectId would discard the imported/opened document and
+         * can trigger redundant state updates. Align the route resolution to
+         * the live document instead.
+         */
+        if (live.documentPhase === "ready" && live.id) {
+          setFailed(null);
+          setResolvedRouteId(live.id);
+          return;
+        }
+        /*
          * A route can change from /editor/A to /editor/B while A is still
          * loading. The prior implementation returned here and never retried B,
          * leaving the address on A. Wait for that shared open to settle, then
