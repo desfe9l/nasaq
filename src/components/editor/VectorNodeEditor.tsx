@@ -5,9 +5,21 @@
  * allowing the author to drag points and handles to reshape the path.
  * Changes are persisted through the editor store's `updateElement`, so they
  * participate in undo/redo, save/reload, and export like any other edit.
+ *
+ * THE RENDER PURITY CONTRACT (the React #301 fix):
+ * the points drawn here are DERIVED from the element's own path data —
+ * `el.content` is the single source of truth — and local state exists only
+ * while a pointer drag is in flight. The previous implementation called
+ * `setPoints(...)` during render whenever `el.content` was non-empty
+ * (`points.length === 0 || el.content` is true on every render for any real
+ * path), which re-rendered forever and stopped the editor with «Too many
+ * re-renders» (React #301) the moment an imported PSD vector shape — every
+ * Photoshop vector layer lands as an `svg` element with path data — was on an
+ * interactive page. Nothing here may call a state setter outside an event
+ * handler or an effect.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "@/lib/editor/store";
 import { type CanvasEl } from "@/lib/editor/model";
 
@@ -23,6 +35,15 @@ interface PathPoint {
 interface VectorNodeEditorProps {
   el: CanvasEl;
   selected: boolean;
+}
+
+type DragPart = "point" | "cp1" | "cp2" | "cp";
+
+interface DragState {
+  index: number;
+  part: DragPart;
+  /** Live preview of the dragged path; the store receives it throttled. */
+  points: PathPoint[];
 }
 
 function parsePathData(d: string): PathPoint[] {
@@ -90,6 +111,41 @@ function pointsToPathData(points: PathPoint[]): string {
   return points.map(pathPointToString).join(" ");
 }
 
+/**
+ * Move one path point (carrying its handles) or a single control handle.
+ * Pure: every object it returns is fresh, so React state updates compare
+ * by value of the produced array, never by mutating a previous snapshot.
+ */
+function movePoint(
+  points: PathPoint[],
+  index: number,
+  part: DragPart,
+  x: number,
+  y: number,
+): PathPoint[] {
+  const current = points[index];
+  if (!current) return points;
+  const next = [...points];
+  const p: PathPoint = { ...current };
+  if (part === "point") {
+    const dx = x - current.x;
+    const dy = y - current.y;
+    p.x = x;
+    p.y = y;
+    if (p.cp1) p.cp1 = { x: p.cp1.x + dx, y: p.cp1.y + dy };
+    if (p.cp2) p.cp2 = { x: p.cp2.x + dx, y: p.cp2.y + dy };
+    if (p.cp) p.cp = { x: p.cp.x + dx, y: p.cp.y + dy };
+  } else if (part === "cp1" && p.cp1) {
+    p.cp1 = { x, y };
+  } else if (part === "cp2" && p.cp2) {
+    p.cp2 = { x, y };
+  } else if (part === "cp" && p.cp) {
+    p.cp = { x, y };
+  }
+  next[index] = p;
+  return next;
+}
+
 const HANDLE_RADIUS = 6;
 const POINT_RADIUS = 8;
 const HANDLE_COLOR = "#006c35";
@@ -98,118 +154,106 @@ const HANDLE_LINE_COLOR = "#c9a86a";
 
 export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
   const updateElement = useEditor((s) => s.updateElement);
-  const [points, setPoints] = useState<PathPoint[]>([]);
-  const [dragging, setDragging] = useState<{
-    index: number;
-    part: "point" | "cp1" | "cp2" | "cp";
-  } | null>(null);
-  const elRef = useRef<SVGSVGElement | null>(null);
+
+  /* Derived — never synchronised with a setter during render (see the file
+   * header): the drawn points always describe the element's current path. */
+  const parsed = useMemo(() => parsePathData(el.content || ""), [el.content]);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const overlayRef = useRef<SVGSVGElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Parse path data when element becomes selected or content changes.
-  if (selected && (points.length === 0 || el.content)) {
-    const parsed = parsePathData(el.content || "");
-    if (parsed.length > 0) setPoints(parsed);
-  }
-
-  // Reset points when no longer selected.
-  if (!selected && points.length > 0) {
-    setPoints([]);
-    setDragging(null);
-  }
+  const points = drag?.points ?? parsed;
+  const dragging = drag !== null;
 
   const commitPath = useCallback(
     (next: PathPoint[]) => {
-      setPoints(next);
       updateElement(el.id, { content: pointsToPathData(next) }, true);
     },
     [el.id, updateElement],
   );
 
-  const updatePoint = useCallback(
-    (index: number, part: "point" | "cp1" | "cp2" | "cp", x: number, y: number) => {
-      setPoints((prev) => {
-        const next = [...prev];
-        const p = { ...next[index] };
-        const dx = x - next[index].x;
-        const dy = y - next[index].y;
-        if (part === "point") {
-          p.x = x;
-          p.y = y;
-          if (p.cp1) { p.cp1.x += dx; p.cp1.y += dy; }
-          if (p.cp2) { p.cp2.x += dx; p.cp2.y += dy; }
-          if (p.cp) { p.cp.x += dx; p.cp.y += dy; }
-        } else if (part === "cp1" && p.cp1) {
-          p.cp1.x = x;
-          p.cp1.y = y;
-        } else if (part === "cp2" && p.cp2) {
-          p.cp2.x = x;
-          p.cp2.y = y;
-        } else if (part === "cp" && p.cp) {
-          p.cp.x = x;
-          p.cp.y = y;
-        }
-        next[index] = p;
-        return next;
-      });
-    },
-    [],
-  );
+  const beginDrag = (
+    e: React.PointerEvent,
+    index: number,
+    part: DragPart,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const state: DragState = { index, part, points: parsed };
+    dragRef.current = state;
+    setDrag(state);
+  };
 
-  const handlePointerMove = useCallback(
-    (e: PointerEvent) => {
-      if (!dragging) return;
-      // Convert screen coordinates to element-local coordinates.
-      // The editor SVG is positioned absolutely with width/height in mm,
-      // so we use the element's bounding box for coordinate mapping.
-      const svg = document.elementFromPoint(e.clientX, e.clientY)?.closest("svg");
+  /**
+   * Global move/up listeners exist only for the duration of one drag. They run
+   * outside React's render cycle for smooth dragging and are cleaned up when
+   * the drag ends or the editor unmounts mid-drag.
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: PointerEvent) => {
+      if (e.buttons === 0) return;
+      const current = dragRef.current;
+      if (!current) return;
+      const svg =
+        overlayRef.current ??
+        (document
+          .elementFromPoint(e.clientX, e.clientY)
+          ?.closest("svg") as SVGSVGElement | null);
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      // Screen coordinates → element-local millimetres (the overlay spans the
+      // element's own box, so the mapping is exact at every zoom).
       const x = ((e.clientX - rect.left) / rect.width) * el.w;
       const y = ((e.clientY - rect.top) / rect.height) * el.h;
-      updatePoint(dragging.index, dragging.part, x, y);
-      // Throttle commits to the store via requestAnimationFrame.
+      const updated: DragState = {
+        ...current,
+        points: movePoint(current.points, current.index, current.part, x, y),
+      };
+      dragRef.current = updated;
+      setDrag(updated);
+      // Throttle commits to the store via requestAnimationFrame; the fluid
+      // preview is local state, the document is written once per frame.
       if (rafRef.current === null) {
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = null;
-          commitPath(points);
+          const latest = dragRef.current;
+          if (latest) commitPath(latest.points);
         });
       }
-    },
-    [dragging, el.w, el.h, updatePoint, commitPath, points],
-  );
-
-  const handlePointerUp = useCallback(() => {
-    setDragging(null);
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    commitPath(points);
-  }, [points, commitPath]);
-
-  // Attach global move/up listeners while dragging.
-  // These run outside React's render cycle for smooth dragging.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const hasListeners = useRef(false);
-  if (dragging && !hasListeners.current) {
-    hasListeners.current = true;
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-  }
-  if (!dragging && hasListeners.current) {
-    hasListeners.current = false;
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
-    window.removeEventListener("pointercancel", handlePointerUp);
-  }
+    };
+    const onEnd = () => {
+      const latest = dragRef.current;
+      dragRef.current = null;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      // The final position lands as one undoable store edit.
+      if (latest) commitPath(latest.points);
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [dragging, el.w, el.h, commitPath]);
 
   if (!selected) return null;
 
   return (
     <svg
-      ref={elRef}
+      ref={overlayRef}
       className="absolute inset-0 pointer-events-none"
       style={{ width: `${el.w}mm`, height: `${el.h}mm` }}
     >
@@ -252,11 +296,7 @@ export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
                 stroke="#ffffff"
                 strokeWidth="1.5"
                 cursor="crosshair"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragging({ index, part: "cp1" });
-                }}
+                onPointerDown={(e) => beginDrag(e, index, "cp1")}
               />,
             );
           }
@@ -283,11 +323,7 @@ export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
                 stroke="#ffffff"
                 strokeWidth="1.5"
                 cursor="crosshair"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragging({ index, part: "cp2" });
-                }}
+                onPointerDown={(e) => beginDrag(e, index, "cp2")}
               />,
             );
           }
@@ -314,11 +350,7 @@ export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
               stroke="#ffffff"
               strokeWidth="1.5"
               cursor="crosshair"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDragging({ index, part: "cp" });
-              }}
+              onPointerDown={(e) => beginDrag(e, index, "cp")}
             />,
           );
         }
@@ -334,11 +366,7 @@ export function VectorNodeEditor({ el, selected }: VectorNodeEditorProps) {
               stroke="#ffffff"
               strokeWidth="2"
               cursor="move"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDragging({ index, part: "point" });
-              }}
+              onPointerDown={(e) => beginDrag(e, index, "point")}
             />
           </g>
         );
