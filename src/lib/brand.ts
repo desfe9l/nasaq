@@ -137,6 +137,10 @@ export const NAV_ITEMS: NavItem[] = [
     label: "طلب تصميم خاص",
   },
   {
+    to: "/services/import",
+    label: "استيراد وتحويل",
+  },
+  {
     to: "/الهوية",
     label: "الهوية",
   },

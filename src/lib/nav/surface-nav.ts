@@ -38,6 +38,7 @@ const SITE_SHORT: Record<string, string> = {
   "/purchase": "التراخيص",
   // «طلب تصميم» — a service REQUEST, never the editor's «إنشاء تصميم».
   "/custom-design": "طلب تصميم",
+  "/services/import": "استيراد",
   "/الهوية": "الهوية",
   "/about": "المنصة",
   "/contact": "تواصل",

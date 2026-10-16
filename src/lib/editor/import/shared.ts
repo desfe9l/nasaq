@@ -12,7 +12,7 @@ import { serializeTable } from "../tables";
 import { uid } from "../../utils";
 import { intrinsicPxOf, stampImportOrigins } from "./origin";
 
-export type ImportKind = "nsq" | "json" | "psd" | "psb" | "docx" | "pptx" | "xlsx" | "pdf" | "png" | "jpg" | "svg";
+export type ImportKind = "nsq" | "json" | "psd" | "psb" | "docx" | "pptx" | "xlsx" | "pdf" | "png" | "jpg" | "svg" | "webp";
 
 export interface ImportNote {
   name: string;
@@ -111,7 +111,7 @@ export function dataUrlFrom(mime: string, bytes: Uint8Array): string {
 
 export function sourceKindOf(kind: ImportKind): ElementSourceKind {
   if (kind === "psd" || kind === "psb") return "psd";
-  if (kind === "png" || kind === "jpg" || kind === "svg") return "image";
+  if (kind === "png" || kind === "jpg" || kind === "svg" || kind === "webp") return "image";
   if (kind === "nsq" || kind === "json") return "image";
   return kind;
 }
