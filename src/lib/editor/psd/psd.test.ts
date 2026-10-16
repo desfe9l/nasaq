@@ -774,4 +774,79 @@ describe("PSD → NASAQ", () => {
     assert.equal(el.content, "عنوان");
   });
 
+  it("converts a vector layer to a native svg element with unique stable IDs and valid dimensions", async () => {
+    const bytes = writePsd(
+      {
+        width: 900,
+        height: 640,
+        children: [
+          {
+            name: "شكل متجهي",
+            left: 320,
+            top: 200,
+            right: 520,
+            bottom: 280,
+            vectorFill: { type: "color", color: { r: 30, g: 90, b: 60 } },
+            vectorMask: {
+              paths: [
+                {
+                  open: false,
+                  fillRule: "non-zero",
+                  operation: "combine",
+                  knots: [
+                    { linked: true, points: [320, 200, 320, 200, 320, 200] },
+                    { linked: true, points: [520, 200, 520, 200, 520, 200] },
+                    { linked: true, points: [420, 280, 420, 280, 420, 280] },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            name: "عنوان",
+            left: 30,
+            top: 260,
+            right: 620,
+            bottom: 330,
+            text: {
+              text: "تقرير نَسَق",
+              style: { font: { name: "Tajawal" }, fontSize: 28, fillColor: { r: 12, g: 20, b: 30 } },
+              paragraphStyle: { justification: "right" },
+            },
+          },
+        ],
+      },
+      { noBackground: true },
+    );
+    const result = await importPsdBytes(bytes, "متجه.psd");
+    const page = result.project.pages[0]!;
+    assert.equal(result.validation.ok, true, JSON.stringify(result.validation.issues));
+
+    const walk = (els: CanvasEl[], out: CanvasEl[] = []): CanvasEl[] => {
+      for (const el of els) {
+        out.push(el);
+        if (el.children) walk(el.children, out);
+      }
+      return out;
+    };
+    const elements = walk(page.elements);
+    const ids = elements.map((el) => el.id);
+    assert.equal(
+      new Set(ids).size,
+      ids.length,
+      "every element keeps a stable unique ID",
+    );
+    for (const el of elements) {
+      assert.ok(el.w > 0 && el.h > 0, `${el.name} has valid positive dimensions`);
+    }
+    const svg = elements.find((el) => el.type === "svg");
+    assert.ok(
+      svg,
+      "a Photoshop vector layer becomes a native editable svg element",
+    );
+    assert.ok(svg!.w > 0 && svg!.h > 0, "svg element has valid dimensions");
+    assert.match(svg!.content || "", /<path/, "svg markup carries path data");
+    assert.match(svg!.content || "", /d=/, "svg path carries a d attribute");
+  });
+
 });
