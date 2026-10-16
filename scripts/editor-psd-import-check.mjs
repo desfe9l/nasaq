@@ -270,6 +270,121 @@ try {
   await assertStudioAlive("cold load");
   await page.screenshot({ path: `${output}/after-reload.png` });
 
+  /* Smart-object overlay: pinned to its artwork, control reachable by mouse.
+   *
+   * The overlay rendered `relative`, so it stacked BELOW the image — the «ذكي»
+   * badge and the edit control detached from the object they belong to. And the
+   * selection frame covered the element box, so the frame swallowed the click
+   * before the control ever saw it: the smart-object edit path was purely
+   * decorative. Both must hold at once — overlay on the artwork, frame stepping
+   * aside — for the control to work, so they are asserted together. */
+  const smartId = await page.evaluate(() => {
+    const s = window.__nsqStore.getState();
+    const id = s.addElement("image", {
+      x: 60,
+      y: 60,
+      w: 100,
+      h: 75,
+      smartObject: {
+        embeddedPsd: "data:application/octet-stream;base64,AAAA",
+        linked: false,
+      },
+    });
+    if (id) s.select(id);
+    return id ?? null;
+  });
+  assert.ok(smartId, "could not place a smart object");
+  await page.locator('[data-smart-object="true"]').first().waitFor({ timeout: 20000 });
+
+  const overlayBox = await page.evaluate((id) => {
+    const rect = (el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        x: Math.round(r.x),
+        y: Math.round(r.y),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+      };
+    };
+    const root = document.querySelector('[data-smart-object="true"]');
+    const frame = document.querySelector(
+      `.selection-frame[data-el-id="${CSS.escape(id)}"]`,
+    );
+    return {
+      element: rect(root.closest(".canvas-el")),
+      overlay: rect(root),
+      overlayPointerEvents: getComputedStyle(root).pointerEvents,
+      frameClasses: frame ? String(frame.className) : null,
+      framePointerEvents: frame ? getComputedStyle(frame).pointerEvents : null,
+      handlePointerEvents: frame?.querySelector(".handle")
+        ? getComputedStyle(frame.querySelector(".handle")).pointerEvents
+        : null,
+    };
+  }, smartId);
+  const sameBox = (a, b) =>
+    Math.abs(a.x - b.x) <= 2 &&
+    Math.abs(a.y - b.y) <= 2 &&
+    Math.abs(a.w - b.w) <= 2 &&
+    Math.abs(a.h - b.h) <= 2;
+  assert.ok(
+    sameBox(overlayBox.element, overlayBox.overlay),
+    `the overlay is not on its artwork: ${JSON.stringify(overlayBox)}`,
+  );
+  assert.equal(
+    overlayBox.overlayPointerEvents,
+    "none",
+    "the overlay itself must not catch canvas pointers",
+  );
+  assert.ok(
+    overlayBox.frameClasses?.includes("is-smart-object"),
+    "the selection frame must step aside for a smart object",
+  );
+  assert.equal(
+    overlayBox.framePointerEvents,
+    "none",
+    "the selection frame still covers the overlay's control",
+  );
+  assert.equal(
+    overlayBox.handlePointerEvents,
+    "auto",
+    "resize handles must keep taking pointers after the frame steps aside",
+  );
+
+  const smartAt = () =>
+    page.evaluate((id) => {
+      for (const pg of window.__nsqStore.getState().pages) {
+        const stack = [...pg.elements];
+        while (stack.length) {
+          const el = stack.pop();
+          if (el.id === id) return { x: el.x, y: el.y };
+          if (el.children) stack.push(...el.children);
+        }
+      }
+      return null;
+    }, smartId);
+  const parked = await smartAt();
+  await page.getByRole("button", { name: "تحرير المحتوى" }).click();
+  await page.waitForTimeout(400);
+  const nestedOpen = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-smart-object="true"] div')].some((d) =>
+      d.className.includes("z-20"),
+    ),
+  );
+  assert.ok(
+    nestedOpen,
+    "a real click on the smart-object control did not open the nested surface",
+  );
+  const stillParked = await smartAt();
+  assert.ok(
+    parked &&
+      stillParked &&
+      Math.abs(stillParked.x - parked.x) < 0.6 &&
+      Math.abs(stillParked.y - parked.y) < 0.6,
+    `the control click dragged the element: ${JSON.stringify({ parked, stillParked })}`,
+  );
+  await assertStudioAlive("smart object overlay");
+  await page.screenshot({ path: `${output}/smart-object.png` });
+
   console.log(
     `[psd-import-check] ok — imported ${imported.elements} elements, reloaded ${reloaded.elements}`,
   );

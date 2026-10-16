@@ -100,6 +100,11 @@ const ROLE =
 const ROLE_UTIL = /^(bg|text|border|ring|divide|placeholder|fill|stroke)-(on-brand|on-inverse|brand-hover|surface-2|inverse-hover|line-2|navy-2|navy-3|green-2|gold-2|brand|surface|paper|page|ink|muted|line|navy|green|gold|inverse|danger|ok|error|success|warning|scrim|on-gold|white|black)$/;
 const RAW_UTIL = /^(bg|text|border|ring|divide|placeholder|fill|stroke)-(\[#|slate-|gray-|zinc-|neutral-|stone-|emerald-|green-|red-|rose-|amber-|yellow-|blue-|sky-|indigo-|violet-|purple-|orange-|teal-|cyan-|lime-|fuchsia-|pink-)/;
 
+/* Background utilities that are not fills: imagery, position, repeat, sizing.
+   They are legitimate `bg-*` classes with no role behind them. */
+const NOT_A_FILL =
+  /^(?:gradient-|linear$|radial$|conic$|none$|auto$|cover$|contain$|center$|top$|bottom$|left$|right$|repeat$|repeat-x$|repeat-y$|no-repeat$|fixed$|local$|scroll$|clip-|origin-|blend-)/;
+
 /* A few surfaces are deliberately fixed-tone: the owner gate renders on its own
  * near-black backdrop in both themes, and the preview viewport / document
  * artwork must stay paper- or stage-coloured. They are allowlisted below and
@@ -193,6 +198,29 @@ for (const rel of tsxFiles("src", "src")) {
         const fillNearby = /bg-(inverse|navy|navy-2|green|gold|danger|ok|black)\b|bg-\[/.test(window);
         if (!onArtwork && !fillNearby && !exempt)
           problems.push({ file: rel, kind: "contrast", detail: `${variant ? `${variant}:` : ""}text-white without a fill of its own` });
+      }
+      /* A fill role that does not exist. Tailwind generates nothing for a name
+         it cannot resolve, so the fill silently disappears while a label that
+         assumed one (white, on-brand, on-inverse) stays — the smart-object
+         error banner shipped invisible exactly this way (`bg-destructive
+         text-white`: `destructive` is not a token in this design system). Raw
+         palette steps are reported by the audit above; imagery and layout
+         utilities are skipped here. */
+      const assumesFill = group.some(
+        (g) => /^text-(white|black|on-brand|on-inverse|on-gold)$/.test(g.base) && !g.darkOnly,
+      );
+      if (assumesFill && !exempt) {
+        for (const b of group) {
+          if (!/^bg-/.test(b.base) || b.darkOnly || RAW_UTIL.test(b.base)) continue;
+          const role = b.base.slice(3).split("/")[0];
+          if (role.includes("[") || role.includes("$") || /^[0-9]/.test(role)) continue;
+          if (NOT_A_FILL.test(role) || ROLE.test(role)) continue;
+          problems.push({
+            file: rel,
+            kind: "missing-role",
+            detail: `${variant ? `${variant}:` : ""}${b.base} names no role in src/styles.css, so it paints nothing while the label stays`,
+          });
+        }
       }
       /* A solid fill carries its own label: without an explicit one the text
          inherits the page ink and disappears (light ink on a light fill, or the
