@@ -21,6 +21,7 @@
  */
 import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,6 +114,32 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/**
+ * Resolve an npm-style bin name to something Windows can actually execute.
+ *
+ * `spawn("vite", ...)` works on POSIX (the bin shim is a symlinked script) but
+ * not on Windows, where `node_modules/.bin/vite` is a `.cmd` batch file that
+ * CreateProcess cannot start: the wrapper — and with it `dev`, `build`,
+ * `build:dev` and `preview` — died with `spawn vite ENOENT` before Vite ever
+ * ran. On win32 a bare command is therefore resolved through the package's own
+ * `package.json` `bin` entry and executed with the current node; everything
+ * else (POSIX, absolute paths, unresolvable names) keeps the direct spawn.
+ */
+export function resolveCommand(command, args, platform = process.platform) {
+  if (platform !== "win32") return { command, args };
+  if (command.includes("/") || command.includes("\\")) return { command, args };
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve(`${command}/package.json`);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.[command];
+    if (!bin) return { command, args };
+    return { command: process.execPath, args: [join(dirname(pkgPath), bin), ...args] };
+  } catch {
+    return { command, args };
+  }
+}
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command) {
@@ -120,7 +147,8 @@ function main(argv) {
     process.exit(2);
   }
   const env = environmentForCommand(command, args, readAppEnv(projectRoot()), process.env);
-  const child = spawn(command, args, { stdio: "inherit", env });
+  const target = resolveCommand(command, args);
+  const child = spawn(target.command, target.args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(signal, () => child.kill(signal));

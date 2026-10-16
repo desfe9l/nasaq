@@ -12,6 +12,7 @@ import {
   parseAppEnv,
   projectRoot,
   readAppEnv,
+  resolveCommand,
 } from "./with-app-env.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -78,6 +79,28 @@ test("Vite preview emulates Vercel unless the runtime is explicitly set", () => 
 test("the NASAQ project does not resolve its app-env flag to auth off", () => {
   const env = readAppEnv(projectRoot());
   assert.notEqual(env.VITE_AUTH_ENABLED, "false");
+});
+
+test("win32 resolves a bare npm bin to the package entry instead of ENOENT", () => {
+  // `node_modules/.bin/vite` is a `.cmd` batch file on Windows, which spawn
+  // cannot execute directly; resolving the package's own bin entry keeps the
+  // dev server, the build and the preview alive there.
+  const args = ["build", "--mode", "development"];
+  const resolved = resolveCommand("vite", args, "win32");
+  assert.equal(resolved.command, process.execPath);
+  assert.match(resolved.args[0], /node_modules[\\/]vite[\\/]bin[\\/]vite\.js$/);
+  assert.deepEqual(resolved.args.slice(1), args);
+  // POSIX keeps the direct spawn, and a real executable path is never rerouted.
+  assert.deepEqual(resolveCommand("vite", args, "linux"), { command: "vite", args });
+  assert.deepEqual(
+    resolveCommand("C:\\tools\\node.exe", args, "win32"),
+    { command: "C:\\tools\\node.exe", args },
+  );
+  // An unresolvable name falls back to the direct spawn rather than throwing.
+  assert.deepEqual(resolveCommand("definitely-not-a-package-xyz", [], "win32"), {
+    command: "definitely-not-a-package-xyz",
+    args: [],
+  });
 });
 
 test("vite loadEnv resolves the wrapped value", () => {
