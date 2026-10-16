@@ -8,8 +8,8 @@ import {
   packPages,
 } from "./templates.ts";
 import { buildProductTemplateSeeds } from "./product-templates.ts";
-import { measureTextHeight, measureTextWidth } from "./arabic.ts";
-
+import { estimateLines, hasArabic, measureTextHeight, measureTextWidth } from "./arabic.ts";
+import { arabicSafeLineHeight } from "./typography.ts";
 /**
  * What a printed catalog page must never do — checked on the REAL builders of
  * every page template, every pack, and every licensed product master, with the
@@ -69,12 +69,30 @@ const fontSizeOf = (el: CanvasEl) => Number(el.style?.fontSize) || 12;
 function renderedHeight(el: CanvasEl): number {
   const measured =
     isText(el) && el.content
-      ? measureTextHeight(
-          el.content,
-          Math.max(8, el.w),
-          fontSizeOf(el),
-          Number(el.style?.lineHeight) || 1.4,
-        )
+      ? (() => {
+          const lineHeight = Number(el.style?.lineHeight) || 1.45;
+          const multiLineArabic =
+            hasArabic(el.content) &&
+            estimateLines(
+              el.content,
+              Math.max(8, el.w),
+              fontSizeOf(el),
+              el.style?.fontFamily,
+            ) > 1;
+          // Match the renderer: multi-line Arabic is raised to the safe floor,
+          // so the measured height never under-estimates the painted box.
+          const effectiveLineHeight = multiLineArabic
+            ? arabicSafeLineHeight(lineHeight, el.style?.fontFamily)
+            : lineHeight;
+          return measureTextHeight(
+            el.content,
+            Math.max(8, el.w),
+            fontSizeOf(el),
+            effectiveLineHeight,
+            0,
+            el.style?.fontFamily,
+          );
+        })()
       : 0;
   return Math.max(el.h, measured);
 }
@@ -207,6 +225,15 @@ test("every catalog page keeps its copy readable, placed and RTL", () => {
           `${label}/${text.name}: content grows into the footer (bottom ${bottom.toFixed(1)})`,
         );
       }
+    }
+
+    // Rendered (auto-grown) text must never run past the page bottom edge.
+    for (const text of texts) {
+      const overrun = text.y + renderedHeight(text);
+      assert.ok(
+        overrun <= size.h + 0.5,
+        `${label}/${text.name}: text extends below the page (bottom ${overrun.toFixed(1)} of ${size.h})`,
+      );
     }
 
     for (let i = 0; i < texts.length; i += 1) {

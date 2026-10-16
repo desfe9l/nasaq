@@ -1,6 +1,7 @@
 import { AUTO_TEXT_TYPES, type CanvasEl, type TextBoxMode } from "./model.ts";
 import {
   estimateLines,
+  faceAdvanceMm,
   fitFontSize,
   hasArabic,
   measureTextHeight,
@@ -143,7 +144,13 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
   const effectiveFontSize = Math.max(runMaxFontSize, base);
   const lineHeight = resolveLineHeight(el, spaced, innerW, effectiveFontSize);
   const justified = s.kashida
-    ? justifyText(spaced, innerW, effectiveFontSize, s.justifyLastLine !== "stretch")
+    ? justifyText(
+        spaced,
+        innerW,
+        effectiveFontSize,
+        s.justifyLastLine !== "stretch",
+        s.fontFamily,
+      )
     : spaced;
 
   if (!FIT_TYPES.has(el.type)) {
@@ -181,11 +188,12 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
       fontSize,
       lineHeight,
       paragraphSpacing,
+      s.fontFamily,
     ) +
     padding * 2;
   const neededWidth =
     mode === "autoWidth"
-      ? measureTextWidth(justified, fontSize, el.w) + padding * 2
+      ? measureTextWidth(justified, fontSize, el.w, s.fontFamily) + padding * 2
       : el.w;
 
   const overflow = fontSize < base - 0.05;
@@ -202,7 +210,7 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
     overflow,
     neededHeight:
       mode === "free"
-        ? measureTextHeight(justified, freeWidth, fontSize, lineHeight, paragraphSpacing) +
+        ? measureTextHeight(justified, freeWidth, fontSize, lineHeight, paragraphSpacing, s.fontFamily) +
           opticalSlack(fontSize)
         : neededHeight,
     neededWidth: mode === "free" ? freeWidth : neededWidth,
@@ -232,7 +240,7 @@ function resolveLineHeight(
   const requested =
     Number(el.style?.lineHeight) || (el.type === "stamp" ? 1.2 : 1.45);
   if (!hasArabic(text)) return requested;
-  if (estimateLines(text, widthMm, fontSizePt) <= 1) return requested;
+  if (estimateLines(text, widthMm, fontSizePt, el.style?.fontFamily) <= 1) return requested;
   /*
    * The floor is per FAMILY: Naskh faces (Amiri, Noto Naskh) need noticeably
    * more leading than Cairo or Tajawal to keep their ascenders and descenders
@@ -244,24 +252,24 @@ function resolveLineHeight(
 /**
  * Auto-kashida for one block.
  *
- * The measurement is the same 0.5em-per-character estimate the height and
- * auto-fit maths use, so the stretch targets the width the rest of the editor
- * already believes the line occupies — a kashida line and a measured line can
- * never disagree about whether the text fits.
+ * The stretch targets the same face-aware advance the editor uses to size a
+ * text box (measured per-face browser ink), never the obsolete flat 0.5em
+ * estimate — so a kashida line and a measured line agree on whether the text
+ * fits, whatever face the block is set in.
  */
 function justifyText(
   text: string,
   widthMm: number,
   fontSizePt: number,
   keepLastLineFlush: boolean,
+  fontFamily?: string,
 ): string {
-  const em = fontSizePt * 0.3528;
   const result = justifyKashida(text, {
     width: widthMm,
     tatweelWidth: tatweelWidthMm(fontSizePt),
     maxPerGap: 6,
     justifyLastLine: !keepLastLineFlush,
-    measureWidth: (value) => value.length * em * 0.5,
+    measureWidth: (value) => value.length * faceAdvanceMm(fontSizePt, fontFamily),
   });
   return result.text;
 }

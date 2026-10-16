@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import type { CanvasEl } from "./model.ts";
 import { prepareText, setTextContext } from "./text-render.ts";
 import { ARABIC_LINE_HEIGHT_FLOOR } from "./typography.ts";
+import { faceAdvanceMm, measureTextWidth } from "./arabic.ts";
 
 const el = (over: Partial<CanvasEl> = {}): CanvasEl => ({
   id: "t1",
@@ -108,6 +109,46 @@ describe("prepareText — the shared render pipeline", () => {
         .replace(/\s+/g, " ")
         .trim();
     assert.equal(readable(stretched.text), readable(plain.text));
+  });
+
+  it("measures kashida stretch per face (browser ink), never a flat 0.5em", () => {
+    const content =
+      "تسليم التقارير المالية للجهات الحكومية والخاصة في المنطقة";
+    const fontSize = 12;
+    const widthMm = 56;
+
+    const wide = prepareText(
+      el({ w: widthMm, content, style: { fontSize, kashida: true, fontFamily: "Amiri" } }),
+    );
+    const narrow = prepareText(
+      el({ w: widthMm, content, style: { fontSize, kashida: true, fontFamily: "Tajawal" } }),
+    );
+
+    const wideAdvance = faceAdvanceMm(fontSize, "Amiri");
+    const narrowAdvance = faceAdvanceMm(fontSize, "Tajawal");
+    assert.ok(wideAdvance > narrowAdvance, "faces must advance differently");
+
+    // A flat 0.5em model ignores the face, so both faces would justify
+    // identically. Face-aware (measured browser-ink) measurement differs.
+    assert.notEqual(
+      wide.text,
+      narrow.text,
+      "justification must differ per face",
+    );
+
+    // Each justified line must fit its box under its own face-aware measurement.
+    assert.ok(
+      measureTextWidth(wide.text, fontSize, 400, "Amiri") <= widthMm + wideAdvance,
+      `Amiri justified line overruns its box`,
+    );
+    assert.ok(
+      measureTextWidth(narrow.text, fontSize, 400, "Tajawal") <= widthMm + narrowAdvance,
+      `Tajawal justified line overruns its box`,
+    );
+
+    // The obsolete flat 0.5em model under-measures Amiri and must not be used.
+    const flat = fontSize * 0.3528 * 0.5;
+    assert.ok(wideAdvance > flat, "Amiri exceeds the flat 0.5em advance");
   });
 
   it("resolves macros before measuring, so a macro never inflates the box", () => {

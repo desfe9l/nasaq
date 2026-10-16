@@ -75,11 +75,12 @@ export function balancedFrame(
   fontSize: number,
   lineHeight: number,
   align: "right" | "left" | "center" | "justify" = "right",
+  fontFamily?: string,
 ): { x: number; y: number; w: number; h: number } {
   const size = fontSize || 14;
   const leading = lineHeight || 1.5;
   const slack = size * 0.3528 * 0.36;
-  const natural = measureTextWidth(content, size, 400) + slack;
+  const natural = measureTextWidth(content, size, 400, fontFamily) + slack;
   const wraps = align === "justify" || content.includes("\n") || natural > w + 1;
   let nextW = w;
   let nextX = x;
@@ -90,7 +91,9 @@ export function balancedFrame(
     else nextX = x + w - nextW;
     nextX = Math.round(nextX * 100) / 100;
   }
-  const needed = measureTextHeight(content, Math.max(8, nextW), size, leading) + slack;
+  const needed =
+    measureTextHeight(content, Math.max(8, nextW), size, leading, 0, fontFamily) +
+    slack;
   const nextH = Math.round(Math.max(h, needed) * 100) / 100;
   return { x: nextX, y, w: nextW, h: nextH };
 }
@@ -108,7 +111,17 @@ export function paint(
   const fontSize = Number(style.fontSize) || 14;
   const lineHeight = Number(style.lineHeight) || 1.5;
   const align = style.textAlign || "right";
-  const frame = balancedFrame(content, x, y, w, h, fontSize, lineHeight, align);
+  const frame = balancedFrame(
+    content,
+    x,
+    y,
+    w,
+    h,
+    fontSize,
+    lineHeight,
+    align,
+    style.fontFamily,
+  );
   add("text", {
     name,
     content,

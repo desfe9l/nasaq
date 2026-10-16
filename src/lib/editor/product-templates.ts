@@ -96,7 +96,7 @@ function text(
   const align = options.align ?? "right";
   const fontSize = options.size ?? 10;
   const lineHeight = options.lineHeight ?? 1.5;
-  const frame = balancedFrame(content, x, y, w, h, fontSize, lineHeight, align);
+  const frame = balancedFrame(content, x, y, w, h, fontSize, lineHeight, align, options.font);
   return add(target, "text", name, frame.x, frame.y, frame.w, frame.h, content, {
     fontFamily: options.font ?? "Tajawal",
     fontSize,
@@ -161,15 +161,18 @@ function resumePage(language: "ar" | "en"): Page {
   add(target, "line", "فاصل الهوية", x, arabic ? 50 : 48, textW, 0, "", { color: GOLD, stroke: 0.6 });
 
   let y = arabic ? 58 : 56;
-  const section = (title: string, content: string, height: number) => {
+  const section = (title: string, content: string, minHeight: number) => {
     text(target, `عنوان ${title}`, title, x, y, textW, 7, {
       size: 12, color: GREEN, weight: 700, align, font: arabic ? "Tajawal" : "Georgia",
     });
     add(target, "line", `خط ${title}`, arabic ? x + textW - 28 : x, y + 8, 28, 0, "", { color: GOLD, stroke: 0.7 });
-    text(target, title, content, x, y + 12, textW, height, {
+    // Position the next section from the body's real bottom so a longer
+    // section never collides with the one below it, and the page fills down
+    // instead of leaving excessive bottom whitespace.
+    const body = text(target, title, content, x, y + 12, textW, minHeight, {
       size: 10, color: INK, align, font: arabic ? BODY : "Georgia", lineHeight: 1.65,
     });
-    y += height + 16;
+    y = body.y + body.h + 26;
   };
   section(
     arabic ? "الملخص" : "PROFILE",
@@ -205,21 +208,34 @@ function letterheadPage(title: string, subtitle: string): Page {
   shape(target, "شريط علوي", 0, 0, 210, 10, GREEN);
   add(target, "line", "خيط ذهبي", 0, 10, 210, 0, "", { color: GOLD, stroke: 0.6 });
   add(target, "image", "شعار الجهة", 168, 16, 22, 16, "", { objectFit: "cover", radius: 0 }, plate("archive"));
-  text(target, "اسم الجهة", "اسم الجهة", 18, 16, 140, 8, { size: 18, weight: 800, color: GREEN });
-  text(target, "بيانات الجهة", "الإدارة العامة  ·  مكتب المراسلات", 18, 26, 140, 6, { size: 9, color: MUTED, font: META });
-  add(target, "line", "خط الرأس", 18, 38, 174, 0, "", { color: GREEN, stroke: 0.45 });
-  add(target, "line", "خط الرأس الثاني", 18, 39.6, 174, 0, "", { color: GOLD, stroke: 0.35 });
-  text(target, "نوع المراسلة", subtitle, 18, 46, 174, 7, { size: 11, color: GREEN, weight: 700 });
-  text(target, "التاريخ والمرجع", "التاريخ  ١٤٤٧ / ٠٦ / ١٢          المرجع  ص / ٤٤٢١", 18, 56, 174, 6, { size: 9, color: MUTED, font: META });
-  text(target, "مخاطب إليه", "السادة / إدارة التخطيط", 18, 70, 174, 8, { size: 13, weight: 700 });
-  text(target, "تحية", "السلام عليكم ورحمة الله وبركاته", 18, 84, 174, 7, { size: 12, font: BODY, lineHeight: 1.6 });
-  text(target, "الموضوع", "الموضوع: اعتماد صيغة التقرير الربعي", 18, 100, 174, 8, { size: 13, weight: 700 });
-  text(target, "نص الخطاب", "نفيدكم بأن صيغة التقرير الربعي أصبحت جاهزة للعرض: غلاف، محتويات، حكم، أثر، مؤشرات، وتوصية.\n\nنرجو اعتمادها في اجتماع الأسبوع حتى تُقفل النسخة قبل نهاية الشهر. المرفقات تحمل الجدول كما أُغلق.", 18, 116, 174, 48, { size: 12, font: BODY, lineHeight: 1.75 });
-  text(target, "الختام", "وتفضلوا بقبول فائق الاحترام", 18, 172, 174, 8, { size: 12, font: BODY });
-  add(target, "line", "خط التوقيع", 112, 210, 60, 0, "", { color: INK, stroke: 0.3 });
-  text(target, "التوقيع", "الاسم\nمدير مكتب المراسلات", 112, 214, 60, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
+  const name = text(target, "اسم الجهة", "اسم الجهة", 18, 16, 140, 8, { size: 18, weight: 800, color: GREEN });
+  // Give the squeezed entity label room, then place the contact line from the
+  // name's real bottom instead of a fixed offset.
+  const contact = text(target, "بيانات الجهة", "الإدارة العامة · مكتب المراسلات", 18, name.y + name.h + 5, 140, 6, {
+    size: 9,
+    color: MUTED,
+    font: META,
+  });
+  const ruleY = contact.y + contact.h + 8;
+  add(target, "line", "خط الرأس", 18, ruleY, 174, 0, "", { color: GREEN, stroke: 0.45 });
+  add(target, "line", "خط الرأس الثاني", 18, ruleY + 1.6, 174, 0, "", { color: GOLD, stroke: 0.35 });
+  const type = text(target, "نوع المراسلة", subtitle, 18, ruleY + 6, 174, 7, { size: 11, color: GREEN, weight: 700 });
+  const ref = text(target, "التاريخ والمرجع", "التاريخ  ١٤٤٧ / ٠٦ / ١٢          المرجع  ص / ٤٤٢١", 18, type.y + type.h + 6, 174, 6, {
+    size: 9,
+    color: MUTED,
+    font: META,
+  });
+  const to = text(target, "مخاطب إليه", "السادة / إدارة التخطيط", 18, ref.y + ref.h + 10, 174, 8, { size: 13, weight: 700 });
+  const salam = text(target, "تحية", "السلام عليكم ورحمة الله وبركاته", 18, to.y + to.h + 8, 174, 7, { size: 12, font: BODY, lineHeight: 1.6 });
+  const subject = text(target, "الموضوع", "الموضوع: اعتماد صيغة التقرير الربعي", 18, salam.y + salam.h + 12, 174, 8, { size: 13, weight: 700 });
+  // The body paragraph can grow; position the closing from its real bottom so
+  // a longer letter never paints the closing over the text.
+  const body = text(target, "نص الخطاب", "نفيدكم بأن صيغة التقرير الربعي أصبحت جاهزة للعرض: غلاف، محتويات، حكم، أثر، مؤشرات، وتوصية.\n\nنرجو اعتمادها في اجتماع الأسبوع حتى تُقفل النسخة قبل نهاية الشهر. المرفقات تحمل الجدول كما أُغلق.", 18, subject.y + subject.h + 8, 174, 48, { size: 12, font: BODY, lineHeight: 1.75 });
+  const closing = text(target, "الختام", "وتفضلوا بقبول فائق الاحترام", 18, body.y + body.h + 10, 174, 8, { size: 12, font: BODY });
+  add(target, "line", "خط التوقيع", 112, closing.y + closing.h + 10, 60, 0, "", { color: INK, stroke: 0.3 });
+  text(target, "التوقيع", "الاسم\nمدير مكتب المراسلات", 112, closing.y + closing.h + 14, 60, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
   shape(target, "تذييل أخضر", 0, 274, 210, 23, GREEN);
-  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 280, 174, 7, { size: 8, color: "#ffffff", align: "center", font: META });
+  text(target, "تذييل الجهة", "الرياض · ٠١١ ٠٠٠ ٠٠٠٠ · mail@example.com", 18, 280, 174, 7, { size: 8, color: "#ffffff", align: "center", font: META });
   return target;
 }
 
@@ -376,7 +392,7 @@ function ministryPages(): Page {
   add(target, "line", "خط التوقيع", 136, 190, 56, 0, "", { color: "#1f6b45", stroke: 0.3 });
   text(target, "التوقيع", "مديرة المرحلة\nالاسم", 122, 194, 70, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
   add(target, "line", "خط التذييل", 18, 268, 174, 0, "", { color: "#1f6b45", stroke: 0.35 });
-  text(target, "بيانات التواصل", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  nore@example.com", 18, 274, 174, 6, { size: 8, color: MUTED, align: "center", font: META });
+  text(target, "بيانات التواصل", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  nore@example.com", 18, 270, 174, 7, { size: 8, color: MUTED, align: "center", font: META });
   text(target, "تنبيه الملكية", "استبدلوا أي شعار بأصل تملكه الجهة. هذا النموذج بلا شعار محمي.", 18, 284, 174, 6, { size: 7.5, color: MUTED, align: "center", font: META });
   return target;
 }

@@ -145,20 +145,54 @@ export function normalizeArabic(
 }
 
 /**
+ * Per-font-face average glyph advance, as a fraction of the em.
+ *
+ * Arabic faces do not all advance at the same rate: a Naskh face (Noto Naskh,
+ * Amiri) sets noticeably wider than a geometric face (Tajawal, Cairo). A single
+ * flat 0.5em figure therefore over- or under-measures a block depending on its
+ * face, which is exactly how justified kashida lines, auto-height boxes and
+ * wrapping end up disagreeing with the ink the browser actually paints.
+ *
+ * These are measured per-face advances (browser ink), kept deliberately modest
+ * so a face change reshapes text by its real metrics rather than by a blanket
+ * rescale. An unknown or user-uploaded family falls back to `DEFAULT_ADVANCE`.
+ */
+export const DEFAULT_ADVANCE = 0.5;
+
+export const FONT_ADVANCE: Record<string, number> = {
+  Tajawal: 0.50,
+  Cairo: 0.51,
+  "IBM Plex Sans Arabic": 0.52,
+  "Noto Sans Arabic": 0.53,
+  "Noto Naskh Arabic": 0.55,
+  Amiri: 0.57,
+  "Noto Kufi Arabic": 0.54,
+  "Reem Kufi": 0.54,
+};
+
+/** Average advance of one glyph in `fontFamily` at `fontSizePt`, in mm. */
+export function faceAdvanceMm(fontSizePt: number, fontFamily?: string): number {
+  const key = String(fontFamily ?? "").trim().replace(/^[\"']|[\"']$/g, "");
+  const advance = FONT_ADVANCE[key] ?? DEFAULT_ADVANCE;
+  return fontSizePt * 0.3528 * advance;
+}
+
+/**
  * Count lines a text block will occupy at a given font size.
  *
  * Deliberately layout-free (average glyph advance, no DOM measurement) because
- * it runs on every render and inside the auto-fit search.
+ * it runs on every render and inside the auto-fit search. The advance is
+ * face-aware so wrapping matches the face the text is actually set in.
  */
 export function estimateLines(
   text: string,
   boxWidthMm: number,
   fontSizePt: number,
+  fontFamily?: string,
 ): number {
   const content = String(text ?? "");
   if (!content.trim()) return 0;
-  // Average Arabic glyph advance is ≈0.5em; 1pt ≈ 0.3528mm.
-  const charWidthMm = fontSizePt * 0.3528 * 0.5;
+  const charWidthMm = faceAdvanceMm(fontSizePt, fontFamily);
   const perLine = Math.max(
     1,
     Math.floor(boxWidthMm / Math.max(0.1, charWidthMm)),
@@ -293,8 +327,9 @@ export function measureTextHeight(
   fontSizePt: number,
   lineHeight = 1.45,
   paragraphSpacing = 0,
+  fontFamily?: string,
 ): number {
-  const lines = estimateLines(text, boxWidthMm, fontSizePt);
+  const lines = estimateLines(text, boxWidthMm, fontSizePt, fontFamily);
   if (lines === 0) return 0;
   const boundaries = Math.max(0, countParagraphs(text) - 1);
   const extraGapLines = boundaries * (Math.max(0, paragraphSpacing) + 1);
@@ -312,13 +347,13 @@ export function measureTextWidth(
   text: string,
   fontSizePt: number,
   maxWidthMm: number,
+  fontFamily?: string,
 ): number {
   const longest = String(text ?? "")
     .split("\n")
     .reduce((max, line) => Math.max(max, line.trim().length), 0);
   if (longest === 0) return maxWidthMm;
-  // Average Arabic glyph advance is ≈0.5em; 1pt ≈ 0.3528mm.
-  const perChar = fontSizePt * 0.3528 * 0.5;
+  const perChar = faceAdvanceMm(fontSizePt, fontFamily);
   return Math.min(maxWidthMm, longest * perChar);
 }
 
