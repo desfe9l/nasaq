@@ -145,6 +145,14 @@ async function probeOnline(): Promise<boolean> {
       headers: { "cache-control": "no-cache" },
       signal: controller.signal,
     });
+    /*
+     * Headers are the entire answer; the body is discarded. Release it
+     * explicitly: an untouched 200 body sits open until GC, holding a
+     * per-host connection and leaving the request "in flight" for tooling
+     * that waits on network idleness (Playwright's `networkidle` never
+     * settles on a page that boots this probe).
+     */
+    void res.body?.cancel().catch(() => {});
     return Boolean(res);
   } catch {
     return false;
