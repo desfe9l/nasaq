@@ -77,10 +77,19 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
           return;
         }
         /*
-         * A route can change from /editor/A to /editor/B while A is still
-         * loading. The prior implementation returned here and never retried B,
-         * leaving the address on A. Wait for that shared open to settle, then
-         * resolve the CURRENT route id from this effect's closure.
+         * A document is already open under a different id than the route. This
+         * happens when importProject/createDocument opened a document inside the
+         * studio while the route still names the outgoing document. The studio
+         * keeps the imported document mounted; the route will catch up through
+         * EditorApp's address-following effect.
+         *
+         * The effect only re-runs when projectId changes (mount or navigation),
+         * so reaching this branch with live.id !== projectId always means an
+         * intentional navigation to routeProjectId — load the route's project
+         * rather than retaining the live document. Loading routeProjectId here
+         * cannot trigger React #301 because the effect does not re-run on import
+         * (projectId is unchanged by importProject); it only re-runs on mount or
+         * explicit navigation.
          */
         if (live.documentPhase === "loading") {
           await waitForDocumentOpenToSettle();
@@ -88,8 +97,12 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
         }
         const opened = await live.openProject(projectId);
         if (!alive) return;
-        setFailed(opened ? null : projectId);
-        setResolvedRouteId(projectId);
+        if (opened) {
+          setFailed(null);
+          setResolvedRouteId(projectId);
+        } else {
+          setFailed(projectId);
+        }
         return;
       }
     })();
