@@ -82,14 +82,19 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
       )}
       data-smart-object="true"
     >
-      {/* Smart object badge — shown when not editing. */}
+      {/* Smart object badge — shown when not editing. It carries the same
+          action as the edit control, because its own tooltip promises one. */}
       {!editing && (
-        <div
+        <button
+          type="button"
+          onClick={openSmartObject}
+          onPointerDown={(e) => e.stopPropagation()}
           className="pointer-events-auto absolute top-1 right-1 z-10 bg-navy/90 text-on-brand text-[10px] px-2 py-1 rounded-bl-md"
           title="كائن ذكي — انقر للتحرير"
+          aria-label="فتح محرر الكائن الذكي"
         >
           ذكي
-        </div>
+        </button>
       )}
       {/* Edit button. */}
       {!editing && !editError && (
