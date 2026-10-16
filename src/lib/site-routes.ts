@@ -29,6 +29,9 @@ export const TEMPLATES_ROUTE = "/templates";
  */
 export const IMPORT_ROUTE = "/import";
 
+/** Canonical URL of the public template-import service (`src/routes/services/import.tsx`). */
+export const SERVICES_IMPORT_ROUTE = "/services/import";
+
 /** The studio Home of a licensed account. */
 export const WORKSPACE_ROUTE = "/workspace";
 

@@ -100,10 +100,28 @@ function safeSvg(raw: string): string {
   return clean;
 }
 
+async function webpSize(bytes: Uint8Array): Promise<{ w: number; h: number } | null> {
+  if (typeof Image === "undefined") return null;
+  const blob = new Blob([bytes as unknown as BlobPart], { type: "image/webp" });
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
 export async function importImageBytes(
   bytes: Uint8Array,
   fileName: string,
-  format: "png" | "jpg" | "svg",
+  format: "png" | "jpg" | "svg" | "webp",
   ids?: () => string,
 ): Promise<ReturnType<ImportBuilder["finish"]>> {
   const builder = new ImportBuilder(format, fileName, ids);
@@ -114,6 +132,19 @@ export async function importImageBytes(
     const page = builder.addPage("صورة", size.w, size.h);
     builder.svg(page, { x: 0, y: 0, w: size.w, h: size.h }, markup, "SVG");
     builder.note("SVG", "editable", "الرسم متجه قابل للتحرير. النصوص داخله تبقى جزءًا من الرسم لا فقرات مستقلة.");
+    return builder.finish();
+  }
+  if (format === "webp") {
+    const sizePx = await webpSize(bytes);
+    if (!sizePx || sizePx.w < 1 || sizePx.h < 1) throw new Error("ملف WebP غير صالح أو تالف.");
+    const size = frame(sizePx.w, sizePx.h);
+    const page = builder.addPage("صورة", size.w, size.h);
+    builder.image(page, { x: 0, y: 0, w: size.w, h: size.h }, dataUrlFrom("image/webp", bytes), "صورة");
+    builder.note(
+      "صورة WebP",
+      "editable",
+      `أصل ${sizePx.w}×${sizePx.h}px كعنصر صورة واحد. الصفحة إطار للطباعة وليست طبقة مسطحة بديلة.`,
+    );
     return builder.finish();
   }
   const sizePx = format === "png" ? pngSize(bytes) : jpegSize(bytes);
