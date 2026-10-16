@@ -76,6 +76,8 @@ export interface TemplatePreviewProps {
   className?: string;
   /** Extra classes for the paper itself (the zoom/transition layer). */
   paperClassName?: string;
+  /** Sizing supplied by the caller when the paper is fitted to a box. */
+  style?: React.CSSProperties;
 }
 
 /**
@@ -88,6 +90,7 @@ export function TemplatePreview({
   page,
   className,
   paperClassName,
+  style,
 }: TemplatePreviewProps) {
   const size = pageSize(page);
   const scale: Scale = { pw: size.w, ph: size.h };
@@ -103,6 +106,7 @@ export function TemplatePreview({
         containerType: "inline-size",
         background: pageBackgroundCss(page),
         direction: "rtl",
+        ...style,
       }}
     >
       <div className={cn("absolute inset-0", paperClassName)}>
@@ -159,6 +163,74 @@ export function TemplateStackPreview({
           className={cn("h-full w-full", paperClassName)}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * A page (or a stack of pages) fitted to a box of KNOWN HEIGHT.
+ *
+ * The box is a size query container, and the sheet's width is
+ * `min(100cqw, ratio × 100cqh)` — as wide as the box OR as tall as the box,
+ * whichever keeps the page's own ratio. A4 portrait and a 16:9 slide therefore
+ * both sit inside the same fixed-height stage with no JavaScript measurement,
+ * no cropping, and no collapsed (0 × 0) sheet. This is the shared sizing rule
+ * the catalog card uses; it lives here so every shelf that paints a real
+ * template agrees with it.
+ */
+export function TemplateSheetPreview({
+  page,
+  height,
+  pages,
+  index = 0,
+  className,
+  paperClassName,
+  stack = false,
+}: {
+  page: Page;
+  /** The stage's definite height in px — the sheet derives its width from it. */
+  height: number;
+  /** The full page list when the stage shows the card's stack of sheets. */
+  pages?: Page[];
+  index?: number;
+  className?: string;
+  paperClassName?: string;
+  stack?: boolean;
+}) {
+  const size = pageSize(page);
+  const ratio = (size.w / size.h).toFixed(4);
+  const sheetStyle: React.CSSProperties = {
+    aspectRatio: `${size.w} / ${size.h}`,
+    width: `min(100cqw, ${ratio} * 100cqh)`,
+  };
+  return (
+    <div
+      className={cn(
+        "relative grid place-items-center [container-type:size]",
+        className,
+      )}
+      style={{ height }}
+    >
+      {stack && pages && pages.length > 1 ? (
+        <TemplateStackPreview
+          pages={pages}
+          index={index}
+          style={sheetStyle}
+          className={cn(
+            "rounded-[3px] border border-line shadow-md",
+            paperClassName,
+          )}
+        />
+      ) : (
+        <TemplatePreview
+          page={page}
+          style={sheetStyle}
+          className={cn(
+            "rounded-[3px] border border-line shadow-md",
+            paperClassName,
+          )}
+        />
+      )}
     </div>
   );
 }

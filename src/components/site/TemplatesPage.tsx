@@ -817,17 +817,18 @@ export function TemplatesPage({
 
       <SiteFooter />
 
-      {/* Floating «إضافة قالب جديد» — a compact FAB on phones so it never
-          covers the filter chips it floats over, the labelled pill from sm up. */}
+      {/* Floating «إضافة قالب جديد» — a phone-only FAB. From `sm` up the
+          page's own «إضافة قالب جديد» button already sits on the first line of
+          the header, so a second floating copy only repeats it over the cards
+          while scrolling. */}
       <button
         type="button"
         onClick={() => setForm({ mode: "create" })}
         title="إضافة قالب جديد"
         aria-label="إضافة قالب جديد"
-        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex size-14 items-center justify-center rounded-full bg-navy text-on-brand shadow-xl shadow-navy/30 transition hover:bg-navy-2 sm:h-12 sm:w-auto sm:gap-2 sm:px-5 sm:text-[13px] sm:font-extrabold"
+        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex size-14 items-center justify-center rounded-full bg-navy text-on-brand shadow-xl shadow-navy/30 transition hover:bg-navy-2 sm:hidden"
       >
         <Plus className="size-4" />
-        <span className="hidden sm:inline">قالب جديد</span>
       </button>
 
       {quickEntry && (
