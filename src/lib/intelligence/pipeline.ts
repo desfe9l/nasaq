@@ -8,6 +8,10 @@ import type { DesignAnalysis, DesignBrief, DesignDna, PipelineResult } from "./s
 import { INTELLIGENCE_SCHEMA_VERSION } from "./schema";
 import { parsePrompt, type PromptAnalysis } from "./prompt-analyzer";
 import { generateFromIntent } from "./design-generator";
+import {
+  reviewCompositions,
+  type CompositionReview,
+} from "@/lib/ai/composition-review";
 import { generateVariations, type DesignVariation } from "./variations";
 import { checkLayoutVariety, type LayoutVarietyReport } from "./layout-variety";
 import {
@@ -84,6 +88,13 @@ export interface StudioGenerationResult {
   /** Layout Variety Check over the primary project: no two consecutive pages
    * share a structure (the anti-monotony guarantee). */
   layoutVariety: LayoutVarietyReport;
+  /**
+   * The deterministic plan review for a provider-authored composition plan —
+   * only present when the brief carried `compositions`. Holds the corrected
+   * plan's issues with their measurements; an issue with `corrected: false`
+   * had no in-bounds correction and is reported, never dropped.
+   */
+  compositionReview?: CompositionReview;
 }
 
 /**
@@ -112,7 +123,27 @@ export function generateDesignFromPrompt(
   const identity = brand && brandIsConfigured(brand) ? brand : null;
   const intent = identity ? applyBrandToIntent(base, identity) : base;
 
-  const initialProject = generateFromIntent(intent);
+  /*
+   * The plan review runs here, on the art-directed intent, so the corrections
+   * and the project the caller receives come from the SAME reviewed plan —
+   * the result's `compositionReview` is that exact review, measurements and
+   * all. `generateFromIntent` re-runs the review itself, so a caller that
+   * reaches it directly (and every style variation, in its own palette) is
+   * covered too; on an already-reviewed plan that second pass is a no-op.
+   */
+  const compositionReview = intent.compositions
+    ? reviewCompositions(
+        intent.compositions.slice(0, intent.pages),
+        intent.palette,
+        intent.dimensions,
+      )
+    : undefined;
+
+  const initialProject = generateFromIntent(
+    compositionReview
+      ? { ...intent, compositions: compositionReview.compositions }
+      : intent,
+  );
   const primary = runLoop(initialProject, intent.title, "generate");
   const primaryResult = identity
     ? {
@@ -141,6 +172,7 @@ export function generateDesignFromPrompt(
     primaryResult,
     variations,
     layoutVariety: checkLayoutVariety(primaryResult.project),
+    ...(compositionReview ? { compositionReview } : {}),
   };
 }
 

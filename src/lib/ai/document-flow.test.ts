@@ -2,9 +2,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { generateDesignFromPrompt } from "@/lib/intelligence/pipeline.ts";
 import { validateProject } from "@/lib/intelligence/layout.ts";
+import { contrastRatio } from "@/lib/intelligence/analyze.ts";
 import { buildDraftDocument } from "@/lib/editor/raw-document.ts";
 import { pageSize, type CanvasEl, type Project } from "@/lib/editor/model.ts";
 import { applyAIEditorOperations, type AIEditorCommandApi } from "./editor-bridge.ts";
+import { normalizeCompositions } from "./design-composition.ts";
 import { normalizeDraft } from "./contract.ts";
 
 /**
@@ -111,6 +113,8 @@ describe("AI design generation becomes a real editor document", () => {
     for (const element of arabic) {
       assert.ok(element.style?.fontFamily, "text carries a font family");
       assert.ok((element.style?.fontSize ?? 0) > 0, "text carries a font size");
+      assert.notEqual(element.style?.direction, "ltr", "Arabic text must not render LTR");
+      assert.notEqual(element.style?.textAlign, "left", "Arabic text must not sit on the left edge");
     }
   });
 
@@ -158,6 +162,135 @@ describe("AI design generation becomes a real editor document", () => {
     ]);
     assert.equal(results[0].ok, false);
     assert.equal(calls.createDocument.length, 0, "an invalid document must never open");
+  });
+});
+
+describe("a defective provider plan is corrected before it becomes editable elements", () => {
+  const plan = normalizeCompositions(
+    [
+      {
+        elements: [
+          // Four defects a real provider plan can carry: an unreadable role
+          // pairing, a copy box that outgrows itself, a colliding pair, and an
+          // opaque panel painted over a heading.
+          {
+            type: "text",
+            x: 8,
+            y: 88,
+            w: 84,
+            h: 8,
+            content:
+              "تسعى المبادرة التدريبية إلى بناء قدرات الكوادر المؤسسية عبر مسارات تدريبية متكاملة تجمع بين التدريب العملي والتقييم المستمر ومتابعة الأثر بعد التخرج في بيئة عمل حقيقية مدعومة بأدوات قياس دقيقة",
+            role: "body",
+            fill: "paper",
+            color: "accent",
+          },
+          {
+            type: "text",
+            x: 10,
+            y: 90,
+            w: 60,
+            h: 8,
+            content: "نص متداخل مع الفقرة السابقة",
+            role: "meta",
+            fill: "none",
+            color: "ink",
+          },
+          {
+            type: "text",
+            x: 8,
+            y: 20,
+            w: 84,
+            h: 14,
+            content: "قسم محجوب خلف شكل معتم",
+            role: "display",
+            fill: "none",
+            color: "ink",
+          },
+          {
+            type: "shape",
+            x: 6,
+            y: 18,
+            w: 88,
+            h: 18,
+            content: "",
+            role: "body",
+            fill: "field",
+            color: "ink",
+          },
+        ],
+      },
+    ],
+    1,
+  );
+  const generated = generateDesignFromPrompt("صمم صفحة لمبادرة تدريبية", {
+    pages: 1,
+    compositions: plan,
+  });
+  const project = generated.primaryResult.project;
+
+  it("reports every plan defect with its measurement before anything is built", () => {
+    assert.ok(generated.compositionReview, "the plan review must travel with the result");
+    const codes = generated.compositionReview.issues.map((issue) => issue.code);
+    for (const code of ["coverage", "contrast", "overlap"]) {
+      assert.ok(
+        codes.includes(code as never),
+        `missing ${code}: ${JSON.stringify(generated.compositionReview.issues)}`,
+      );
+    }
+    for (const issue of generated.compositionReview.issues) {
+      assert.equal(issue.corrected, true, `uncorrected: ${JSON.stringify(issue)}`);
+    }
+  });
+
+  it("keeps the corrected document valid, editable, readable and RTL", () => {
+    assert.deepEqual(validateProject(project), []);
+    const elements = project.pages.flatMap((page) => walk(page.elements));
+    assert.equal(elements.length, 4, "no plan element was dropped or invented");
+
+    const headingIndex = elements.findIndex(
+      (element) => element.content === "قسم محجوب خلف شكل معتم",
+    );
+    const panelIndex = elements.findIndex((element) => element.type === "shape");
+    assert.ok(headingIndex >= 0 && panelIndex >= 0, "the plan was built as written");
+    assert.ok(
+      panelIndex < headingIndex,
+      "the opaque panel now paints beneath the heading it covered",
+    );
+
+    const texts = elements.filter((element) => element.type === "text" && element.content);
+    assert.ok(texts.length >= 3);
+    for (const element of texts) {
+      assert.equal(element.style?.direction, "rtl", `RTL lost on: ${element.content}`);
+      assert.equal(element.style?.textAlign, "right", `align lost on: ${element.content}`);
+      const fill = element.style?.fill;
+      const color = element.style?.color;
+      if (
+        typeof fill === "string" &&
+        fill.startsWith("#") &&
+        typeof color === "string" &&
+        color.startsWith("#")
+      ) {
+        assert.ok(
+          contrastRatio(color, fill) >= 3,
+          `${color} on ${fill} is unreadable for: ${element.content}`,
+        );
+      }
+    }
+
+    for (let i = 0; i < texts.length; i += 1) {
+      for (let j = i + 1; j < texts.length; j += 1) {
+        const a = texts[i];
+        const b = texts[j];
+        const sharedW = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const sharedH = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        const shared = sharedW > 0 && sharedH > 0 ? sharedW * sharedH : 0;
+        assert.ok(
+          shared / Math.min(a.w * a.h, b.w * b.h) < 0.3,
+          `texts still collide: ${a.content} / ${b.content}`,
+        );
+      }
+    }
   });
 });
 

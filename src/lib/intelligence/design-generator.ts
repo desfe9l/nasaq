@@ -14,6 +14,10 @@ import type { PaletteRoles } from "./schema";
 import type { PromptAnalysis } from "./prompt-analyzer";
 import { plate } from "@/lib/editor/template-layouts";
 import {
+  COMPOSITION_TEXT_SCALE,
+  reviewCompositions,
+} from "@/lib/ai/composition-review";
+import {
   directiveForPattern,
   enforceLayoutVariety,
   planPageLayouts,
@@ -1859,7 +1863,18 @@ export function generateFromIntent(intent: PromptAnalysis): Project {
   // Provider geometry uses the same page/element constructors as the catalog.
   // Do not run a preset builder or automatic pattern reflow over this plan.
   if (intent.compositions) {
-    const pages = intent.compositions.slice(0, intent.pages).map((composition, index) => {
+    /*
+     * The provider plan is validated and corrected BEFORE it becomes editable
+     * elements — for EVERY caller, in that caller's own palette (the studio
+     * pipeline and each style variation alike). Checks and the conservative
+     * correction rules live in composition-review.ts.
+     */
+    const review = reviewCompositions(
+      intent.compositions.slice(0, intent.pages),
+      intent.palette,
+      intent.dimensions,
+    );
+    const pages = review.compositions.map((composition, index) => {
       const page = sheet(`صفحة ${index + 1}`, intent.dimensions.w, intent.dimensions.h, intent.palette.paper);
       for (const item of composition.elements) {
         put(page, item.type, {
@@ -1876,7 +1891,9 @@ export function generateFromIntent(intent: PromptAnalysis): Project {
             fill: item.fill === "none" ? "none" : intent.palette[item.fill],
             color: intent.palette[item.color], shape: item.shape === "circle" ? "circle" : "rect", shapeId: item.shape,
             borderWidth: 0, fontFamily: item.role === "body" ? "Noto Naskh Arabic" : "Tajawal",
-            fontSize: item.role === "display" ? 26 : item.role === "meta" ? 9 : 12,
+            /* ONE type scale, shared with the plan review's height model. */
+            fontSize: COMPOSITION_TEXT_SCALE[item.role].fontSize,
+            lineHeight: COMPOSITION_TEXT_SCALE[item.role].lineHeight,
             fontWeight: item.role === "display" ? 800 : 400,
             direction: "rtl", textAlign: "right", textBoxMode: "autoHeight",
           },
