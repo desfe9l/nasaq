@@ -65,6 +65,7 @@ import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
 import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 import { Route as SCodeRouteImport } from './routes/s/$code'
+import { Route as ServicesImportRouteImport } from './routes/services/import'
 import { Route as ShareTokenRouteImport } from './routes/share/$token'
 import { Route as TCodeRouteImport } from './routes/t/$code'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
@@ -366,6 +367,11 @@ const SCodeRoute = SCodeRouteImport.update({
   path: '/s/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesImportRoute = ServicesImportRouteImport.update({
+  id: '/services/import',
+  path: '/services/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShareTokenRoute = ShareTokenRouteImport.update({
   id: '/share/$token',
   path: '/share/$token',
@@ -520,6 +526,7 @@ export interface FileRoutesByFullPath {
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$code': typeof SCodeRoute
+  '/services/import': typeof ServicesImportRoute
   '/share/$token': typeof ShareTokenRoute
   '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
@@ -594,6 +601,7 @@ export interface FileRoutesByTo {
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$code': typeof SCodeRoute
+  '/services/import': typeof ServicesImportRoute
   '/share/$token': typeof ShareTokenRoute
   '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
@@ -672,6 +680,7 @@ export interface FileRoutesById {
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/s/$code': typeof SCodeRoute
+  '/services/import': typeof ServicesImportRoute
   '/share/$token': typeof ShareTokenRoute
   '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
@@ -751,6 +760,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/projects/$projectId'
     | '/s/$code'
+    | '/services/import'
     | '/share/$token'
     | '/t/$code'
     | '/templates/$templateId'
@@ -825,6 +835,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/projects/$projectId'
     | '/s/$code'
+    | '/services/import'
     | '/share/$token'
     | '/t/$code'
     | '/templates/$templateId'
@@ -902,6 +913,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/projects/$projectId'
     | '/s/$code'
+    | '/services/import'
     | '/share/$token'
     | '/t/$code'
     | '/templates/$templateId'
@@ -959,6 +971,7 @@ export interface RootRouteChildren {
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
   SCodeRoute: typeof SCodeRoute
+  ServicesImportRoute: typeof ServicesImportRoute
   ShareTokenRoute: typeof ShareTokenRoute
   TCodeRoute: typeof TCodeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -1367,6 +1380,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services/import': {
+      id: '/services/import'
+      path: '/services/import'
+      fullPath: '/services/import'
+      preLoaderRoute: typeof ServicesImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/share/$token': {
       id: '/share/$token'
       path: '/share/$token'
@@ -1644,6 +1664,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
   SCodeRoute: SCodeRoute,
+  ServicesImportRoute: ServicesImportRoute,
   ShareTokenRoute: ShareTokenRoute,
   TCodeRoute: TCodeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

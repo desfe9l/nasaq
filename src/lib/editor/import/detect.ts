@@ -41,6 +41,7 @@ export function magicMatches(format: ImportKind, magicHex: string): boolean {
   if (format === "pdf") return h.startsWith("25504446");
   if (format === "png") return h.startsWith("89504e47");
   if (format === "jpg") return h.startsWith("ffd8ff");
+  if (format === "webp") return h.startsWith("52494646");
   if (format === "svg") {
     try {
       const bytes = new Uint8Array(h.length / 2);
@@ -51,6 +52,12 @@ export function magicMatches(format: ImportKind, magicHex: string): boolean {
     }
   }
   return false;
+}
+
+function isWebp(bytes: Uint8Array): boolean {
+  return bytes.byteLength >= 12
+    && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
 }
 
 export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedFile {
@@ -95,6 +102,10 @@ export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedF
     if (!signature.startsWith("ffd8ff")) return { error: "الملف ليس JPG صالحًا." };
     return { format: "jpg" };
   }
+  if (kind === "webp" || isWebp(bytes)) {
+    if (!isWebp(bytes)) return { error: "ملف WebP غير صالح أو تالف." };
+    return { format: "webp" };
+  }
   if (kind === "svg" || (looksSvg(bytes) && !signature.startsWith(ZIP))) {
     if (!looksSvg(bytes)) return { error: "ملف SVG غير صالح." };
     return { format: "svg" };
@@ -105,5 +116,5 @@ export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedF
     if (kind === "docx") return { format: "docx" };
     return { format: "docx" };
   }
-  return { error: "صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وXLSX وPDF وPNG وJPG وSVG." };
+  return { error: "صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وXLSX وPDF وPNG وJPG وWEBP وSVG." };
 }

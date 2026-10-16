@@ -46,6 +46,7 @@ import {
   WORKSPACE_ROUTE,
   editorPathFor,
   templatePathFor,
+  SERVICES_IMPORT_ROUTE,
 } from "@/lib/site-routes";
 import { entrySlug } from "@/lib/templates/entry-slug";
 import {
@@ -673,6 +674,20 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                   </span>
                 </button>
               ))}
+              <a
+                href={SERVICES_IMPORT_ROUTE}
+                className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gold/60 bg-gold/[0.07] p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/60 hover:shadow-card-hover"
+              >
+                <span className="grid size-9 place-items-center rounded-lg bg-gold/25 text-ink">
+                  <FolderOpen className="size-4" />
+                </span>
+                <span className="text-[13px] font-extrabold text-ink">
+                  استيراد وتحويل ملف
+                </span>
+                <span className="text-[11px] font-bold text-muted">
+                  PSD · PDF · وورد · بوربوينت · صور
+                </span>
+              </a>
               <button
                 type="button"
                 onClick={() => setNewDoc({ start: "template" })}

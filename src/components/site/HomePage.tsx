@@ -249,6 +249,7 @@ export function HomePage() {
   const [projectsRef, projectsVisible] = useReveal<HTMLElement>({ delay: 120 });
   const [packsRef, packsVisible] = useReveal<HTMLElement>({ delay: 120 });
   const [highlightsRef, highlightsVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [importRef, importVisible] = useReveal<HTMLElement>({ delay: 120 });
 
   return (
     <div className="min-h-full bg-page">
@@ -323,6 +324,64 @@ export function HomePage() {
         </section>
 
         <ProductWalkthrough />
+
+        {/* ── Import & Convert service ── */}
+        <section
+          ref={importRef}
+          className={cn("border-b border-line/60 bg-surface-2 py-12 sm:py-16", importVisible && "is-revealed")}
+          data-animate
+        >
+          <div className="nsq-container">
+            <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+              <div>
+                <h2 className="mt-1 text-[1.5rem] sm:text-[1.75rem] font-black text-ink">
+                  استورد ملفاتك وحوّلها إلى مستندات نَسَق
+                </h2>
+                <p className="mt-3 max-w-lg text-[13px] leading-6 text-muted">
+                  ارفع ملف فوتوشوب أو وورد أو بوربوينت أو PDF أو صورة، وسيتحول إلى
+                  مستند قابل للتحرير في نَسَق مع الحفاظ على النصوص والصور والأبعاد.
+                  افحص النتيجة، أصلح العناصر، وافتح الملف مباشرة في المحرر.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <PremiumButton
+                    variant="primary"
+                    size="md"
+                    onClick={() => window.location.assign("/services/import")}
+                  >
+                    <Layers className="size-4 shrink-0 mr-2" aria-hidden />
+                    ابدأ الاستيراد
+                  </PremiumButton>
+                  <a
+                    href="/services/import"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 text-[13px] font-extrabold text-ink hover:border-brand"
+                  >
+                    التعرّف على الصيغ المدعومة
+                  </a>
+                </div>
+              </div>
+              <div className="hidden lg:block">
+                <div className="grid gap-y-3 text-[12px]">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-brand" aria-hidden>●</span>
+                    <span>PSD، PSB، DOCX، PPTX، PDF، PNG، JPG، WEBP، SVG، .nsq</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-brand" aria-hidden>●</span>
+                    <span>فحص بالتوقيع وليس بالامتداد فقط</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-brand" aria-hidden>●</span>
+                    <span>معاينة وإصلاح العناصر قبل الفتح في المحرر</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-brand" aria-hidden>●</span>
+                    <span>استعراض مفتوح للجميع · التحويل للمشتركين</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* ── Who it's for (+ the three working principles) ── */}
         <section
