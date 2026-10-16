@@ -77,6 +77,18 @@ export interface CompositionReview {
   issues: CompositionIssue[];
 }
 
+/**
+ * Arabic UI labels for each defect class. The `detail` strings are engineering
+ * diagnostics (measured ratios, millimetres) and stay English; surfaces that
+ * speak to the author use this map instead of printing raw diagnostics.
+ */
+export const COMPOSITION_ISSUE_LABELS: Record<CompositionIssue["code"], string> = {
+  contrast: "تباين منخفض بين النص وخلفيته",
+  coverage: "شكل يغطي جزءًا كبيرًا من النص",
+  overflow: "نص يتجاوز حد الصفحة عند امتداده",
+  overlap: "تداخل بين كتل نصية",
+};
+
 const MM_PER_PT = 25.4 / 72;
 /** Percentage points kept between two boxes after a separation. */
 const GAP = 1.5;

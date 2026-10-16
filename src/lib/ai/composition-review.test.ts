@@ -3,6 +3,7 @@ import test from "node:test";
 import { contrastRatio } from "@/lib/intelligence/analyze";
 import type { PaletteRoles } from "@/lib/intelligence/schema";
 import {
+  COMPOSITION_ISSUE_LABELS,
   COMPOSITION_TEXT_SCALE,
   reviewCompositions,
 } from "./composition-review";
@@ -240,6 +241,16 @@ test("a collision with no in-bounds separation is reported, not forced", () => {
   );
   assert.equal(review.compositions[0].elements[1].x, 22);
   assert.equal(review.compositions[0].elements[1].y, 7);
+});
+
+test("every defect class has an Arabic label for the surfaces that speak to the author", () => {
+  for (const code of ["contrast", "coverage", "overflow", "overlap"] as const) {
+    const label = COMPOSITION_ISSUE_LABELS[code];
+    assert.ok(
+      label && /[\u0600-\u06FF]/.test(label),
+      `missing an Arabic label for ${code}`,
+    );
+  }
 });
 
 test("the review is idempotent and deterministic, and never touches copy or boxes", () => {

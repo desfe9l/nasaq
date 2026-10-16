@@ -817,16 +817,17 @@ export function TemplatesPage({
 
       <SiteFooter />
 
-      {/* Floating «إضافة قالب جديد» */}
+      {/* Floating «إضافة قالب جديد» — a compact FAB on phones so it never
+          covers the filter chips it floats over, the labelled pill from sm up. */}
       <button
         type="button"
         onClick={() => setForm({ mode: "create" })}
         title="إضافة قالب جديد"
         aria-label="إضافة قالب جديد"
-        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex h-12 items-center gap-2 rounded-full bg-navy px-5 text-[13px] font-extrabold text-on-brand shadow-xl shadow-navy/30 transition hover:bg-navy-2"
+        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex size-14 items-center justify-center rounded-full bg-navy text-on-brand shadow-xl shadow-navy/30 transition hover:bg-navy-2 sm:h-12 sm:w-auto sm:gap-2 sm:px-5 sm:text-[13px] sm:font-extrabold"
       >
         <Plus className="size-4" />
-        قالب جديد
+        <span className="hidden sm:inline">قالب جديد</span>
       </button>
 
       {quickEntry && (

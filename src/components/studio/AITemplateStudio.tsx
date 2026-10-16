@@ -39,6 +39,7 @@ import {
   type StudioGenerationResult,
 } from "@/lib/intelligence/pipeline";
 import { generateDesignBriefFn } from "@/lib/ai/functions";
+import { COMPOSITION_ISSUE_LABELS } from "@/lib/ai/composition-review";
 import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import type { CoverStyle, DesignGenerationMode } from "@/lib/ai/design-contract";
 import type { DesignVariation } from "@/lib/intelligence/variations";
@@ -332,6 +333,15 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
     }
   };
 
+  /*
+   * Automatic plan repairs, said out loud: the review corrected the plan
+   * before it became elements, so the author sees the count — and any issue
+   * that could not be corrected in bounds — instead of an unexplained
+   * difference between the prompt and the result.
+   */
+  const planIssues = result?.compositionReview?.issues ?? [];
+  const planIssuesOpen = planIssues.filter((issue) => !issue.corrected).length;
+
   return (
     <div className="grid gap-4 text-ink" dir="rtl">
       {/* ----------------- Header & Prompt Box ----------------- */}
@@ -565,6 +575,25 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
                 <CheckCircle2 className="size-3" />
                 جودة التصميم: {currentVariation?.score || 95}/100
               </span>
+              {planIssues.length > 0 && (
+                <span
+                  className={cn(
+                    "flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold",
+                    planIssuesOpen ? "bg-error/10 text-error" : "bg-gold/15 text-ink",
+                  )}
+                  title={planIssues
+                    .map(
+                      (issue) =>
+                        `${COMPOSITION_ISSUE_LABELS[issue.code]}${issue.corrected ? "" : " — تحتاج مراجعة يدوية"}`,
+                    )
+                    .join("\n")}
+                >
+                  <Wand2 className="size-3" />
+                  {planIssuesOpen
+                    ? `مراجعة التخطيط: ${planIssuesOpen} ملاحظة تحتاج نظرك`
+                    : `صُحّحت ${planIssues.length} ملاحظة تخطيط تلقائيًا`}
+                </span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
