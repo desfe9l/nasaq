@@ -759,8 +759,9 @@ function sectionDividerPage(theme: Theme, org: string): Page {
 function processPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("مراحل إجرائية", theme, (add) => {
-    paint(add, "تسمية", "تسلسل إجرائي", 16, 20, 120, 6, { ...ROLE.meta, color: c.accent });
-    paint(add, "العنوان", "أربع مراحل", 16, 30, 120, 12, { ...ROLE.h1, color: c.primary });
+    const measure = cell(0, 12);
+    paint(add, "تسمية", "تسلسل إجرائي", measure.x, 20, measure.w, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "أربع مراحل", measure.x, 30, measure.w, 12, { ...ROLE.h1, color: c.primary });
     paint(add, "الحالة", "الآن: التنفيذ", 120, 34, 74, 8, { ...ROLE.meta, color: c.accent, textAlign: "left" });
     hairline(add, "المسار", 24, 72, 164, c.line, 0.7);
     const stages: [string, string][] = [

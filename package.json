@@ -40,7 +40,7 @@
     "test:auth:swr": "node scripts/auth-swr-check.mjs",
     "test:admin:e2e": "node scripts/admin-e2e.mjs",
     "test:ai:e2e": "node scripts/ai-e2e.mjs",
-    "test:editor:products": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs --test src/lib/editor/product-templates.test.ts src/lib/editor/template-families.test.ts src/lib/editor/design-skill.test.ts src/lib/templates/custom-templates.test.ts src/lib/templates/draft-commit.test.ts",
+    "test:editor:products": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs --test src/lib/editor/product-templates.test.ts src/lib/editor/template-families.test.ts src/lib/editor/template-catalog.test.ts src/lib/editor/design-skill.test.ts src/lib/templates/custom-templates.test.ts src/lib/templates/draft-commit.test.ts",
     "test:editor:windows": "node scripts/editor-windows-smoke.mjs",
     "verify:team": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs scripts/verify-keygen-team.mjs",
     "lint": "eslint .",

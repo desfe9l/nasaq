@@ -99,7 +99,8 @@ function walk(dir: string, out: string[] = []): string[] {
 function definers(pattern: RegExp): string[] {
   return walk(join(root, "src"))
     .filter((file) => pattern.test(readFileSync(file, "utf8")))
-    .map((file) => relative(root, file));
+    // Forward slashes so the assertion reads the same on every platform.
+    .map((file) => relative(root, file).replaceAll("\\", "/"));
 }
 
 test("template generation is bound to the nasaq-media skill", () => {

@@ -398,7 +398,7 @@ export function buildFamilyPage(
         add("image", { name: "صورة", x: 28, y: 62, w: 154, h: 78, src: plate("night"), style: { objectFit: "cover", radius: 0 } });
         paint(add, "العنوان", "تقرير القيادة", 24, 156, 162, 18, { ...ROLE.display, fontSize: 32, color: "#ffffff", textAlign: "center" });
         hairline(add, "خيط", 78, 180, 54, ink.gold, 0.8);
-        paint(add, "سطر", "يُتداول داخل الجهة. لا يُنشر كما هو.", 24, 190, 162, 10, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#172033", textAlign: "center" });
+        paint(add, "سطر", "يُتداول داخل الجهة. لا يُنشر كما هو.", 24, 190, 162, 10, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#e7efe9", textAlign: "center" });
         paint(add, "الجهة", entity, 24, 230, 162, 8, { ...ROLE.h3, color: ink.gold, textAlign: "center" });
         paint(add, "السنة", "٢٠٢٦", 24, 244, 162, 8, { ...ROLE.meta, color: "#ffffff", textAlign: "center" });
       });

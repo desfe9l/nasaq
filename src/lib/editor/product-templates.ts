@@ -147,12 +147,15 @@ function resumePage(language: "ar" | "en"): Page {
   text(target, "الاسم", arabic ? "نورة السبيعي" : "FULL NAME", x, 14, textW, 12, {
     size: 26, color: GREEN, weight: 800, align, font: arabic ? "Tajawal" : "Georgia",
   });
-  text(target, "المسمى المهني", arabic ? "أخصائية اتصال مؤسسي" : "Communications Lead", x, 28, textW, 7, {
+  // The 26pt name frame carries its descender slack to y≈31, so the metadata
+  // line starts below it (32) instead of inside it, and the contact line keeps
+  // the 4mm rhythm after that: 42.5 Arabic / 40.5 English.
+  text(target, "المسمى المهني", arabic ? "أخصائية اتصال مؤسسي" : "Communications Lead", x, 32, textW, 7, {
     size: 11, color: INK, weight: 600, align, font: arabic ? "IBM Plex Sans Arabic" : "Georgia",
   });
   text(target, "معلومات التواصل", arabic
     ? "الرياض  ·  nora@example.com  ·  ٠٥٥ ٠٠٠ ٠٠٠٠"
-    : "Riyadh  ·  name@example.com  ·  +966 55 000 0000", x, arabic ? 40 : 38, textW, 6, {
+    : "Riyadh  ·  name@example.com  ·  +966 55 000 0000", x, arabic ? 42.5 : 40.5, textW, 6, {
     size: 8, color: MUTED, align, font: META,
   });
   add(target, "line", "فاصل الهوية", x, arabic ? 50 : 48, textW, 0, "", { color: GOLD, stroke: 0.6 });
@@ -262,7 +265,7 @@ function portfolioPages(): Page[] {
   add(cover, "image", "صورة الغلاف", 16, 36, 178, 110, "", { objectFit: "cover", radius: 0 }, plate("facade"));
   text(cover, "عنوان الملف", "أعمال مختارة", 18, 180, 174, 6, { size: 10, color: GOLD, weight: 700, font: META });
   text(cover, "اسم المصمم", "ليان القاسم", 18, 192, 174, 14, { size: 26, weight: 800, color: "#ffffff" });
-  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 214, 174, 8, { size: 12, color: "#1f6b45", font: META });
+  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 214, 174, 8, { size: 12, color: "#e7efe9", font: META });
   text(cover, "بيانات التواصل", "layan@example.com", 18, 232, 174, 7, { size: 11, color: GOLD, font: META });
 
   const about = page("نبذة");
@@ -329,7 +332,7 @@ function businessCardPages(): Page[] {
   shape(back, "أرضية", 0, 0, 94.9, 56.8, GREEN);
   text(back, "اسم العلامة", "اسم الجهة", 8, 14, 78, 8, { size: 12, color: "#ffffff", weight: 800 });
   add(back, "line", "فاصل", 56, 26, 28, 0, "", { color: GOLD, stroke: 0.5 });
-  text(back, "عنوان الشركة", "الرياض  ·  مراسلات ومطبوعات", 8, 32, 78, 8, { size: 7, color: "#1f6b45", font: META });
+  text(back, "عنوان الشركة", "الرياض  ·  مراسلات ومطبوعات", 8, 32, 78, 8, { size: 7, color: "#e7efe9", font: META });
   text(back, "ملاحظة الطباعة", "وجه خلفي", 8, 48, 78, 4, { size: 4.5, color: GOLD, font: META });
   return [front, back];
 }
@@ -340,7 +343,7 @@ function greetingPages(): Page[] {
   add(photo, "image", "مشهد التهنئة", 8, 8, 92, 58, "", { objectFit: "cover", radius: 2 }, plate("dune"));
   text(photo, "نص التهنئة", "كل عام وأنتم بخير", 8, 74, 92, 12, { size: 14, color: "#ffffff", weight: 800 });
   add(photo, "line", "خيط", 8, 90, 28, 0, "", { color: GOLD, stroke: 0.7 });
-  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 96, 92, 8, { size: 9, color: "#1f6b45", font: BODY });
+  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 96, 92, 8, { size: 9, color: "#e7efe9", font: BODY });
   text(photo, "اسم المرسل", "نورة", 8, 114, 92, 6, { size: 8, color: GOLD, font: META });
 
   const typeLed = page("تهنئة مكتوبة", 108, 135);
