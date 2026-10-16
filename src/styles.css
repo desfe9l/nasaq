@@ -1465,6 +1465,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
+ * Vector node editing is the svg twin of in-place text editing: the frame
+ * keeps its outline but must not intercept the pointer, or the frame body
+ * swallows every click meant for a node handle drawn beneath it.
+ */
+.selection-frame.is-node-editing {
+  pointer-events: none;
+}
+
+/*
  * A locked element accepts the pointer so the editor can select it without
  * starting a move. The NASAQ pin is visual only.
  */

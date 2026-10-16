@@ -219,12 +219,24 @@ try {
     { timeout: 60000 },
   );
 
-  /* The import itself runs through the editor's real picker, with the licence
-   * state re-applied because a full page load resolves entitlements afresh. */
+  /* The import itself runs through the editor's real picker. The licence state
+   * is re-applied on the LIVE dev store (`window.__nsqStore` — a bare module
+   * import can hand back a second, HMR-stamped store instance) and pinned,
+   * because a mocked test session cannot pass the server's licence middleware:
+   * the background revalidation would otherwise downgrade this deliberately
+   * licensed run mid-import, and the free tier refuses the second project. */
   await page.evaluate(async () => {
-    const { useEditor } = await import("/src/lib/editor/store.ts");
     const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
-    useEditor.getState().setEntitlements({ ...LICENSE_ENTITLEMENTS.PRO });
+    const store = window.__nsqStore;
+    if (!store) throw new Error("the dev store is not exposed");
+    const original = store.getState().setEntitlements;
+    original.call(store.getState(), { ...LICENSE_ENTITLEMENTS.PRO });
+    store.setState({
+      setEntitlements: (next, owner) =>
+        next && next.unlimited_projects
+          ? original.call(store.getState(), next, owner)
+          : undefined,
+    });
   });
   const input = page.locator('input[type="file"][accept*=".psd"]').first();
   await input.setInputFiles(

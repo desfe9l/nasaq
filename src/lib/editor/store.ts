@@ -285,6 +285,19 @@ interface Ui {
   editingId: string | null;
   /** Begin/end in-place text editing for an element. */
   setEditing: (id: string | null) => void;
+  /**
+   * Element whose VECTOR NODES are being edited in place, if any — the svg
+   * twin of `editingId`.
+   *
+   * Node handles sit exactly where the selection frame's corner handles sit (a
+   * path's extreme points ARE its bounding-box corners), so the two handle sets
+   * must never be live at once: double-clicking a shape with an editable path
+   * enters this mode, the selection frame steps aside while it is active, and
+   * Escape or selecting anything else leaves it.
+   */
+  nodeEditId: string | null;
+  /** Begin/end in-place vector node editing for an element. */
+  setNodeEdit: (id: string | null) => void;
   zoom: number;
   showGrid: boolean;
   snapGrid: boolean;
@@ -1485,6 +1498,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       selectedIds: [],
       enteredGroupId: null,
       editingId: null,
+      nodeEditId: null,
       ...extra,
     });
   };
@@ -2106,6 +2120,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     selectedIds: [],
     enteredGroupId: null,
     editingId: null,
+    nodeEditId: null,
     zoom: 0.82,
     showGrid: false,
     showOutsidePage: SHOW_OUTSIDE_PAGE_DEFAULT,
@@ -4275,6 +4290,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
       });
       // Remember the page the author is ON (debounced) so a reload reopens
       // the same page even when no edit has triggered an auto-save since.
@@ -4285,12 +4301,20 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
+        /* Leaving the shape ends its node editing session with it. */
+        ...(s.nodeEditId && s.nodeEditId !== id ? { nodeEditId: null } : {}),
         // Selecting artwork updates the properties target without forcing a
         // closed or compact sidebar to pop open over the canvas.
         ...(id ? { rightTab: "properties" as const } : {}),
       })),
 
-    setEditing: (id) => set({ editingId: id }),
+    setEditing: (id) =>
+      set({ editingId: id, ...(id ? { nodeEditId: null } : {}) }),
+
+    /* Text and vector node editing are two answers to "the artwork is being
+       manipulated in place" — entering one must end the other. */
+    setNodeEdit: (id) =>
+      set({ nodeEditId: id, ...(id ? { editingId: null } : {}) }),
 
     toggleSelect: (id) => {
       const s = get();
@@ -4665,6 +4689,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         // selection-scoped command ignored the element that was just added.
         activePageId: page.id,
         editingId: null,
+        nodeEditId: null,
         selectedId: el.id,
         selectedIds: [el.id],
         rightTab: "properties",
@@ -6011,6 +6036,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
         previewAll: true,
       });
       pushHistory();
@@ -6043,6 +6069,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
         previewAll: true,
       });
       pushHistory();
@@ -6077,6 +6104,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
       });
       pushHistory();
     },
@@ -6138,6 +6166,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
         previewAll: true,
       });
       pushHistory();
@@ -6192,6 +6221,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
         editingId: null,
+        nodeEditId: null,
         previewAll: true,
       });
       pushHistory();
@@ -6221,6 +6251,7 @@ export const useEditor = create<EditorStore>((set, get) => {
               selectedIds: [],
               enteredGroupId: null,
               editingId: null,
+              nodeEditId: null,
             }
           : {}),
       });

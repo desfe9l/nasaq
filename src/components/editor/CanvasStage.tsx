@@ -240,6 +240,7 @@ export function CanvasStage({
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const setActivePage = useEditor((s) => s.setActivePage);
   const editingId = useEditor((s) => s.editingId);
+  const nodeEditId = useEditor((s) => s.nodeEditId);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const renamePage = useEditor((s) => s.renamePage);
 
@@ -2136,6 +2137,13 @@ export function CanvasStage({
         }
         const target = e.target as HTMLElement;
         if (target.closest(".crop-overlay")) return;
+        /*
+         * Vector node editing owns the press: a node handle drawn over the
+         * artwork is a first-class drag target of its own (like the crop
+         * overlay), so the stage must not read the same press as "move the
+         * element". The overlay's own handler takes it from here.
+         */
+        if (target.closest("[data-vector-node-editor]")) return;
         if (
           target.closest(
             "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
@@ -2390,6 +2398,7 @@ export function CanvasStage({
               root={stageEl}
               selectedSet={page.id === activePageId ? selectedSet : EMPTY_SELECTION}
               selectedId={page.id === activePageId ? selectedId : null}
+              nodeEditId={page.id === activePageId ? nodeEditId : null}
               editingId={page.id === activePageId ? editingId : null}
               enteredGroupId={page.id === activePageId ? enteredGroupId : null}
               showGrid={showGrid}
@@ -2493,6 +2502,7 @@ const ArtboardPage = memo(function ArtboardPage({
   root,
   selectedSet,
   selectedId,
+  nodeEditId,
   editingId,
   enteredGroupId,
   showGrid,
@@ -2518,6 +2528,8 @@ const ArtboardPage = memo(function ArtboardPage({
   root: HTMLElement | null;
   selectedSet: Set<string>;
   selectedId: string | null;
+  /** Element in in-place vector node editing, when it lives on this page. */
+  nodeEditId: string | null;
   editingId: string | null;
   enteredGroupId: string | null;
   showGrid: boolean;
@@ -2788,6 +2800,8 @@ const ArtboardPage = memo(function ArtboardPage({
                           pageCount={pageCount}
                           siblings={enteredKids}
                           interactive={live}
+                          selected={child.id === selectedId}
+                          nodeEditing={child.id === nodeEditId}
                           onGesture={onElementGesture}
                           pageId={page.id}
                           offX={entered.x}
@@ -2806,6 +2820,8 @@ const ArtboardPage = memo(function ArtboardPage({
                   pageCount={pageCount}
                   siblings={page.elements}
                   interactive={live}
+                  selected={el.id === selectedId}
+                  nodeEditing={el.id === nodeEditId}
                   onEnterGroup={el.type === "group" ? onEnterGroup : undefined}
                   pageId={page.id}
                   onGesture={onElementGesture}
@@ -2836,6 +2852,7 @@ const ArtboardPage = memo(function ArtboardPage({
                   frame={frame}
                   primary={frame.el.id === selectedId}
                   editing={editingId === frame.el.id}
+                  nodeEditing={nodeEditId === frame.el.id}
                   onGesture={(ev, kind, handle) =>
                     onElementGesture(ev, frame.el, kind, handle, {
                       pageId: page.id,
@@ -2914,6 +2931,8 @@ const EnteredChildNode = memo(function EnteredChildNode({
   pageCount,
   siblings,
   interactive,
+  selected,
+  nodeEditing,
   onGesture,
   pageId,
   offX,
@@ -2924,6 +2943,8 @@ const EnteredChildNode = memo(function EnteredChildNode({
   pageCount: number;
   siblings: CanvasEl[];
   interactive: boolean;
+  selected: boolean;
+  nodeEditing: boolean;
   onGesture: ElementGestureHandler;
   pageId: string;
   offX: number;
@@ -2937,6 +2958,8 @@ const EnteredChildNode = memo(function EnteredChildNode({
       pageCount={pageCount}
       siblings={siblings}
       interactive={interactive}
+      selected={selected}
+      nodeEditing={nodeEditing}
       pageId={pageId}
       parent={{ x: offX, y: offY }}
       onGesture={onGesture}
@@ -3238,12 +3261,14 @@ function SelectionFrame({
   frame,
   primary,
   editing,
+  nodeEditing,
   onGesture,
   onEditRequest,
 }: {
   frame: SelectionBox;
   primary: boolean;
   editing: boolean;
+  nodeEditing: boolean;
   onGesture: (
     e: React.PointerEvent,
     kind: "move" | "resize" | "rotate",
@@ -3359,6 +3384,7 @@ function SelectionFrame({
         el.resizeLocked && "is-resize-locked",
         (el.widthLocked || el.heightLocked) && "is-dimension-locked",
         editing && "is-editing",
+        nodeEditing && "is-node-editing",
       )}
       data-el-id={el.id}
       style={
@@ -3390,7 +3416,7 @@ function SelectionFrame({
         onEditRequest();
       }}
     >
-      {primary && !el.locked && !editing && (
+      {primary && !el.locked && !editing && !nodeEditing && (
         <>
           {/* Resize handles — Hit Area أكبر من المرئي، مناسب لـ Apple Pencil */}
           {!el.resizeLocked &&

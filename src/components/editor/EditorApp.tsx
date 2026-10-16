@@ -1566,6 +1566,14 @@ function Studio({
         return;
       }
       if (e.key === "Escape") {
+        /* In-place modes end before the selection does: a shape in vector node
+           editing leaves node editing (and stays selected), then a group step
+           out, and only then the selection is cleared. */
+        if (useEditor.getState().nodeEditId) {
+          e.preventDefault();
+          useEditor.getState().setNodeEdit(null);
+          return;
+        }
         // Escape steps out of a group first, then clears the selection — so it
         // backs out of the nesting one level at a time instead of jumping to
         // nothing and losing the author's place.

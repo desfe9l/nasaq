@@ -14,6 +14,7 @@ import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
 import { imageAdjustCss, safeImageSrc, sharpnessKernel } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
 import { isCompoundShape, shapeDef, type ShapePart } from "@/lib/editor/shapes";
+import { extractVectorTarget } from "@/lib/editor/vector-node-edit";
 import {
   dashArrayForUnits,
   shapeIdOf,
@@ -56,6 +57,19 @@ const textPointerDown = (e: React.PointerEvent<HTMLElement>) => {
 interface Props {
   el: CanvasEl;
   interactive: boolean;
+  /**
+   * True while this element is the PRIMARY selection. Only the primary
+   * selection gets direct-manipulation chrome of its own (the vector node
+   * editor today); everything else stays inside CanvasStage's overlay layer,
+   * so a multi-selection never sprouts competing handle sets.
+   */
+  selected?: boolean;
+  /**
+   * True while this element is in IN-PLACE VECTOR NODE editing (its path is
+   * being reshaped handle by handle). Entered by double-clicking a drawing with
+   * a representable path — see `store.nodeEditId`.
+   */
+  nodeEditing?: boolean;
   /**
    * Stable gesture sink (never an inline closure): `(event, element, kind,
    * handle, context)`. Keeping the handler identity stable is what lets this
@@ -124,6 +138,8 @@ function areElementNodePropsEqual(
   if (
     prev.el !== next.el ||
     prev.interactive !== next.interactive ||
+    prev.selected !== next.selected ||
+    prev.nodeEditing !== next.nodeEditing ||
     prev.onGesture !== next.onGesture ||
     prev.onEnterGroup !== next.onEnterGroup ||
     prev.pageNo !== next.pageNo ||
@@ -169,6 +185,8 @@ function areElementNodePropsEqual(
 export const ElementNode = memo(function ElementNode({
   el,
   interactive,
+  selected,
+  nodeEditing,
   onGesture,
   onEnterGroup,
   pageNo,
@@ -180,6 +198,7 @@ export const ElementNode = memo(function ElementNode({
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const setEditing = useEditor((s) => s.setEditing);
+  const setNodeEdit = useEditor((s) => s.setNodeEdit);
   const commit = useEditor((s) => s.commit);
   /**
    * Live gesture geometry for THIS element only. The selector allocates
@@ -265,7 +284,20 @@ export const ElementNode = memo(function ElementNode({
       }
       return;
     }
-    if (!EDITABLE.has(el.type)) return;
+    if (!EDITABLE.has(el.type)) {
+      /*
+       * A drawing whose first path this editor can represent opens VECTOR NODE
+       * editing instead: the two in-place modes are mutually exclusive, and the
+       * selection frame steps aside for whichever one is active (node handles
+       * sit exactly where the frame's corner handles sit — a path's extreme
+       * points ARE its bounding-box corners).
+       */
+      if (el.type === "svg" && extractVectorTarget(el.content ?? "")) {
+        e.stopPropagation();
+        setNodeEdit(el.id);
+      }
+      return;
+    }
     e.stopPropagation();
     const node = textRef.current;
     if (!node) return;
@@ -418,6 +450,8 @@ export const ElementNode = memo(function ElementNode({
                 onKeyDown={handleEditKey}
                 siblings={activeElements}
                 interactive={interactive}
+                selected={selected}
+                nodeEdit={nodeEditing}
                 pageRef={
                   pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
                 }
@@ -431,6 +465,8 @@ export const ElementNode = memo(function ElementNode({
               onKeyDown={handleEditKey}
               siblings={activeElements}
               interactive={interactive}
+              selected={selected}
+              nodeEdit={nodeEditing}
               pageRef={
                 pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
               }
@@ -450,6 +486,8 @@ export const ElementNode = memo(function ElementNode({
               onKeyDown={handleEditKey}
               siblings={activeElements}
               interactive={interactive}
+              selected={selected}
+              nodeEdit={nodeEditing}
               pageRef={
                 pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
               }
@@ -463,6 +501,8 @@ export const ElementNode = memo(function ElementNode({
             onKeyDown={handleEditKey}
             siblings={activeElements}
             interactive={interactive}
+            selected={selected}
+            nodeEdit={nodeEditing}
             pageRef={
               pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
             }
@@ -481,6 +521,8 @@ function ElementContent({
   pageRef,
   siblings,
   interactive,
+  selected,
+  nodeEdit,
 }: {
   el: CanvasEl;
   textRef: React.RefObject<HTMLDivElement | null>;
@@ -489,6 +531,10 @@ function ElementContent({
   pageRef?: PageContext;
   siblings: CanvasEl[];
   interactive: boolean;
+  /** Primary-selection gate — see the `selected` note on `Props`. */
+  selected?: boolean;
+  /** In-place node editing — see the `nodeEditing` note on `Props`. */
+  nodeEdit?: boolean;
 }) {
   const s = el.style || {};
   const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -1272,28 +1318,45 @@ function ElementContent({
         </div>
       );
     }
-    /* When selected, overlay the vector node editor for point/handle manipulation. */
-    const nodeEditor = interactive ? (
-      <VectorNodeEditor el={el} selected={interactive} />
-    ) : null;
+    /*
+     * Node handles belong to the element that is BOTH the primary selection and
+     * in node-editing mode, and never to a locked layer: `interactive` is
+     * page-wide (any live page), the mode is per element, so gating on it here
+     * is what keeps every other imported vector shape free of handle sets — and
+     * keeps the selection frame's corner handles (which sit exactly where the
+     * path's extreme points sit) out of the way while nodes are being dragged.
+     */
+    const nodeEditor =
+      interactive && selected && nodeEdit && !el.locked ? (
+        <VectorNodeEditor el={el} selected />
+      ) : null;
     return (
-      <div
-        className="canvas-svg-content h-full w-full relative"
-        style={{
-          color: s.color || "#172033",
-          opacity: el.opacity ?? 1,
-          overflow: s.overflowVisible ? "visible" : "hidden",
-          pointerEvents: "none",
-        }}
-      >
-        {/* Sanitised SVG markup — rendered inline. */}
+      <>
         <div
-          className="absolute inset-0 h-full w-full"
-          dangerouslySetInnerHTML={{ __html: clean }}
-        />
-        {/* Vector node editor overlay — point/handle manipulation when selected. */}
+          className="canvas-svg-content h-full w-full relative"
+          style={{
+            color: s.color || "#172033",
+            opacity: el.opacity ?? 1,
+            overflow: s.overflowVisible ? "visible" : "hidden",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Sanitised SVG markup — rendered inline. */}
+          <div
+            className="absolute inset-0 h-full w-full"
+            dangerouslySetInnerHTML={{ __html: clean }}
+          />
+        </div>
+        {/*
+         * The node overlay is a SIBLING of the artwork wrapper, never a child:
+         * `.canvas-svg-content` clips to the element box (`overflow: hidden`),
+         * and a padded overlay inside it would have its padding — exactly the
+         * edge handles' grab room — clipped away for hit testing. The parent
+         * `.canvas-el` is positioned and `overflow: visible`, so the padded
+         * box works there.
+         */}
         {nodeEditor}
-      </div>
+      </>
     );
   }
 
