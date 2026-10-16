@@ -2155,6 +2155,16 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (owner !== getStorageOwner()) return;
       const before = get();
       if (before.hydrated && before.sessionOwner !== owner) return;
+      // Skip the store write when entitlements are unchanged. Creating a new
+      // object reference on every call notifies every store subscriber and can
+      // drive a render loop (React #301 — "Maximum update depth exceeded") in
+      // components that sync entitlements back into the store.
+      if (
+        before.entitlementsResolved &&
+        before.entitlementsOwner === owner &&
+        sameData(before.entitlements, entitlements)
+      )
+        return;
       const resolved = { ...entitlements };
       set({
         entitlements: resolved,
