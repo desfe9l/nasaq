@@ -217,31 +217,37 @@ export function ProjectCard({
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => void onOpen(project.id)}
-              className="block w-full text-right"
-            >
-              {/* Wrap instead of truncate: long official titles stay readable. */}
-              <strong className="line-clamp-2 break-words text-[13px] font-extrabold leading-5">
-                {project.name}
-                {project.favorite && (
-                  <span className="mr-1 text-warning" title="في المفضلة">
-                    ★
-                  </span>
-                )}
-              </strong>
-              <span className="mt-0.5 block text-[11px] text-muted">
-                {project.pages} صفحة · {theme.name}
-              </span>
-              <span className="mt-0.5 block text-[11px] tabular-nums text-muted">
-                آخر تعديل {relativeTime(project.updatedAt)}
-                {project.orgName ? ` · ${project.orgName}` : ""}
-              </span>
+            <>
+              <button
+                type="button"
+                onClick={() => void onOpen(project.id)}
+                className="block w-full text-right"
+              >
+                {/* Wrap instead of truncate: long official titles stay readable. */}
+                <strong className="line-clamp-2 break-words text-[13px] font-extrabold leading-5">
+                  {project.name}
+                  {project.favorite && (
+                    <span className="mr-1 text-warning" title="في المفضلة">
+                      ★
+                    </span>
+                  )}
+                </strong>
+                <span className="mt-0.5 block text-[11px] text-muted">
+                  {project.pages} صفحة · {theme.name}
+                </span>
+                <span className="mt-0.5 block text-[11px] tabular-nums text-muted">
+                  آخر تعديل {relativeTime(project.updatedAt)}
+                  {project.orgName ? ` · ${project.orgName}` : ""}
+                </span>
+              </button>
+              {/* «حفظ للعمل دون اتصال» is its own control, NOT nested inside
+                  the open button: a button inside a button is invalid HTML and
+                  the click bubbled to the parent, opening the document instead
+                  of preparing it for offline work. */}
               <span className="mt-2 flex">
                 <ProjectOfflineButton projectId={project.id} updatedAt={project.updatedAt} />
               </span>
-            </button>
+            </>
           )}
         </div>
 
