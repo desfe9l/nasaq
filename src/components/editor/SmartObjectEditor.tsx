@@ -72,15 +72,20 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
   return (
     <div
       className={cn(
-        "relative h-full w-full flex flex-col items-center justify-center",
-        editing ? "opacity-50 pointer-events-none" : "",
+        /* An overlay pinned to the artwork. It must be absolute: in flow it
+           stacked BELOW the image, so the «ذكي» badge and the edit button
+           detached from the object they belong to (and landed under the
+           floating toolbar). The root never takes pointer events, so the
+           element stays selectable/draggable; its controls opt back in. */
+        "pointer-events-none absolute inset-0 flex flex-col items-center justify-center",
+        editing ? "opacity-50" : "",
       )}
       data-smart-object="true"
     >
       {/* Smart object badge — shown when not editing. */}
       {!editing && (
         <div
-          className="absolute top-1 right-1 z-10 bg-emerald-900/90 text-white text-[10px] px-2 py-1 rounded-bl-md"
+          className="pointer-events-auto absolute top-1 right-1 z-10 bg-navy/90 text-on-brand text-[10px] px-2 py-1 rounded-bl-md"
           title="كائن ذكي — انقر للتحرير"
         >
           ذكي
@@ -91,7 +96,8 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
         <button
           type="button"
           onClick={openSmartObject}
-          className="absolute bottom-2 right-2 z-10 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] px-3 py-1.5 rounded-md shadow-lg transition-colors"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="pointer-events-auto absolute bottom-2 right-2 z-10 bg-navy hover:bg-navy-2 text-on-brand text-[10px] px-3 py-1.5 rounded-md shadow-lg transition-colors"
           disabled={!smartObject.embeddedPsd && !smartObject.linkedFile}
         >
           {smartObject.linkedFile ? "فتح المصدر" : "تحرير المحتوى"}
@@ -100,22 +106,25 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
       {/* Edit error. */}
       {editError && (
         <div
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-destructive text-white text-[10px] px-3 py-2 rounded-md shadow-lg text-center max-w-xs"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-danger text-on-brand text-[10px] px-3 py-2 rounded-md shadow-lg text-center max-w-xs"
         >
           {editError}
         </div>
       )}
       {/* Nested editing surface. */}
       {editing && smartObject.embeddedPsd && (
-        <div className="absolute inset-0 z-20 bg-white/95 backdrop-blur-sm border border-emerald-200 rounded-lg shadow-2xl flex flex-col">
-          <div className="flex items-center justify-between p-3 border-b border-emerald-200">
-            <span className="text-sm font-semibold text-emerald-900">
+        <div
+          className="pointer-events-auto absolute inset-0 z-20 bg-surface/95 backdrop-blur-sm border border-line rounded-lg shadow-2xl flex flex-col"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between p-3 border-b border-line">
+            <span className="text-sm font-semibold text-ink">
               تحرير المحتوى المتداخل
             </span>
             <button
               type="button"
               onClick={closeSmartObject}
-              className="text-[10px] text-emerald-600 hover:text-emerald-900"
+              className="text-[10px] text-brand hover:text-brand-hover"
             >
               إغلاق
             </button>
@@ -131,7 +140,7 @@ export function SmartObjectEditor({ el, selected }: SmartObjectEditorProps) {
                 // Save with current embedded data (no changes in this version).
                 saveSmartObject(smartObject.embeddedPsd || "");
               }}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] py-2 rounded-md transition-colors"
+              className="w-full bg-navy hover:bg-navy-2 text-on-brand text-[11px] py-2 rounded-md transition-colors"
             >
               حفظ التغييرات
             </button>

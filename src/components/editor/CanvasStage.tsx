@@ -2144,6 +2144,12 @@ export function CanvasStage({
          * element". The overlay's own handler takes it from here.
          */
         if (target.closest("[data-vector-node-editor]")) return;
+        /*
+         * The smart-object overlay is the third such owner: its badge, edit
+         * control and nested editing surface live inside the element box, so
+         * the press belongs to the overlay, not to "move the element".
+         */
+        if (target.closest("[data-smart-object]")) return;
         if (
           target.closest(
             "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
@@ -3385,6 +3391,9 @@ function SelectionFrame({
         (el.widthLocked || el.heightLocked) && "is-dimension-locked",
         editing && "is-editing",
         nodeEditing && "is-node-editing",
+        /* A smart object draws its own inline overlay inside the element box;
+           the frame must not swallow the clicks meant for it (see styles.css). */
+        el.smartObject && "is-smart-object",
       )}
       data-el-id={el.id}
       style={

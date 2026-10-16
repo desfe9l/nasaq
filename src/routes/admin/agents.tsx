@@ -128,7 +128,7 @@ function AgentsSection() {
                 </span>
               )}
               {agent.status === "not-installed" && (
-                <span className="inline-flex h-5 items-center gap-1 rounded-full bg-gold/10 px-2 text-[10px] font-bold text-gold">
+                <span className="inline-flex h-5 items-center gap-1 rounded-full bg-gold/10 px-2 text-[10px] font-bold text-warning">
                   غير مثبت
                 </span>
               )}
@@ -155,7 +155,7 @@ function AgentsSection() {
 
           {agent.status === "not-installed" && (
             <div className="mb-2 p-2 rounded-[8px] bg-gold/5 border border-gold/20">
-              <p className="text-[11px] text-gold font-bold">الخطوة التالية على ويندوز:</p>
+              <p className="text-[11px] text-warning font-bold">الخطوة التالية على ويندوز:</p>
               <p className="text-[10.5px] text-muted">{agent.windowsSetup}</p>
             </div>
           )}

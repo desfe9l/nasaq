@@ -1474,6 +1474,23 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
+ * A Photoshop smart object carries its own inline overlay — the «ذكي» badge
+ * and the «تحرير المحتوى» control — inside the element's box. The frame body
+ * covered that box, so the control could never receive a real click while the
+ * object was selected (the only state in which the overlay exists). The frame
+ * therefore steps aside exactly like it does for in-place text and vector node
+ * editing; the resize/rotate handles opt back in, and dragging keeps working
+ * through the element's own gesture handler.
+ */
+.selection-frame.is-smart-object {
+  pointer-events: none;
+}
+.selection-frame.is-smart-object .handle,
+.selection-frame.is-smart-object .rotate-handle {
+  pointer-events: auto;
+}
+
+/*
  * A locked element accepts the pointer so the editor can select it without
  * starting a move. The NASAQ pin is visual only.
  */
