@@ -266,8 +266,14 @@ page.on("pageerror", (e) => errors.push(String(e)));
 async function waitForEditorReady() {
   await page.getByRole("button", { name: "ملف المشروع", exact: true }).waitFor({ timeout: 30000 });
   await page.evaluate(async () => {
+    /*
+     * HMR can invalidate `/src/lib/editor/store.ts` behind a `?t=` timestamp,
+     * so a bare dynamic import here creates a SECOND store instance that never
+     * hydrates while the app runs on the real one. Prefer the dev handle the
+     * editor itself exposes after hydration, and fall back to the import.
+     */
     const mod = await import("/src/lib/editor/store.ts");
-    window.__store = mod.useEditor;
+    window.__store = window.__nsqStore ?? mod.useEditor;
   });
   await page.waitForFunction(() => window.__store && window.__store.getState().hydrated, null, { timeout: 30000 });
   await page.waitForFunction(() => window.__store.getState().sessionOwner === "leave-test-user");
@@ -302,6 +308,64 @@ if ((await textEl.count()) > 0) {
     "focusing and blurring text element without editing must not mark project dirty",
   );
 }
+
+// 1a. A download anchor must write a file, never move the tab. Every export
+// (PNG, PDF, NSQ, JSON…) clicks a `blob:` anchor with the download attribute;
+// the guard used to intercept it as an internal link — cancelling the file and
+// assigning the blob to the tab, which threw the author out of the editor.
+const downloadStarted = page.waitForEvent("download", { timeout: 15000 });
+await page.evaluate(async () => {
+  const { downloadBlob } = await import("/src/lib/utils.ts");
+  downloadBlob(new Blob(["nasaq"], { type: "text/plain" }), "nasaq-leave-download.txt");
+});
+const downloaded = await downloadStarted;
+assert.equal(
+  downloaded.suggestedFilename(),
+  "nasaq-leave-download.txt",
+  "a download anchor must reach the browser as a file",
+);
+assert.equal(
+  new URL(page.url()).pathname,
+  "/editor",
+  "a download must not navigate the editor tab",
+);
+
+// 1b. An internal link click is still intercepted while dirty — the guard's
+// whole purpose — and cancelling keeps the author in place.
+await page.evaluate(() => {
+  const store = window.__store.getState();
+  store.pauseScheduledSave();
+  store.setName("تعديل قبل نقرة رابط");
+});
+await page.waitForFunction(() => window.__store.getState().saveState === "dirty");
+await page.evaluate(() => {
+  const a = document.createElement("a");
+  a.href = "/workspace";
+  a.id = "leave-probe-link";
+  a.textContent = "رابط داخلي";
+  document.body.appendChild(a);
+  a.click();
+});
+await page.getByRole("dialog", { name: "لديك تغييرات غير محفوظة" }).waitFor();
+await page.getByRole("button", { name: "إلغاء", exact: true }).click();
+await page.waitForFunction(() => !document.getElementById("unsaved-leave-title"));
+assert.equal(
+  new URL(page.url()).pathname,
+  "/editor",
+  "an internal link while dirty must not navigate before the prompt is answered",
+);
+await page.evaluate(async (name) => {
+  // Drop the probe edit without saving: this boot document is a premium pack
+  // under FREE entitlements, where `saveNow` is refused by design.
+  await window.__store.getState().discardUnsavedChanges();
+  document.getElementById("leave-probe-link")?.remove();
+}, savedName);
+assert.equal(await page.evaluate(() => window.__store.getState().saveState), "saved");
+assert.equal(
+  await page.evaluate(() => window.__store.getState().name),
+  savedName,
+  "cancelling the leave prompt must leave the author's document untouched",
+);
 
 const account = page.getByRole("button", { name: /حساب / });
 await account.click();
@@ -362,12 +426,13 @@ assert.equal(new URL(page.url()).pathname, "/editor");
 const saved = await page.evaluate(async () => {
   const { useEditor } = await import("/src/lib/editor/store.ts");
   const { LICENSE_ENTITLEMENTS } = await import("/src/lib/license/types.ts");
-  window.__store = useEditor;
-  const store = useEditor.getState();
+  const live = window.__nsqStore ?? useEditor;
+  window.__store = live;
+  const store = live.getState();
   store.setEntitlements(LICENSE_ENTITLEMENTS.PRO, store.sessionOwner ?? undefined);
   store.setName("محفوظ للخروج");
   await store.saveNow();
-  return useEditor.getState().saveState;
+  return live.getState().saveState;
 });
 if (saved !== "saved" && saved !== "idle") throw new Error(`save left state ${saved}`);
 let unexpected = false;

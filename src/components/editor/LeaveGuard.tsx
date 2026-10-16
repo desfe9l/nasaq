@@ -17,6 +17,7 @@ import {
   unloadBypassed,
   unloadShouldPrompt,
 } from "@/lib/editor/leave-controller";
+import { leaveClickTarget } from "@/lib/editor/leave-links";
 import { useEditor } from "@/lib/editor/store";
 import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 
@@ -139,17 +140,18 @@ export function LeaveGuard() {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.("a[href]");
       if (!anchor) return;
-      if (anchor.getAttribute("target") === "_blank") return;
-      const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || /^(mailto:|tel:)/i.test(href)) return;
-      let url: URL;
-      try {
-        url = new URL(href, window.location.href);
-      } catch {
-        return;
-      }
-      if (url.origin !== window.location.origin) return;
-      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      /*
+       * Downloads (every export) and non-http(s) hrefs are not navigation:
+       * classifying one as leaving cancelled the file write and sent the tab
+       * to the raw blob. `leaveClickTarget` owns that rule and is unit-tested.
+       */
+      const url = leaveClickTarget({
+        href: anchor.getAttribute("href"),
+        download: anchor.hasAttribute("download"),
+        target: anchor.getAttribute("target"),
+        currentHref: window.location.href,
+      });
+      if (!url) return;
       event.preventDefault();
       event.stopPropagation();
       void requestLeave().then((ok) => {
