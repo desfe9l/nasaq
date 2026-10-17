@@ -147,8 +147,15 @@ function officialPages(theme: Theme, org: string): Page[] {
       paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 196, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
       paint(add, "تسمية الجهة", "الجهة", 16, 214, 178, 5, { ...ROLE.caption, color: ink.gold });
       paint(add, "اسم الجهة", entity, 16, 222, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
-      paint(add, "الفترة", "يناير — ديسمبر", 16, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
-      paint(add, "النسخة", "نسخة داخلية", 120, 244, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
+      /*
+       * RTL footer: the period is the primary item and must sit at the RIGHT
+       * edge, with the "internal copy" mark opposite it. These two were laid
+       * out LTR-first (period left, copy right), so the cover read the wrong way
+       * round in an Arabic document — and the copy mark carried a forced
+       * `textAlign: "left"` that contradicted the page direction outright.
+       */
+      paint(add, "الفترة", "يناير — ديسمبر", 94, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+      paint(add, "النسخة", "نسخة داخلية", 16, 244, 74, 8, { ...ROLE.meta, color: ink.gold });
     }, A4),
 
     page("المحتويات", theme, (add) => {
@@ -252,10 +259,16 @@ function officialPages(theme: Theme, org: string): Page[] {
         kpiCard(add, label, x, y, 86, 52, value, label, ink.green, ink.gold, theme.ink);
       });
       band(add, "شريط الملخص", 16, 220, 178, 16, ink.green);
-      paint(add, "ملخص أول", "٣٤٨٦", 110, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
-      paint(add, "تسمية أول", "إجمالي العمليات", 110, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
-      paint(add, "ملخص ثان", "٧٣٠", 24, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
-      paint(add, "تسمية ثان", "ما زال مفتوحًا", 24, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
+      /*
+       * The stat number and its caption sat on a shared edge (the number ended
+       * at y=230 and the caption began at y=230), so the two ran together with
+       * no gap at all. A caption needs air under its figure: the number now
+       * ends at 229 and the caption starts at 231, inside the same band.
+       */
+      paint(add, "ملخص أول", "٣٤٨٦", 110, 221, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية أول", "إجمالي العمليات", 110, 231, 70, 4, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
+      paint(add, "ملخص ثان", "٧٣٠", 24, 221, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية ثان", "ما زال مفتوحًا", 24, 231, 70, 4, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
       folio(add, theme, entity, "٠٥");
     }, A4),
 

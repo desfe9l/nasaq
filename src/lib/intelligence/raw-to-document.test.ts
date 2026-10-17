@@ -14,6 +14,7 @@ import { pageSize } from "../editor/model.ts";
 import { critiqueProject } from "./critic.ts";
 import { textsOf } from "./layout.ts";
 import { RAW_PAGE, analyseRawText, composeFromText, improveRawText } from "./raw-to-document.ts";
+import { checkLayoutVariety } from "./layout-variety.ts";
 
 const PASTE = `تقرير الأداء التشغيلي — الربع الثالث
 عملت الفرق على ثلاث مبادرات: رقمنة الطلبات، وتقليل زمن المعالجة إلى 3 أيام، وتدريب 45 موظفًا.
@@ -85,4 +86,27 @@ test("the same paste composes the same document twice", () => {
 test("an explicit title overrides the paste's first heading", () => {
   const result = improveRawText({ text: PASTE, title: "محضر اجتماع" });
   assert.ok(textsOf(result.after).join("\n").includes("محضر اجتماع"));
+});
+
+test("a multi-page paste yields genuinely different layouts, not repeated copies", () => {
+  // `composeText` builds every body page from one template. Before variety
+  // enforcement, pages 2 and 3 came out layout-identical and this repo's own
+  // detector reported `ok: false`. Pinned so the repetition cannot return.
+  const lines = [
+    "المقدمة العامة للتقرير",
+    "يعرض هذا القسم نطاق العمل المنجز خلال الربع المالي",
+    "المنهجية المعتمدة في جمع البيانات والتحقق منها",
+    "النتائج الرئيسية ومؤشرات الأداء",
+    "التوصيات التنفيذية والخطوات التالية",
+    "الملاحق والجداول التفصيلية",
+  ];
+  const project = composeFromText({ title: "التقرير الربع سنوي", lines, total: 4 });
+
+  assert.equal(project.pages.length, 4);
+  const report = checkLayoutVariety(project);
+  assert.ok(
+    report.ok,
+    `no two pages may share a layout: ${JSON.stringify(report.pairs)}`,
+  );
+  assert.equal(report.pairs.filter((p) => p.identical).length, 0);
 });

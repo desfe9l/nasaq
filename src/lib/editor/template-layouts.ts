@@ -229,7 +229,13 @@ export function folio(
     lineHeight: 1,
     verticalAlign: "middle",
   });
-  paint(add, "تذييل الجهة", org || "اسم الجهة", 22, y + 3.6, w - 32, 7, {
+  /*
+   * Symmetric insets. This was x=22 with width w-32, which put the box's right
+   * edge at w-10 — 1mm outside the 11mm safe margin on A4, and because the run
+   * is right-aligned the address text sat on that out-of-margin edge. x=16 with
+   * width w-32 lands on w-16, matching the margin the rest of the layout uses.
+   */
+  paint(add, "تذييل الجهة", org || "اسم الجهة", 16, y + 3.6, w - 32, 7, {
     fontFamily: META,
     fontSize: 8,
     fontWeight: 600,

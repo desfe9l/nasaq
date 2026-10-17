@@ -172,7 +172,7 @@ export const FONT_ADVANCE: Record<string, number> = {
 
 /** Average advance of one glyph in `fontFamily` at `fontSizePt`, in mm. */
 export function faceAdvanceMm(fontSizePt: number, fontFamily?: string): number {
-  const key = String(fontFamily ?? "").trim().replace(/^[\"']|[\"']$/g, "");
+  const key = String(fontFamily ?? "").trim().replace(/^["']|["']$/g, "");
   const advance = FONT_ADVANCE[key] ?? DEFAULT_ADVANCE;
   return fontSizePt * 0.3528 * advance;
 }

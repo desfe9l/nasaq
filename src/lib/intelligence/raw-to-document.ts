@@ -28,6 +28,7 @@ import {
   type TextComposition,
 } from "./layout";
 import { runLoop } from "./pipeline";
+import { enforceLayoutVariety } from "./layout-variety";
 import {
   analyzeRawContent,
   RAW_MAX_SECTIONS,
@@ -75,7 +76,7 @@ export function composeFromText(
   },
 ): Project {
   const copy = splitCopy(input.title, input.lines);
-  return composeText({
+  const composed = composeText({
     ...DEFAULTS,
     ...copy,
     w: input.w ?? DEFAULTS.w,
@@ -85,6 +86,21 @@ export function composeFromText(
     palette: input.palette ?? DEFAULTS.palette,
     orgLine: input.orgLine ?? DEFAULTS.orgLine,
   });
+
+  /*
+   * `composeText` builds every body page from one structural template, so a
+   * four-page paste came out with pages 2 and 3 layout-identical — measured by
+   * this repo's own `checkLayoutVariety` (`ok: false`, an identical pair). The
+   * enforcement pass already existed and was already used by the AI path
+   * (`design-twin`, `editor-bridge`); the raw-content path simply never called
+   * it. Applying it here means pasted Arabic briefs get genuinely different
+   * compositions instead of repeated near-copies of one layout.
+   *
+   * This is a safety net, not a redesign: it re-flows only the pages the
+   * detector proves are duplicates, and it is bounded to two passes.
+   */
+  const enforced = enforceLayoutVariety(composed);
+  return enforced.project;
 }
 
 export interface RawTextInput {
