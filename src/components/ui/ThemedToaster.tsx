@@ -17,5 +17,16 @@ export function ThemedToaster(props: ToasterProps) {
     () => readStoredTheme() ?? "light",
   );
   useEffect(() => subscribeTheme(setAppearance), []);
-  return <Toaster theme={appearance === "light" ? "light" : "dark"} {...props} />;
+  return (
+    <Toaster
+      theme={appearance === "light" ? "light" : "dark"}
+      dir="rtl"
+      toastOptions={{
+        className: "font-sans border-line bg-surface text-ink shadow-panel rounded-[var(--radius-md,10px)]",
+        descriptionClassName: "text-muted",
+      }}
+      {...props}
+    />
+  );
 }
+

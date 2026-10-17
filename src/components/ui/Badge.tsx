@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export type BadgeVariant = "brand" | "gold" | "neutral" | "ok" | "warn" | "danger";
+export type BadgeVariant = "brand" | "gold" | "neutral" | "ok" | "warn" | "danger" | "emerald";
 export type BadgeSize = "sm" | "md";
 
 const badgeBase =
@@ -14,6 +14,7 @@ const badgeVariants: Record<BadgeVariant, string> = {
   ok: "bg-ok/10 text-success",
   warn: "bg-warning/10 text-warning",
   danger: "bg-error/10 text-error",
+  emerald: "border border-brand/20 bg-brand/10 text-brand",
 };
 
 const badgeSizes: Record<BadgeSize, string> = {
@@ -26,6 +27,7 @@ export function Badge({
   variant = "neutral",
   size = "md",
   icon: Icon,
+  ltr = false,
   className,
   ...props
 }: {
@@ -33,10 +35,12 @@ export function Badge({
   variant?: BadgeVariant;
   size?: BadgeSize;
   icon?: React.ComponentType<{ className?: string }>;
+  ltr?: boolean;
   className?: string;
 } & React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
+      dir={ltr ? "ltr" : undefined}
       className={cn(badgeBase, badgeVariants[variant], badgeSizes[size], className)}
       {...props}
     >
@@ -45,3 +49,4 @@ export function Badge({
     </span>
   );
 }
+

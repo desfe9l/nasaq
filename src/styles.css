@@ -504,6 +504,25 @@ html.dark.dim {
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Smooth theme switching without affecting canvas artwork or gesture performance */
+  html.is-theme-transitioning,
+  html.is-theme-transitioning body,
+  html.is-theme-transitioning header,
+  html.is-theme-transitioning nav,
+  html.is-theme-transitioning footer,
+  html.is-theme-transitioning section,
+  html.is-theme-transitioning aside,
+  html.is-theme-transitioning .editor-ui,
+  html.is-theme-transitioning .editor-toolbar,
+  html.is-theme-transitioning .editor-sidebar,
+  html.is-theme-transitioning .editor-page-rail,
+  html.is-theme-transitioning .floating-toolbar,
+  html.is-theme-transitioning .site-header,
+  html.is-theme-transitioning button,
+  html.is-theme-transitioning a {
+    transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease !important;
+  }
+
   /*
    * Headings use the display face at weight 500 (Alexandria has only the 400
    * and 500 faces bundled). A Tailwind weight utility on the element still wins,
@@ -615,68 +634,68 @@ html.dark.dim {
 
 /* Shared editor tokens also reach portalled menus; no document color uses them. */
 :root, .editor-ui {
-  --editor-bg: #181d21;
-  --editor-panel: #1e252b;
-  --editor-toolbar: #1a2229;
-  --editor-surface: #242d34;
-  --editor-border: #33404b;
-  --editor-text: #e9eef3;
-  --editor-text-secondary: #9fb0bd;
-  --editor-hover: #2a353e;
-  --editor-active: #3c454d;
-  --editor-disabled: #1b232a;
-  --editor-accent: #8ea0ae;
-  --editor-accent-hover: #a3b4c0;
-  --editor-accent-ink: #8ec6ea;
-  --editor-accent-text: #ffffff;
-  --editor-accent-soft: #293e4d;
+  --editor-bg: #0d141f;
+  --editor-panel: #131c2b;
+  --editor-toolbar: #101826;
+  --editor-surface: #192335;
+  --editor-border: #233147;
+  --editor-text: #e9eef5;
+  --editor-text-secondary: #9aa5b4;
+  --editor-hover: #1f2c42;
+  --editor-active: #283750;
+  --editor-disabled: #141c2a;
+  --editor-accent: #c9a86a;
+  --editor-accent-hover: #dfc38d;
+  --editor-accent-ink: #e0c894;
+  --editor-accent-text: #0f1e33;
+  --editor-accent-soft: rgba(201, 168, 106, 0.16);
   --editor-danger: #e4a29d;
   --editor-danger-soft: #422d30;
-  --editor-success: #63c29a;
+  --editor-success: #00874a;
 }
 .editor-ui { background: var(--editor-bg); color: var(--editor-text); }
 
 :root:not(.dark), .editor-ui.editor-light {
-  --editor-bg: #d9dddf;
-  --editor-panel: #e4e7e9;
-  --editor-toolbar: #dde1e3;
-  --editor-surface: #e7eaec;
-  --editor-border: #c4cacf;
-  --editor-text: #242c33;
-  --editor-text-secondary: #55616a;
-  --editor-hover: #d3d8db;
-  --editor-active: #c5cbcf;
-  --editor-disabled: #d8dcde;
-  --editor-accent: #3d4c59;
-  --editor-accent-hover: #2c3944;
-  --editor-accent-ink: #2c3944;
-  --editor-accent-text: #f4f6f7;
-  --editor-accent-soft: #d7dde1;
-  --editor-danger: #9b4541;
-  --editor-danger-soft: #f2e4e2;
-  --editor-success: #0b7a52;
+  --editor-bg: #f4f0e8;
+  --editor-panel: #fcfbfa;
+  --editor-toolbar: #f8f6f1;
+  --editor-surface: #ffffff;
+  --editor-border: #ddd6c8;
+  --editor-text: #172033;
+  --editor-text-secondary: #5d6575;
+  --editor-hover: #f0ece3;
+  --editor-active: #e4ded2;
+  --editor-disabled: #ece7dc;
+  --editor-accent: #006c35;
+  --editor-accent-hover: #00542a;
+  --editor-accent-ink: #006c35;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: rgba(0, 108, 53, 0.1);
+  --editor-danger: #b42318;
+  --editor-danger-soft: #fdf2f2;
+  --editor-success: #006c35;
 }
 
 .editor-ui.editor-dim,
 html.dark.dim {
-  --editor-bg: #30373e;
-  --editor-panel: #394149;
-  --editor-toolbar: #353d45;
-  --editor-surface: #424b54;
-  --editor-border: #59646e;
-  --editor-text: #f0f3f5;
-  --editor-text-secondary: #c0c9d0;
-  --editor-hover: #48535d;
-  --editor-active: #59636c;
-  --editor-disabled: #343c43;
-  --editor-accent: #c5d0d8;
-  --editor-accent-hover: #d5dee4;
-  --editor-accent-ink: #a8d6f0;
-  --editor-accent-text: #ffffff;
-  --editor-accent-soft: #3b515e;
-  --editor-danger: #f0aaa4;
-  --editor-danger-soft: #563b3b;
-  --editor-success: #82d9b1;
+  --editor-bg: #20262e;
+  --editor-panel: #262d36;
+  --editor-toolbar: #222932;
+  --editor-surface: #2d3642;
+  --editor-border: #3f4b59;
+  --editor-text: #f0f3f6;
+  --editor-text-secondary: #b7c0ca;
+  --editor-hover: #353f4d;
+  --editor-active: #424d5c;
+  --editor-disabled: #232a32;
+  --editor-accent: #d8bd85;
+  --editor-accent-hover: #ecd8ab;
+  --editor-accent-ink: #e8d3a7;
+  --editor-accent-text: #172033;
+  --editor-accent-soft: rgba(216, 189, 133, 0.16);
+  --editor-danger: #b74b40;
+  --editor-danger-soft: #4a2c2c;
+  --editor-success: #157a49;
 }
 
 .editor-ui .editor-toolbar,
@@ -717,20 +736,20 @@ html.dark.dim {
 
 /* Workspace is interface chrome; the artboard retains its own document colors. */
 .editor-ui {
-  --editor-canvas: #1e252b;
+  --editor-canvas: #090e17;
   --editor-canvas-grid: rgba(255, 255, 255, 0.035);
   --editor-canvas-text: #cfd6db;
   --editor-canvas-text-secondary: #9aa5ae;
 }
 .editor-ui.editor-light {
-  --editor-canvas: #c5ccd1;
-  --editor-canvas-grid: rgba(40, 51, 59, 0.035);
+  --editor-canvas: #e7e2d7;
+  --editor-canvas-grid: rgba(23, 32, 51, 0.04);
   --editor-canvas-text: var(--editor-text);
   --editor-canvas-text-secondary: var(--editor-text-secondary);
 }
 .editor-ui.editor-dim {
-  --editor-canvas: #444d55;
-  --editor-canvas-grid: rgba(255, 255, 255, 0.045);
+  --editor-canvas: #1b2128;
+  --editor-canvas-grid: rgba(255, 255, 255, 0.04);
   --editor-canvas-text: var(--editor-text);
   --editor-canvas-text-secondary: var(--editor-text-secondary);
 }

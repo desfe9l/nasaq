@@ -6,6 +6,7 @@ export type ButtonVariant =
   | "ghost"
   | "inverse"
   | "brand"
+  | "gold"
   | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
@@ -29,6 +30,8 @@ const buttonVariants: Record<ButtonVariant, string> = {
     "bg-inverse text-on-inverse border border-inverse hover:bg-inverse-hover",
   brand:
     "text-brand hover:bg-navy/8 hover:text-brand-hover",
+  gold:
+    "bg-gold text-on-gold border border-gold hover:bg-gold-2 hover:shadow-[0_4px_14px_color-mix(in_srgb,var(--color-gold)_35%,transparent)] active:translate-y-[1px]",
   danger:
     "border border-error bg-error text-on-inverse hover:bg-error/90",
 };

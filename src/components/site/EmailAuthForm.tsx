@@ -8,6 +8,8 @@ import {
 } from "@/lib/auth/error-messages";
 import { normalizeEmail } from "@/lib/auth/credentials";
 import { SIGN_UP_ROUTE } from "@/lib/site-routes";
+import { PremiumInput } from "@/components/ui/PremiumInput";
+import { PremiumButton } from "@/components/ui/PremiumButton";
 
 /**
  * Email + password authentication form — the ONE surface for both directions.
@@ -138,81 +140,64 @@ export function EmailAuthForm({
       {authEnabled && (
         <>
           {isSignUp && (
-            <label className="grid gap-1.5">
-              <span className="text-[12px] font-bold">الاسم الكامل</span>
-              <input
-                type="text"
-                name="name"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={field("name")}
-                placeholder="مثال: فيصل العنزي"
-              />
-              {fieldErrors.name && (
-                <span className="text-[11px] text-error">{fieldErrors.name}</span>
-              )}
-            </label>
+            <PremiumInput
+              label="الاسم الكامل"
+              type="text"
+              name="name"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="مثال: فيصل العنزي"
+              error={fieldErrors.name}
+            />
           )}
 
-          <label className="grid gap-1.5">
-            <span className="text-[12px] font-bold">البريد الإلكتروني</span>
-            <input
-              type="email"
-              name="email"
-              dir="ltr"
-              inputMode="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(normalizeEmail(e.target.value))}
-              className={field("email")}
-              placeholder="name@example.com"
-            />
-            {fieldErrors.email && (
-              <span className="text-[11px] text-error">{fieldErrors.email}</span>
-            )}
-          </label>
+          <PremiumInput
+            label="البريد الإلكتروني"
+            type="email"
+            name="email"
+            dir="ltr"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(normalizeEmail(e.target.value))}
+            placeholder="name@example.com"
+            error={fieldErrors.email}
+          />
 
-          <label className="grid gap-1.5">
-            <span className="text-[12px] font-bold">كلمة المرور</span>
-            <input
-              type="password"
-              name="password"
-              dir="ltr"
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={field("password")}
-              placeholder={isSignUp ? "8 أحرف على الأقل" : "••••••••"}
-            />
-            {fieldErrors.password && (
-              <span className="text-[11px] text-error">{fieldErrors.password}</span>
-            )}
-          </label>
+          <PremiumInput
+            label="كلمة المرور"
+            type="password"
+            name="password"
+            dir="ltr"
+            autoComplete={isSignUp ? "new-password" : "current-password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={isSignUp ? "8 أحرف على الأقل" : "••••••••"}
+            error={fieldErrors.password}
+          />
 
           {isSignUp && (
-            <label className="grid gap-1.5">
-              <span className="text-[12px] font-bold">تأكيد كلمة المرور</span>
-              <input
-                type="password"
-                name="confirm"
-                dir="ltr"
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className={field("confirm")}
-                placeholder="أعد كتابة كلمة المرور"
-              />
-              {fieldErrors.confirm && (
-                <span className="text-[11px] text-error">{fieldErrors.confirm}</span>
-              )}
-            </label>
+            <PremiumInput
+              label="تأكيد كلمة المرور"
+              type="password"
+              name="confirm"
+              dir="ltr"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="أعد كتابة كلمة المرور"
+              error={fieldErrors.confirm}
+            />
           )}
 
-          <button
+          <PremiumButton
             type="submit"
+            variant="primary"
+            size="md"
+            loading={busy === "email"}
             disabled={busy !== null}
-            className="mt-1 h-11 w-full cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-wait disabled:opacity-60"
+            className="mt-1 w-full"
           >
             {busy === "email"
               ? isSignUp
@@ -221,7 +206,7 @@ export function EmailAuthForm({
               : isSignUp
                 ? "إنشاء حساب"
                 : "تسجيل الدخول"}
-          </button>
+          </PremiumButton>
 
           <p
             id="auth-form-error"

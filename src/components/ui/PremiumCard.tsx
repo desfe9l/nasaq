@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export type CardVariant = "default" | "elevated" | "interactive" | "outline";
+export type CardVariant = "default" | "elevated" | "interactive" | "outline" | "brand" | "gold";
 export type CardPadding = "none" | "sm" | "md" | "lg";
 
 const cardBase =
@@ -11,6 +11,8 @@ const cardVariants: Record<CardVariant, string> = {
   elevated: "shadow-panel",
   interactive: "shadow-card hover:-translate-y-0.5 hover:shadow-card-hover cursor-pointer",
   outline: "shadow-none border-2 border-line bg-transparent",
+  brand: "shadow-card border-brand/30 bg-surface hover:border-brand/60",
+  gold: "shadow-card border-gold/40 bg-surface hover:border-gold/70",
 };
 
 const cardPadding: Record<CardPadding, string> = {

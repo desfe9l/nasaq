@@ -16,7 +16,7 @@ export function Skeleton({ className, rounded = "rounded-[8px]" }: { className?:
       aria-hidden
       className={cn(
         "relative block overflow-hidden bg-skeleton text-transparent",
-        "before:absolute before:inset-0 before:translate-x-[-100%] before:animate-[shimmer_1.8s_ease-in-out_infinite] before:border-t before:border-transparent/30 before:bg-gradient-to-r before:from-transparent before:via-white/40 before:to-transparent dark:before:via-zinc-700/40",
+        "before:absolute before:inset-0 before:translate-x-[-100%] before:animate-[shimmer_1.8s_ease-in-out_infinite] before:border-t before:border-transparent/30 before:bg-gradient-to-r before:from-transparent before:via-white/40 before:to-transparent dark:before:via-white/10",
         rounded,
         className,
       )}

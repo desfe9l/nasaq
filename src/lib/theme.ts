@@ -110,6 +110,8 @@ applyStoredTheme();
 
 function applyTheme(appearance: AppearanceMode): void {
   const root = document.documentElement;
+  if (!root) return;
+  root.classList.add?.("is-theme-transitioning");
   const darkVariant = appearance !== "light";
   root.classList.toggle("dark", darkVariant);
   root.classList.toggle("dim", appearance === "dim");
@@ -117,6 +119,11 @@ function applyTheme(appearance: AppearanceMode): void {
   window.dispatchEvent(
     new CustomEvent<AppearanceMode>(THEME_EVENT, { detail: appearance }),
   );
+  if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+    window.setTimeout(() => {
+      root.classList?.remove?.("is-theme-transitioning");
+    }, 220);
+  }
 }
 
 /**
@@ -130,7 +137,7 @@ function syncThemeColor(appearance: AppearanceMode): void {
     appearance === "dark"
       ? "#0b1220"
       : appearance === "dim"
-        ? "#20262c"
+        ? "#20262e"
         : "#f4f0e8";
   if (meta) meta.setAttribute("content", color);
 }

@@ -27,6 +27,8 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { TemplateGallery, slidesFromTemplate } from "@/components/site/TemplateGallery";
 import { PremiumAccessNote } from "@/components/site/TemplateAccess";
 import { ContactRequestButton } from "@/components/site/ClientRequestPanel";
+import { Badge } from "@/components/ui/Badge";
+import { PremiumButton } from "@/components/ui/PremiumButton";
 import { useCatalogEntries } from "@/components/site/useCatalog";
 import { useEditor } from "@/lib/editor/store";
 import { pageSize } from "@/lib/editor/model";
@@ -210,25 +212,24 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
             </p>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Badge>{entry.kindLabel}</Badge>
-              <Badge>{entry.categoryLabel}</Badge>
-              <Badge>{pagesLabel(entry.pages.length)}</Badge>
-              <Badge ltr>
+              <Badge variant="neutral">{entry.kindLabel}</Badge>
+              <Badge variant="neutral">{entry.categoryLabel}</Badge>
+              <Badge variant="neutral">{pagesLabel(entry.pages.length)}</Badge>
+              <Badge variant="neutral" ltr>
                 {Math.round(size.w)} × {Math.round(size.h)} مم
               </Badge>
-              <Badge>{locked ? "يتطلب ترخيصًا" : "متاح الآن"}</Badge>
+              <Badge variant={locked ? "gold" : "ok"}>{locked ? "يتطلب ترخيصًا" : "متاح الآن"}</Badge>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <button
-                type="button"
+              <PremiumButton
                 onClick={() => void run("use")}
                 disabled={busy !== null}
-                className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-5 text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:opacity-60"
+                loading={busy === "use"}
+                icon={Sparkles}
               >
-                <Sparkles className="size-4" aria-hidden />
                 {busy === "use" ? "جارٍ الإنشاء…" : "استخدام القالب"}
-              </button>
+              </PremiumButton>
               {!locked && entry && (
                 <TemplateOfflineButton
                   templateId={entry.sourceId}
@@ -245,24 +246,24 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
                   }
                 />
               )}
-              <button
-                type="button"
+              <PremiumButton
+                variant="outline"
                 onClick={() => void run("edit")}
                 disabled={busy !== null}
-                className={GHOST}
+                loading={busy === "edit"}
+                icon={Pencil}
               >
-                <Pencil className="size-4" aria-hidden />
                 {busy === "edit" ? "جارٍ الفتح…" : "تعديل القالب"}
-              </button>
-              <button
-                type="button"
+              </PremiumButton>
+              <PremiumButton
+                variant="outline"
                 onClick={() => void run("duplicate")}
                 disabled={busy !== null}
-                className={GHOST}
+                loading={busy === "duplicate"}
+                icon={Copy}
               >
-                <Copy className="size-4" aria-hidden />
                 تكرار إلى قوالبي
-              </button>
+              </PremiumButton>
               <a href={templatePreviewPathFor(slugForEntry)} className={GHOST}>
                 <Eye className="size-4" aria-hidden />
                 معاينة كاملة
@@ -333,16 +334,7 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
 const GHOST =
   "inline-flex h-11 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[13px] font-bold text-ink transition hover:border-brand disabled:opacity-60";
 
-function Badge({ children, ltr }: { children: React.ReactNode; ltr?: boolean }) {
-  return (
-    <span
-      className="rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-bold text-muted"
-      dir={ltr ? "ltr" : undefined}
-    >
-      {children}
-    </span>
-  );
-}
+
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
