@@ -6131,10 +6131,12 @@ button.license-badge-locked:focus-visible {
   min-width: 0;
   padding: var(--ui-props-pad, 5px 10px);
   border: 1px solid var(--editor-border, #dde2ea);
-  border-radius: 10px;
-  background: var(--editor-panel, #fff);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--editor-panel, #ffffff) 92%, var(--editor-surface));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: var(--editor-text, #0f172a);
-  box-shadow: 0 8px 24px -12px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.35), 0 0 0 1px color-mix(in srgb, var(--editor-border) 50%, transparent);
   font-size: 11px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -6203,7 +6205,7 @@ button.license-badge-locked:focus-visible {
   cursor: pointer;
 }
 .tool-props-btn:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.08);
+  background: color-mix(in srgb, var(--editor-accent, #006C35) 12%, transparent);
 }
 .tool-props-btn:disabled {
   opacity: 0.45;
@@ -6211,8 +6213,8 @@ button.license-badge-locked:focus-visible {
 }
 .tool-props-btn.is-primary {
   border-color: transparent;
-  background: var(--color-brand, #1d4ed8);
-  color: #fff;
+  background: var(--color-brand, #006C35);
+  color: var(--color-on-brand, #ffffff);
 }
 .tool-props-btn.is-quiet {
   border-color: transparent;
@@ -6233,18 +6235,19 @@ button.license-badge-locked:focus-visible {
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+  transition: all 120ms ease;
 }
 .tool-props-chip.is-active {
   border-color: transparent;
-  background: var(--color-brand, #1d4ed8);
-  color: #fff;
+  background: var(--color-brand, #006C35);
+  color: var(--color-on-brand, #ffffff);
 }
 .tool-props-hint {
   color: var(--editor-muted, #64748b);
   white-space: nowrap;
 }
 .tool-props-hint.is-live {
-  color: var(--color-brand, #1d4ed8);
+  color: var(--color-brand, #006C35);
   font-weight: 700;
 }
 .tool-props-sep {
