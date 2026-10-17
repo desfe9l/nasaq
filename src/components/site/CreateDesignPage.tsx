@@ -109,7 +109,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
     <div className="min-h-full bg-paper">
       <SiteHeader current={CREATE_ROUTE} />
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-7 sm:px-6 md:py-9">
+      <main className="mx-auto w-full max-w-5xl px-4 py-7 sm:px-6 md:py-9 pb-24 md:pb-12">
         {/* Masthead — where you are, what this screen decides, and what is next. */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">

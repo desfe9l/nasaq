@@ -38,6 +38,7 @@ import {
   openNewDocumentFlow,
   useWorkspaceEntry,
 } from "@/lib/auth/use-workspace-entry";
+import { DesktopSegmentedNav, MobileBottomNav } from "@/components/nav/CoreSiteNav";
 import { ProductNav } from "@/components/nav/ProductNav";
 import { siteNavFor, siteNavLabelsFor } from "@/lib/nav/surface-nav";
 import { ContactRequestButton } from "./ClientRequestPanel";
@@ -401,13 +402,9 @@ export function SiteHeader({ current }: { current: string }) {
           <BrandLogo />
         </a>
 
-        <ProductNav
-          label="الروابط الرئيسية"
-          items={navItems}
-          activeId={current}
-        />
+        <DesktopSegmentedNav current={current} className="mx-auto" />
 
-<div className="site-header-actions flex shrink-0 items-center gap-1.5">
+        <div className="site-header-actions flex shrink-0 items-center gap-1.5">
             {/*
              * Appearance — a single compact cycling button:
              * فاتح → داكن → خافت (the shared `getNextAppearance` order).
@@ -431,12 +428,6 @@ export function SiteHeader({ current }: { current: string }) {
             })()}
           {/*
            * «اطلب خدمة» — the platform's own request channel, in the chrome.
-           *
-           * The header used to lead with a WhatsApp number, which made the
-           * platform's contact model a third-party link. The native panel is now
-           * the primary door (available to visitors too); the messaging channel
-           * stays available on the contact page and in the footer for people who
-           * prefer it.
            */}
           <ContactRequestButton source="site" label="اطلب خدمة" compact />
           <NewDocumentButton />
@@ -445,6 +436,7 @@ export function SiteHeader({ current }: { current: string }) {
         </div>
       </div>
     </header>
+    <MobileBottomNav current={current} />
     </>
   );
 }

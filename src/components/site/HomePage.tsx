@@ -18,11 +18,13 @@ import {
   Shapes,
   BadgeCheck,
   CheckCircle2,
+  FileUp,
   Type,
 } from "lucide-react";
 import { PACKS, createProject } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
+import { SemanticDocCard, SEMANTIC_DOC_ITEMS } from "@/components/site/SemanticDocCards";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
@@ -258,7 +260,7 @@ export function HomePage() {
   const [aboutRef, aboutVisible] = useReveal<HTMLElement>({ delay: 120 });
 
   return (
-    <div className="min-h-full bg-page">
+    <div className="min-h-full bg-page pb-20 md:pb-0">
       <SiteHeader current="/" />
       <main>
         {/* ── Hero ── */}
@@ -285,6 +287,7 @@ export function HomePage() {
 
               {/* Two doors only: the primary entry and the plans. The project
                   link lives with the projects it opens (see below). */}
+              {/* Dual primary hero actions: New Document and Import & Convert */}
               <div className="mt-7 flex flex-wrap items-center gap-3">
                 <PremiumButton
                   variant="primary"
@@ -296,15 +299,22 @@ export function HomePage() {
                   icon={ArrowLeft}
                   iconPosition="end"
                 >
-                  {heroLabel}
+                  إنشاء مستند جديد
                 </PremiumButton>
                 <PremiumButton
                   variant="outline"
-                  size="md"
-                  onClick={() => window.location.assign("/purchase")}
+                  size="lg"
+                  onClick={() => window.location.assign("/services/import")}
+                  icon={FileUp}
                 >
-                  استعراض الخطط والأسعار
+                  استيراد ملف وتحويله فوراً
                 </PremiumButton>
+                <a
+                  href="/purchase"
+                  className="inline-flex items-center gap-1 text-[13px] font-bold text-muted hover:text-ink px-2 py-1 transition"
+                >
+                  استعراض الخطط والأسعار ←
+                </a>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -326,6 +336,39 @@ export function HomePage() {
               document={featuredDocument}
               pending={templatesLoading}
             />
+          </div>
+        </section>
+
+        {/* ── Document Studio Quick Starts (Anti-Icon Ambiguity) ── */}
+        <section className="border-b border-line/60 bg-surface py-12 sm:py-16">
+          <div className="nsq-container">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+              <div>
+                <p className="nsq-section-eyebrow">نماذج ومخرجات نَسَق</p>
+                <h2 className="nsq-section-title mt-1.5 text-[1.45rem] sm:text-[1.75rem]">
+                  ابدأ بإنشاء مستندك المؤسسي بدقة
+                </h2>
+                <p className="nsq-wrap mt-1 text-[0.85rem] text-muted">
+                  هياكل مسبقة الإعداد تحاكي مخرجاتك الواقعية — تقارير، خطابات، عروض، ولوحات مؤشرات.
+                </p>
+              </div>
+              <a
+                href="/create"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3.5 text-[0.75rem] font-bold text-ink transition hover:border-brand"
+              >
+                شاشة الإنشاء المتقدمة
+                <ArrowLeft className="size-3.5" aria-hidden />
+              </a>
+            </div>
+            <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+              {SEMANTIC_DOC_ITEMS.map((item) => (
+                <SemanticDocCard
+                  key={item.id}
+                  item={item}
+                  href={item.id === "import" ? "/services/import" : `/create?start=${item.id === "report" ? "blank" : "template"}`}
+                />
+              ))}
+            </div>
           </div>
         </section>
 

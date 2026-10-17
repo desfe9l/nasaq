@@ -1,16 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, CalendarDays, Check, Clock3, Copy, MessageCircle, Phone } from "lucide-react";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Check,
+  Clock3,
+  Copy,
+  Headphones,
+  LayoutTemplate,
+  MessageCircle,
+  Phone,
+  QrCode,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import { BRAND, CONTACT_PHONE_INTL, WHATSAPP_MESSAGES, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { ClientRequestForm } from "./ClientRequestPanel";
+import { cn } from "@/lib/utils";
+import type { RequestKind } from "@/lib/requests/types";
 
-const SCOPES = ["تقرير رسمي", "عرض تقديمي", "غلاف ومستند", "تصميم إنفوجرافيك", "استفسار آخر"];
+const SCOPES = ["تقرير رسمي", "عرض تقديمي", "غلاف ومستند", "تصميم إنفوجرافيك", "قالب مخصص", "استفسار عام"];
+
+type ActiveHubTab = "whatsapp" | "template" | "support";
 
 export function ContactPage() {
   const hydrate = useEditor((s) => s.hydrate);
+  const [activeTab, setActiveTab] = useState<ActiveHubTab>("whatsapp");
   const [scope, setScope] = useState(SCOPES[0]);
   const [entity, setEntity] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -38,7 +55,7 @@ export function ContactPage() {
     const handle = window.setTimeout(() => {
       import("qrcode")
         .then(({ default: QR }) =>
-          QR.toDataURL(whatsappHref(message), { width: 168, margin: 1 }),
+          QR.toDataURL(whatsappHref(message), { width: 160, margin: 1 }),
         )
         .then((url) => {
           if (!cancelled) setQrDataUrl(url);
@@ -65,211 +82,387 @@ export function ContactPage() {
   };
 
   return (
-    <div className="min-h-full bg-paper">
+    <div className="min-h-screen bg-page">
       <SiteHeader current="/contact" />
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6">
-        <p className="text-[12px] font-extrabold tracking-[0.16em] text-ink">تواصل تجاري مباشر</p>
-        <h1 className="mt-3 text-[30px] font-extrabold">كيف نساعدك في بدء العمل؟</h1>
-        <p className="mt-3 text-[15px] leading-8 text-muted">
-          تحدث مباشرة مع {BRAND.team} للاستفسار عن الترخيص، تجهيز الهوية، أو تسليم نسخة مناسبة لجهتك.
-        </p>
-
-        {/*
-         * The platform's own request system, FIRST.
-         *
-         * The page used to open with a phone number and a WhatsApp link, which
-         * made a third-party channel the only way to reach NASAQ. A visitor or a
-         * signed-in customer now writes the request here; it is stored, tracked
-         * and answered from the administration's inbox. The direct channels stay
-         * directly below for anyone who prefers them.
-         */}
-        <section className="mt-8 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="max-w-2xl">
-              <p className="text-[11px] font-extrabold tracking-[0.14em] text-brand">
-                طلب داخل المنصة
-              </p>
-              <h2 className="mt-2 text-[21px] font-extrabold text-ink">
-                اطلب خدمة أو تواصل معنا من هنا
-              </h2>
-              <p className="mt-2 text-[13px] leading-7 text-muted">
-                اكتب طلبك ويصل مباشرة إلى إدارة نَسَق مع بيانات التواصل، ويُتابع من لوحة الطلبات.
-                لا تحتاج إلى حساب، وإن كنت مسجّلًا فسيُربط الطلب بحسابك وتظهر ردودنا في «طلباتي».
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 pb-24 md:pb-12">
+        {/* Masthead */}
+        <header className="overflow-hidden rounded-2xl border border-line bg-surface p-6 sm:p-8 mb-8 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-extrabold tracking-[0.16em] text-brand">
+                  {BRAND.platformEn} · SUPPORT & ENTERPRISE HUB
+                </p>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-surface-2 px-2.5 py-0.5 text-[10px] font-bold text-success">
+                  <span className="size-1.5 rounded-full bg-success" />
+                  متاح الآن
+                </span>
+              </div>
+              <h1 className="mt-1 text-2xl sm:text-3xl font-black text-ink">
+                مركز التواصل والدعم المؤسسي
+              </h1>
+              <p className="mt-1.5 max-w-2xl text-xs sm:text-sm font-semibold leading-6 text-muted">
+                تواصل مباشر وسريع مع فريق نَسَق للاستفسارات الفورية، طلب تصميم قوالب حصرية لجهتك،
+                أو الحصول على الدعم التقني لمشاريعك.
               </p>
             </div>
-          </div>
-          <div className="mt-5">
-            <ClientRequestForm source="contact" />
-          </div>
-        </section>
 
-        <div className="mt-8 grid gap-6 border-y border-line py-7 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-[13px] font-extrabold text-muted">
-              <Phone className="size-4 text-brand-hover" />
-              التواصل المباشر
-              {/* Live availability badge + copy-to-clipboard on the number row. */}
-              <span className="flex items-center gap-2 rounded-full border border-brand bg-ok/10 px-2.5 py-0.5 text-[11px] font-extrabold leading-5 text-success">
-                <span aria-hidden>🟢</span>
-                <span>متاح الآن</span>
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <a href={whatsappHref(WHATSAPP_MESSAGES.support)} className="subscription-cta inline-flex rounded-lg px-4 py-3 text-[16px] font-bold">
-                تواصل عبر واتساب
+            {/* Quick Action Pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={telHref()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-bold text-ink transition hover:border-brand hover:text-brand"
+              >
+                <Phone className="size-3.5" />
+                <span>اتصال مباشر</span>
               </a>
               <button
                 type="button"
                 onClick={() => void copyNumber()}
-                aria-label="نسخ الرقم الدولي"
-                className="inline-flex size-9 items-center justify-center rounded-[8px] border border-line text-muted transition hover:border-brand hover:text-brand-hover"
-                title="نسخ الرقم"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-bold text-ink transition hover:border-brand hover:text-brand"
+                title="نسخ الرقم الدولي"
               >
-                {copied ? <Check className="size-4 text-brand" /> : <Copy className="size-4" />}
+                {copied ? <Check className="size-3.5 text-brand" /> : <Copy className="size-3.5" />}
+                <span dir="ltr">{CONTACT_PHONE_INTL}</span>
               </button>
-            </div>
-            <p className="mt-2 text-[12px] text-muted">
-              قناة مباشرة لمن يفضّل الاتصال أو المراسلة. يمكنك أيضًا إرسال الطلب من النموذج أعلاه
-              ليُسجَّل داخل المنصة ويحصل على متابعة.
-            </p>
-            {/* Official accounts live inside the existing contact block — the
-                same place a visitor is already looking for a channel, so no
-                new section is added to the page. Handles are shown in full
-                here because picking the right account is the point. */}
-            <div className="mt-4">
-              <p className="text-[11px] font-extrabold text-muted">الحسابات الرسمية</p>
-              <SocialLinks variant="full" className="mt-2" />
+              <a
+                href={whatsappHref(demoBookingMessage)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-navy px-3.5 text-xs font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2 active:scale-[0.98]"
+              >
+                <CalendarDays className="size-3.5" />
+                <span>حجز موعد عرض توضيحي (15 دقيقة)</span>
+              </a>
             </div>
           </div>
+        </header>
 
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={telHref()}
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"
+        {/* ── 3 Interactive Core Cards ── */}
+        <section aria-labelledby="channels-heading" className="mb-8">
+          <h2 id="channels-heading" className="sr-only">قنوات التواصل والدعم</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Card 1: WhatsApp Direct */}
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("whatsapp")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("whatsapp");
+              }}
+              className={cn(
+                "group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition shadow-sm",
+                activeTab === "whatsapp"
+                  ? "border-brand bg-surface ring-2 ring-brand/20 shadow-card"
+                  : "border-line bg-surface hover:border-brand/60 hover:bg-surface-2",
+              )}
             >
-              <Phone className="size-4" />
-              اتصال مباشر
-            </a>
-            <a
-              href={whatsappHref(message)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-green px-4 text-[13px] font-extrabold text-on-brand"
-            >
-              <MessageCircle className="size-4" />
-              مراسلة واتساب
-            </a>
-            <button
-              type="button"
-              onClick={() => void copyNumber()}
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold"
-            >
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              نسخ الرقم الدولي
-            </button>
-            <a
-              href={whatsappHref(demoBookingMessage)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-brand bg-ok/10 px-4 text-[13px] font-extrabold text-success"
-            >
-              <CalendarDays className="size-4" />
-              حجز موعد عرض توضيحي (15 دقيقة)
-            </a>
-          </div>
-        </div>
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="grid size-11 place-items-center rounded-xl bg-navy text-on-brand">
+                    <MessageCircle className="size-5" />
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                    <span className="size-1.5 rounded-full bg-success" />
+                    متوسط الرد: أقل من 15 دقيقة
+                  </span>
+                </div>
+                <h3 className="mt-4 text-base font-black text-ink group-hover:text-brand">
+                  تواصل مباشر عبر واتساب
+                </h3>
+                <p className="mt-1.5 text-xs font-semibold leading-5 text-muted">
+                  محادثة فورية وسريعة مع مسؤولي المنصة للاستفسارات العامة، الشراء، أو الدعم الفوري.
+                </p>
+              </div>
 
-        <section className="mt-8 grid gap-6 border-b border-line pb-8 md:grid-cols-[1.1fr_.9fr]">
-          <div>
-          <h2 className="text-[16px] font-extrabold">نوع الطلب</h2>
-          <p className="mt-1 text-[12px] text-muted">
-            اختر نوع الطلب ليُضاف تلقائياً إلى نص رسالة واتساب — وأضف الجهة والموعد الاختياريين.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {SCOPES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setScope(s)}
-                aria-pressed={scope === s}
-                className={
-                  scope === s
-                    ? "rounded-full border border-brand bg-navy px-3 py-1.5 text-[12px] font-bold text-on-brand"
-                    : "rounded-full border border-line px-3 py-1.5 text-[12px] font-bold text-muted"
-                }
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
-          {/* Optional metadata feeding the live message builder. */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-[11px] font-extrabold text-muted">
-              اسم الجهة (اختياري)
-              <input
-                value={entity}
-                onChange={(e) => setEntity(e.target.value)}
-                placeholder="مثال: إدارة الاتصال المؤسسي"
-                className="h-10 rounded-[8px] border border-line bg-surface px-3 text-[13px] font-semibold"
-              />
-            </label>
-            <label className="grid gap-1 text-[11px] font-extrabold text-muted">
-              الموعد النهائي (اختياري)
-              <input
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                placeholder="مثال: 15 أكتوبر 2026"
-                className="h-10 rounded-[8px] border border-line bg-surface px-3 text-[13px] font-semibold"
-              />
-            </label>
-          </div>
-
-          <p className="mt-4 whitespace-pre-line rounded-[8px] border border-line bg-line-2/60 p-3 text-[13px] leading-7">
-            {message}
-          </p>
-          <a
-            href={whatsappHref(message)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex h-10 items-center gap-2 rounded-[8px] bg-green px-4 text-[12px] font-extrabold text-on-brand"
-          >
-            <MessageCircle className="size-3.5" />
-            إرسال هذه الرسالة على واتساب
-          </a>
-          </div>
-          <aside className="border-r-2 border-gold pr-4">
-            <BadgeCheck className="size-5 text-brand-hover" />
-            <h2 className="mt-3 text-[15px] font-extrabold">طلب ترخيص أو تسليم</h2>
-            <p className="mt-2 text-[12px] leading-6 text-muted">لشراء نسخة كاملة، نحدد نوع الترخيص أولاً، ثم نرسل تفاصيل الدفع ونجهز التسليم وخطوات بدء الاستخدام.</p>
-            <a href="/purchase" className="mt-4 inline-flex text-[12px] font-extrabold text-brand-hover underline underline-offset-4">عرض النسخ والتراخيص</a>
-
-            {/* Desktop QR: scan to continue this exact message on mobile. */}
-            <div ref={qrBoxRef} className="mt-6 hidden md:block">
-              <div className="inline-flex flex-col items-center gap-2 rounded-[10px] border border-line bg-surface p-3">
-                {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="رمز QR لمتابعة المحادثة عبر واتساب" className="size-[168px]" />
-                ) : (
-                  <div className="grid size-[168px] place-items-center rounded bg-line-2 text-center text-[11px] text-muted">
-                    جارٍ تجهيز الرمز…
-                  </div>
-                )}
-                <span className="text-[11px] font-bold text-muted">
-                  امسح الرمز لمتابعة المحادثة من هاتفك
+              <div className="mt-5 flex items-center justify-between border-t border-line pt-3 text-xs font-black text-brand">
+                <span>{activeTab === "whatsapp" ? "القناة المحددة حاليًا" : "اختيار المراسلة الفورية"}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px]", activeTab === "whatsapp" ? "bg-navy text-on-brand" : "bg-surface-2 text-muted")}>
+                  {activeTab === "whatsapp" ? "نشط" : "عرض"}
                 </span>
               </div>
-            </div>
-          </aside>
+            </article>
+
+            {/* Card 2: Custom Enterprise Template */}
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("template")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("template");
+              }}
+              className={cn(
+                "group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition shadow-sm",
+                activeTab === "template"
+                  ? "border-brand bg-surface ring-2 ring-brand/20 shadow-card"
+                  : "border-line bg-surface hover:border-brand/60 hover:bg-surface-2",
+              )}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="grid size-11 place-items-center rounded-xl bg-brand/10 text-brand">
+                    <LayoutTemplate className="size-5" />
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                    <Sparkles className="size-3 text-brand" />
+                    تصميم حصري ومعتمد
+                  </span>
+                </div>
+                <h3 className="mt-4 text-base font-black text-ink group-hover:text-brand">
+                  طلب قالب مؤسسي مخصص
+                </h3>
+                <p className="mt-1.5 text-xs font-semibold leading-5 text-muted">
+                  برمجة وتصميم قوالب تقارير وخطابات تتطابق 100% مع الهوية البصرية الرسمية لجهتك.
+                </p>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between border-t border-line pt-3 text-xs font-black text-brand">
+                <span>{activeTab === "template" ? "القناة المحددة حاليًا" : "بدء طلب القالب"}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px]", activeTab === "template" ? "bg-navy text-on-brand" : "bg-surface-2 text-muted")}>
+                  {activeTab === "template" ? "نشط" : "عرض"}
+                </span>
+              </div>
+            </article>
+
+            {/* Card 3: Technical Support */}
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("support")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setActiveTab("support");
+              }}
+              className={cn(
+                "group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition shadow-sm",
+                activeTab === "support"
+                  ? "border-brand bg-surface ring-2 ring-brand/20 shadow-card"
+                  : "border-line bg-surface hover:border-brand/60 hover:bg-surface-2",
+              )}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="grid size-11 place-items-center rounded-xl bg-navy text-on-brand">
+                    <Headphones className="size-5" />
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-muted">
+                    <BadgeCheck className="size-3 text-brand" />
+                    متابعة تذكرة رسمية
+                  </span>
+                </div>
+                <h3 className="mt-4 text-base font-black text-ink group-hover:text-brand">
+                  الإبلاغ عن مشكلة أو دعم فني
+                </h3>
+                <p className="mt-1.5 text-xs font-semibold leading-5 text-muted">
+                  مساعدة متخصصة في مشاكل الاستيراد، محاذاة الخطوط، معالجة الطبقات، وحفظ الملفات.
+                </p>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between border-t border-line pt-3 text-xs font-black text-brand">
+                <span>{activeTab === "support" ? "القناة المحددة حاليًا" : "فتح تذكرة دعم"}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px]", activeTab === "support" ? "bg-navy text-on-brand" : "bg-surface-2 text-muted")}>
+                  {activeTab === "support" ? "نشط" : "عرض"}
+                </span>
+              </div>
+            </article>
+          </div>
         </section>
 
-        <section className="mt-8 flex items-start gap-3">
-          <Clock3 className="mt-0.5 size-5 shrink-0 text-brand-hover" />
-          <div><h2 className="text-[16px] font-extrabold">أوقات الرد</h2>
-          <p className="mt-2 text-[14px] leading-7 text-muted">
-            عادةً يتم الرد خلال أوقات العمل الرسمية. إن لم يكن الرقم متاحاً، أرسل رسالة واتساب وسيتم
-            التواصل في أقرب وقت.
-          </p>
+        {/* ── Active Hub Content Section ── */}
+        <section aria-labelledby="hub-content-heading" className="rounded-3xl border border-line bg-surface p-6 sm:p-8 shadow-card">
+          <h2 id="hub-content-heading" className="sr-only">تفاصيل القناة المحددة</h2>
+
+          {/* TAB 1: WhatsApp Interactive Builder */}
+          {activeTab === "whatsapp" && (
+            <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="grid size-9 place-items-center rounded-lg bg-navy text-on-brand">
+                    <MessageCircle className="size-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-ink">مُنشئ رسالة واتساب المباشرة</h3>
+                    <p className="text-xs font-semibold text-muted">
+                      اختر موضوع الاستفسار ليتم تجهيز نص الرسالة تلقائيًا قبل الانتقال لواتساب
+                    </p>
+                  </div>
+                </div>
+
+                {/* Scope chips */}
+                <div className="mt-5">
+                  <label className="text-xs font-black text-ink">نوع الاستفسار أو الطلب</label>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {SCOPES.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setScope(s)}
+                        aria-pressed={scope === s}
+                        className={cn(
+                          "rounded-xl border px-3.5 py-2 text-xs font-bold transition active:scale-[0.98]",
+                          scope === s
+                            ? "border-brand bg-navy text-on-brand shadow-sm font-black"
+                            : "border-line bg-surface-2 text-muted hover:text-ink hover:border-brand/40",
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional Entity & Deadline */}
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <label htmlFor="wa-entity" className="text-xs font-bold text-muted">
+                      اسم الجهة أو المؤسسة (اختياري)
+                    </label>
+                    <input
+                      id="wa-entity"
+                      value={entity}
+                      onChange={(e) => setEntity(e.target.value)}
+                      placeholder="مثال: وزارة / هيئة / شركة..."
+                      className="h-10 rounded-xl border border-line bg-page px-3 text-xs font-bold text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <label htmlFor="wa-deadline" className="text-xs font-bold text-muted">
+                      الموعد النهائي للتسليم (اختياري)
+                    </label>
+                    <input
+                      id="wa-deadline"
+                      value={deadline}
+                      onChange={(e) => setDeadline(e.target.value)}
+                      placeholder="مثال: نهاية الشهر الحالي"
+                      className="h-10 rounded-xl border border-line bg-page px-3 text-xs font-bold text-ink outline-none transition focus:border-brand focus:ring-1 focus:ring-brand"
+                    />
+                  </div>
+                </div>
+
+                {/* Generated Message Preview */}
+                <div className="mt-5">
+                  <p className="text-xs font-bold text-muted mb-1.5">نص الرسالة التلقائي:</p>
+                  <div className="rounded-xl border border-line bg-surface-2 p-3.5 text-xs font-semibold leading-6 text-ink whitespace-pre-line">
+                    {message}
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <a
+                    href={whatsappHref(message)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-6 text-xs font-black text-on-brand shadow-sm transition hover:bg-navy-2 active:scale-[0.98]"
+                  >
+                    <MessageCircle className="size-4" />
+                    <span>إرسال المحادثة على واتساب الآن</span>
+                  </a>
+                  <a
+                    href={whatsappHref(WHATSAPP_MESSAGES.support)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-xs font-bold text-muted hover:text-ink hover:bg-surface-2 transition"
+                  >
+                    فتح محادثة عامة
+                  </a>
+                </div>
+              </div>
+
+              {/* QR Code Sidebar for Mobile Handoff */}
+              <aside className="rounded-2xl border border-line bg-surface-2/60 p-5 flex flex-col items-center justify-center text-center">
+                <div className="flex items-center gap-2 text-xs font-black text-ink mb-3">
+                  <QrCode className="size-4 text-brand" />
+                  <span>المتابعة من هاتفك المحمول</span>
+                </div>
+                <div ref={qrBoxRef} className="rounded-2xl border border-line bg-surface p-3.5 shadow-sm">
+                  {qrDataUrl ? (
+                    <img
+                      src={qrDataUrl}
+                      alt="رمز QR للمحادثة الفورية عبر واتساب"
+                      className="size-40 rounded-lg"
+                    />
+                  ) : (
+                    <div className="grid size-40 place-items-center rounded-lg bg-surface-2 text-xs text-muted">
+                      جارٍ توليد الرمز...
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-[11px] font-semibold text-muted max-w-[200px]">
+                  امسح الرمز بكاميرا الجوال لمتابعة المحادثة مباشرة دون الحاجة لنسخ أي أرقام.
+                </p>
+
+                <div className="mt-5 w-full border-t border-line pt-4 text-right">
+                  <div className="flex items-center gap-2 text-xs font-bold text-ink">
+                    <Clock3 className="size-3.5 text-brand" />
+                    <span>ساعات العمل المباشرة:</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted leading-5">
+                    الرد فوري طوال ساعات العمل الرسمية. الرسائل الواردة خارج أوقات العمل تُجاب في بداية يوم العمل التالي.
+                  </p>
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {/* TAB 2: Custom Template Request */}
+          {activeTab === "template" && (
+            <div>
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-xl bg-brand/10 text-brand">
+                    <LayoutTemplate className="size-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-ink">طلب قالب مؤسسي مخصص</h3>
+                    <p className="text-xs font-semibold text-muted">
+                      سيقوم فريق المصممين في نَسَق ببناء القالب وربطه بحساب مؤسستك خلال ٤٨ ساعة عمل.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs font-bold text-muted">
+                  مباشر داخل المنصة
+                </span>
+              </div>
+              <ClientRequestForm source="contact" defaultKind="template" />
+            </div>
+          )}
+
+          {/* TAB 3: Technical Support Request */}
+          {activeTab === "support" && (
+            <div>
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-xl bg-navy text-on-brand">
+                    <Headphones className="size-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-ink">تذكرة دعم فني واستفسارات استخدام</h3>
+                    <p className="text-xs font-semibold text-muted">
+                      فريق الدعم الفني الهندسي يتابع التذاكر مباشرة ويقدم الحلول التقنية المباشرة.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs font-bold text-muted">
+                  أولوية الدعم الفني
+                </span>
+              </div>
+              <ClientRequestForm source="contact" defaultKind="support" />
+            </div>
+          )}
+        </section>
+
+        {/* ── Official Social Links & Footer Section ── */}
+        <section aria-labelledby="social-heading" className="mt-8 rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 id="social-heading" className="text-sm font-black text-ink">
+                الحسابات الرسمية لمنصة نَسَق
+              </h3>
+              <p className="mt-0.5 text-xs font-semibold text-muted">
+                تابع التحديثات المؤسسية والإصدارات الجديدة عبر قنواتنا المعتمدة.
+              </p>
+            </div>
+            <SocialLinks variant="full" />
           </div>
         </section>
       </main>

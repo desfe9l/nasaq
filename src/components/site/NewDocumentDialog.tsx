@@ -67,6 +67,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DialogHeader, GHOST_BTN, Modal, PRIMARY_BTN } from "./TemplateDialogs";
 import { TemplatePreview } from "./TemplatePreview";
+import { MicroDocPreview, SEMANTIC_DOC_ITEMS } from "./SemanticDocCards";
 
 const THEME_ORDER: ThemeId[] = ["official", "ministry", "slate", "sand", "eid"];
 
@@ -425,28 +426,42 @@ export function NewDocumentForm({
             ) : (
               <>
                 <Section title="نوع المستند">
-                  <div className="flex flex-wrap gap-2">
-                    {DOC_KINDS.map((kind) => (
-                      <Choice
-                        key={kind.id}
-                        active={config.kind === kind.id}
-                        onClick={() =>
-                          set({
-                            kind: kind.id,
-                            size: kind.size,
-                            orientation: kind.orientation,
-                          })
-                        }
-                        className="px-3.5 py-2"
-                      >
-                        <span className="block text-[12px] font-extrabold text-ink">
-                          {kind.title}
-                        </span>
-                        <span className="block text-[10px] font-bold text-muted">
-                          {kind.desc}
-                        </span>
-                      </Choice>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {DOC_KINDS.map((kind) => {
+                      const active = config.kind === kind.id;
+                      const semanticInfo = SEMANTIC_DOC_ITEMS.find((s) => s.id === kind.id);
+                      return (
+                        <Choice
+                          key={kind.id}
+                          active={active}
+                          onClick={() =>
+                            set({
+                              kind: kind.id,
+                              size: kind.size,
+                              orientation: kind.orientation,
+                            })
+                          }
+                          className="flex items-center gap-3 p-3 transition"
+                        >
+                          <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-surface-2 p-1 border border-line/60">
+                            <MicroDocPreview type={kind.id} className="w-7 sm:w-8" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate text-xs font-black text-ink">
+                                {semanticInfo?.title || kind.title}
+                              </span>
+                              <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[9px] font-bold text-muted border border-line">
+                                {kind.desc}
+                              </span>
+                            </div>
+                            <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-muted">
+                              {semanticInfo?.desc || kind.desc}
+                            </p>
+                          </div>
+                        </Choice>
+                      );
+                    })}
                   </div>
                 </Section>
 

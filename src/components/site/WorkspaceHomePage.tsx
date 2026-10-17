@@ -92,6 +92,7 @@ import {
 import { CARD_W, CARD_WRAP } from "./cards";
 import { ProjectFileButton } from "./ProjectFileButton";
 import { IMPORT_ROUTE, TEMPLATES_ROUTE } from "@/lib/site-routes";
+import { SemanticDocCard, SEMANTIC_DOC_ITEMS } from "./SemanticDocCards";
 
 type FeaturedPill = "featured" | CatalogPillId;
 
@@ -482,7 +483,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         </div>
       )}
 
-      <main className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-8 sm:px-6 md:gap-12 md:py-12">
+      <main className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-8 pb-24 md:pb-12 sm:px-6 md:gap-12 md:py-12">
         {/* ── 1. NASAQ introduction ─────────────────────────────────────── */}
         <section
           aria-labelledby="home-intro"
@@ -621,89 +622,55 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             {/* Install NASAQ as a desktop app, straight from the workspace. */}
             <AppInstallNotice variant="button" />
           </div>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-navy p-4 sm:p-5 text-on-brand shadow-card">
+            <div className="flex items-center gap-3">
+              <span className="grid size-11 place-items-center rounded-xl bg-surface/15">
+                <FilePlus2 className="size-5" />
+              </span>
+              <div>
+                <h3 className="text-base font-extrabold">مستند جديد فوري</h3>
+                <p className="text-xs text-on-brand/75">
+                  افتراضيًا: A4 رأسي · صفحة واحدة · السمة الرسمية
+                </p>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setNewDoc({})}
               data-testid="home-new-document"
-              className="group relative flex min-h-[168px] flex-col justify-between overflow-hidden rounded-2xl bg-navy p-5 text-right text-on-brand shadow-lg shadow-navy/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-navy-2 hover:shadow-xl dark:shadow-black/30"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-surface px-4 text-xs font-extrabold text-ink transition hover:bg-surface-2 active:scale-[0.98]"
             >
-              <span
-                aria-hidden
-                className="absolute -bottom-10 -left-10 size-40 rounded-full border-[18px] border-white/[0.06]"
-              />
-              <span className="grid size-11 place-items-center rounded-xl bg-surface/15 transition group-hover:bg-surface/25">
-                <FilePlus2 className="size-5" />
-              </span>
-              <span className="relative">
-                <span className="block text-[18px] font-extrabold">
-                  مستند جديد
-                </span>
-                <span className="mt-1 block text-[12px] font-semibold text-white/75">
-                  افتراضيًا: A4 رأسي · صفحة واحدة · السمة الرسمية
-                </span>
-              </span>
-              <span className="absolute left-5 top-5 inline-flex items-center gap-1 text-[11px] font-extrabold text-white/80 transition group-hover:-translate-x-0.5">
-                ابدأ <ArrowLeft className="size-3.5" />
-              </span>
+              <span>فتح المحرر الآن</span>
+              <ArrowLeft className="size-3.5" />
             </button>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {QUICK_STARTS.map((q) => (
-                <button
-                  key={q.kind}
-                  type="button"
-                  onClick={() => {
-                    const kind = docKind(q.kind);
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {SEMANTIC_DOC_ITEMS.map((item) => {
+              if (item.id === "import") {
+                return (
+                  <SemanticDocCard
+                    key={item.id}
+                    item={item}
+                    href={SERVICES_IMPORT_ROUTE}
+                  />
+                );
+              }
+              const kind = docKind(item.id);
+              return (
+                <SemanticDocCard
+                  key={item.id}
+                  item={item}
+                  onClick={() =>
                     setNewDoc({
                       kind: kind.id,
                       size: kind.size,
                       orientation: kind.orientation,
-                    });
-                  }}
-                  className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-line bg-surface p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-brand hover:shadow-card-hover"
-                >
-                  <span className="grid size-9 place-items-center rounded-lg bg-navy/10 text-brand transition group-hover:bg-navy-2 group-hover:text-on-brand">
-                    <q.icon className="size-4" />
-                  </span>
-                  <span className="text-[13px] font-extrabold text-ink">
-                    {q.title}
-                  </span>
-                  <span className="text-[11px] font-bold text-muted">
-                    {q.desc}
-                  </span>
-                </button>
-              ))}
-              <a
-                href={SERVICES_IMPORT_ROUTE}
-                className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gold/60 bg-gold/[0.07] p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/60 hover:shadow-card-hover"
-              >
-                <span className="grid size-9 place-items-center rounded-lg bg-gold/25 text-ink">
-                  <FolderOpen className="size-4" />
-                </span>
-                <span className="text-[13px] font-extrabold text-ink">
-                  استيراد وتحويل ملف
-                </span>
-                <span className="text-[11px] font-bold text-muted">
-                  PSD · PDF · وورد · بوربوينت · صور
-                </span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setNewDoc({ start: "template" })}
-                className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gold/60 bg-gold/[0.07] p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/60 hover:shadow-card-hover"
-              >
-                <span className="grid size-9 place-items-center rounded-lg bg-gold/25 text-ink">
-                  <RectangleHorizontal className="size-4" />
-                </span>
-                <span className="text-[13px] font-extrabold text-ink">
-                  من حزمة جاهزة
-                </span>
-                <span className="text-[11px] font-bold text-muted">
-                  تقارير وعروض متعددة الصفحات
-                </span>
-              </button>
-            </div>
+                    })
+                  }
+                />
+              );
+            })}
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-line bg-surface-2 px-4 py-3">
             <ProjectFileButton />
