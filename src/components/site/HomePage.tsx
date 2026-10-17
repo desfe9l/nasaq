@@ -41,6 +41,7 @@ import { PricingSection } from "@/components/site/PricingSection";
 import { PremiumTemplates } from "@/components/site/PremiumTemplates";
 import { ProductEcosystem, ProductWalkthrough } from "@/components/site/ProductWalkthrough";
 import { PremiumButton } from "@/components/ui/PremiumButton";
+import { Badge } from "@/components/ui/Badge";
 import { useReveal } from "@/components/ui/useReveal";
 import { cn } from "@/lib/utils";
 
@@ -307,9 +308,9 @@ export function HomePage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="nsq-badge nsq-badge--neutral">تخزين محلي أولًا</span>
-                <span className="nsq-badge nsq-badge--neutral">جاهز للطباعة 300 DPI</span>
-                <span className="nsq-badge nsq-badge--neutral">دعم الخطوط العربية الرسمية</span>
+                <Badge variant="neutral">تخزين محلي أولًا</Badge>
+                <Badge variant="neutral">جاهز للطباعة 300 DPI</Badge>
+                <Badge variant="neutral">دعم الخطوط العربية الرسمية</Badge>
               </div>
 
               {/* Secondary utility row: opening an existing project file. */}
@@ -352,16 +353,17 @@ export function HomePage() {
                     variant="primary"
                     size="md"
                     onClick={() => window.location.assign("/services/import")}
+                    icon={Layers}
                   >
-                    <Layers className="size-4 shrink-0 mr-2" aria-hidden />
                     ابدأ الاستيراد
                   </PremiumButton>
-                  <a
-                    href="/services/import"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 text-[13px] font-extrabold text-ink hover:border-brand"
+                  <PremiumButton
+                    variant="outline"
+                    size="md"
+                    onClick={() => window.location.assign("/services/import")}
                   >
                     التعرّف على الصيغ المدعومة
-                  </a>
+                  </PremiumButton>
                 </div>
               </div>
               <div className="hidden lg:block">
@@ -502,21 +504,22 @@ export function HomePage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
+                  <PremiumButton
+                    size="sm"
+                    variant="primary"
                     onClick={() => window.location.assign("/templates")}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
+                    icon={ArrowLeft}
+                    iconPosition="end"
                   >
                     استعراض القوالب
-                    <ArrowLeft className="size-4" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
+                  </PremiumButton>
+                  <PremiumButton
+                    size="sm"
+                    variant="outline"
                     onClick={startBlank}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
                   >
                     صفحة فارغة
-                  </button>
+                  </PremiumButton>
                 </div>
               </div>
             )}

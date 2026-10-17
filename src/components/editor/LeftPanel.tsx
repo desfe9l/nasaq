@@ -284,8 +284,8 @@ export function LeftPanel({
               className={cn(
                 "editor-panel-tab grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2 ",
+                  ? "bg-navy text-on-brand shadow-sm ring-1 ring-brand/30"
+                  : "text-muted hover:bg-line-2 hover:text-ink",
               )}
             >
               <Icon className="size-4 shrink-0" />

@@ -652,6 +652,7 @@ html.dark.dim {
   --editor-danger: #e4a29d;
   --editor-danger-soft: #422d30;
   --editor-success: #00874a;
+  --editor-success-soft: rgba(0, 135, 74, 0.16);
 }
 .editor-ui { background: var(--editor-bg); color: var(--editor-text); }
 
@@ -674,6 +675,7 @@ html.dark.dim {
   --editor-danger: #b42318;
   --editor-danger-soft: #fdf2f2;
   --editor-success: #006c35;
+  --editor-success-soft: rgba(0, 108, 53, 0.12);
 }
 
 .editor-ui.editor-dim,
@@ -696,6 +698,7 @@ html.dark.dim {
   --editor-danger: #b74b40;
   --editor-danger-soft: #4a2c2c;
   --editor-success: #157a49;
+  --editor-success-soft: rgba(21, 122, 73, 0.16);
 }
 
 .editor-ui .editor-toolbar,
@@ -1091,6 +1094,22 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-pane-scroll {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--editor-border) 70%, transparent) transparent;
+}
+.editor-pane-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.editor-pane-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-pane-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--editor-border) 70%, transparent);
+  border-radius: 9999px;
+}
+.editor-pane-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--editor-accent);
 }
 
 /*
@@ -3434,9 +3453,9 @@ summary,
   background: color-mix(in srgb, var(--editor-panel) 96%, transparent);
 }
 .panel-tab.is-active {
-  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 12%, transparent);
-  color: var(--editor-active, #2f6fb0);
-  box-shadow: inset 0 -2px 0 var(--editor-active, #2f6fb0);
+  background: var(--editor-accent-soft);
+  color: var(--editor-accent-ink);
+  box-shadow: inset 0 -2px 0 var(--editor-accent);
 }
 .panel-tab button {
   display: grid;
