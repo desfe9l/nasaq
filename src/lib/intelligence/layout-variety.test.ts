@@ -17,6 +17,7 @@ import {
   stylePresets,
 } from "./style-presets";
 import { generateVariations } from "./variations";
+import { critiqueProject } from "./critic";
 import { generateDesignFromPrompt } from "./pipeline";
 import { parsePrompt } from "./prompt-analyzer";
 import { validateProject } from "./layout";
@@ -370,4 +371,50 @@ test("stampLayoutMeta classifies roles, hierarchy and grid anchors", () => {
   for (const el of page.elements) {
     assert.equal(el.layout?.pattern, "stat-cards");
   }
+});
+
+test("the RTL rule does not flag a numeral-only reference column", () => {
+  // A table of contents puts its page numbers at the OUTER edge, which in an
+  // RTL document is the left. Flagging that made correct design look broken,
+  // and the auto-fixer would have mirrored an already-correct column.
+  const numeral = (content: string) =>
+    criticPageIsRtlIssue(content) === false;
+
+  function criticPageIsRtlIssue(content: string): boolean {
+    const project = {
+      id: "t",
+      name: "ت",
+      theme: "official",
+      orgName: "",
+      defaultSize: "A4",
+      createdAt: Date.now(),
+      pages: [
+        {
+          id: "p1",
+          name: "المحتويات",
+          elements: [
+            {
+              id: "n",
+              type: "text",
+              name: "صفحة",
+              x: 16,
+              y: 80,
+              w: 18,
+              h: 8,
+              rotation: 0,
+              opacity: 1,
+              z: 1,
+              content,
+              style: { textAlign: "left", direction: "ltr", fontSize: 12 },
+            },
+          ],
+        },
+      ],
+    };
+    return critiqueProject(project as never).issues.some((i) => i.metric === "rtl");
+  }
+
+  assert.equal(numeral("٠٣"), true, "numeral-only column is not an RTL violation");
+  assert.equal(numeral("12"), true, "western numerals likewise");
+  assert.equal(criticPageIsRtlIssue("المقدمة والنطاق"), true, "Arabic prose forced left IS a violation");
 });

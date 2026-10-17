@@ -147,8 +147,15 @@ function officialPages(theme: Theme, org: string): Page[] {
       paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 196, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
       paint(add, "تسمية الجهة", "الجهة", 16, 214, 178, 5, { ...ROLE.caption, color: ink.gold });
       paint(add, "اسم الجهة", entity, 16, 222, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
-      paint(add, "الفترة", "يناير — ديسمبر", 16, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
-      paint(add, "النسخة", "نسخة داخلية", 120, 244, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
+      /*
+       * RTL footer: the period is the primary item and must sit at the RIGHT
+       * edge, with the "internal copy" mark opposite it. These two were laid
+       * out LTR-first (period left, copy right), so the cover read the wrong way
+       * round in an Arabic document — and the copy mark carried a forced
+       * `textAlign: "left"` that contradicted the page direction outright.
+       */
+      paint(add, "الفترة", "يناير — ديسمبر", 94, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+      paint(add, "النسخة", "نسخة داخلية", 16, 244, 74, 8, { ...ROLE.meta, color: ink.gold });
     }, A4),
 
     page("المحتويات", theme, (add) => {

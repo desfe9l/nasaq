@@ -4,6 +4,21 @@ import type { Correction, Critique, CritiqueAxis, CritiqueIssue, QualityAxes } f
 import { INTELLIGENCE_SCHEMA_VERSION } from "./schema";
 
 const CONTENT = new Set(["text", "box", "stat", "table", "stamp"]);
+/*
+ * Arabic-Indic and Western digits, plus the separators a reference column
+ * legitimately carries. `ARABIC` matches U+0660–U+0669, so a table-of-contents
+ * page-number cell («٠٣») was being reported as Arabic prose forced to the
+ * left. In an RTL document that column belongs at the OUTER edge, so flagging
+ * it made correct design look broken — and the auto-fixer would have "corrected"
+ * it by mirroring a column that was already right.
+ */
+const NUMERAL_TOKEN = /^[\u0660-\u0669\u06F0-\u06F90-9\s.,،٫٬-]*$/;
+
+const isNumeralToken = (content: unknown): boolean => {
+  const value = String(content ?? "").trim();
+  return value.length > 0 && NUMERAL_TOKEN.test(value);
+};
+
 const ARABIC = /[\u0600-\u06FF]/;
 const AXES: Array<keyof QualityAxes> = [
   "structure",
@@ -112,7 +127,7 @@ function pageIssues(page: Page, pageIndex: number, pageCount: number): CritiqueI
       );
     }
     const arabic = ARABIC.test(el.content || "");
-    if (arabic && (el.style.textAlign === "left" || el.style.direction === "ltr")) {
+    if (arabic && !isNumeralToken(el.content) && (el.style.textAlign === "left" || el.style.direction === "ltr")) {
       found.push(
         issue(
           `${el.id}-rtl`,
@@ -255,7 +270,22 @@ function pageIssues(page: Page, pageIndex: number, pageCount: number): CritiqueI
     }
   }
   if (pageIndex === 0) {
-    const title = texts.find((el) => el.name === "العنوان");
+    /*
+     * The cover title is identified by its TYPOGRAPHY, not by a magic element
+     * name. Keying on `name === "العنوان"` reported «الغلاف بلا عنوان بحجم
+     * عرض» for the official template, whose cover title is named
+     * «عنوان التقرير» and set at 34pt — a correct display title that the rule
+     * simply could not see. Every template that named its cover title
+     * differently was reported as broken, and the auto-fixer would have
+     * "corrected" a cover that was already right.
+     */
+    const title = texts.reduce<CanvasEl | undefined>(
+      (best, el) =>
+        Number(el.style.fontSize || 0) > Number(best?.style.fontSize || 0)
+          ? el
+          : best,
+      undefined,
+    );
     const titleSize = Number(title?.style.fontSize || 0);
     if (!title || titleSize < 20) {
       found.push(
@@ -438,7 +468,7 @@ export function applySafeFixes(project: Project): { project: Project; correction
     const margin = Math.min(16, Math.max(8, size.w * 0.05));
     for (const el of page.elements) {
       if (!isContent(el)) continue;
-      if (ARABIC.test(el.content || "") && (el.style.textAlign === "left" || el.style.direction === "ltr")) {
+      if (ARABIC.test(el.content || "") && !isNumeralToken(el.content) && (el.style.textAlign === "left" || el.style.direction === "ltr")) {
         const before = {
           textAlign: el.style.textAlign || "",
           direction: el.style.direction || "",
