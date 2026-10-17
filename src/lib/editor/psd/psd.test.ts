@@ -439,6 +439,7 @@ describe("PSD → NASAQ", () => {
       { hash: asset.hash, assetId: "asset-existing", name: "صورة محفوظة" },
     ]);
     assert.equal(second.report.assets[0]?.match?.assetId, "asset-existing");
+    const originalPhotoSrc = flat(second.project.pages[0]!.elements).find((el) => el.name === "Photo")?.src;
     const applied = applyAssetDecisions(
       second.project,
       second.report.assets,
@@ -446,6 +447,8 @@ describe("PSD → NASAQ", () => {
       new Map([["asset-existing", "data:image/png;base64,QQ=="]]),
     );
     assert.equal(applied.saves.length, 0);
+    assert.notEqual(applied.project, second.project);
+    assert.equal(flat(second.project.pages[0]!.elements).find((el) => el.name === "Photo")?.src, originalPhotoSrc);
     const photo = flat(applied.project.pages[0]!.elements).find((el) => el.name === "Photo");
     assert.equal(photo?.src, "data:image/png;base64,QQ==");
     const fresh = applyAssetDecisions(

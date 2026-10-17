@@ -8,11 +8,14 @@ import type { PsdDocument, PsdNode, ValidationIssue, ValidationResult } from "./
 
 function flatten(els: CanvasEl[], dx = 0, dy = 0): CanvasEl[] {
   const out: CanvasEl[] = [];
-  for (const el of els) {
-    const abs = { ...el, x: el.x + dx, y: el.y + dy };
-    out.push(abs);
-    if (el.children?.length) out.push(...flatten(el.children, abs.x, abs.y));
-  }
+  const visit = (items: CanvasEl[], offsetX: number, offsetY: number) => {
+    for (const el of items) {
+      const abs = { ...el, x: el.x + offsetX, y: el.y + offsetY };
+      out.push(abs);
+      if (el.children?.length) visit(el.children, abs.x, abs.y);
+    }
+  };
+  visit(els, dx, dy);
   return out;
 }
 

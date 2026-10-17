@@ -60,12 +60,15 @@ type Phase = "idle" | "working" | "ready";
 
 function flatten(els: CanvasEl[], depth = 0, dx = 0, dy = 0): { el: CanvasEl; depth: number; x: number; y: number }[] {
   const out: { el: CanvasEl; depth: number; x: number; y: number }[] = [];
-  for (const el of els) {
-    const x = el.x + dx;
-    const y = el.y + dy;
-    out.push({ el, depth, x, y });
-    if (el.children?.length) out.push(...flatten(el.children, depth + 1, x, y));
-  }
+  const visit = (items: CanvasEl[], level: number, offsetX: number, offsetY: number) => {
+    for (const el of items) {
+      const x = el.x + offsetX;
+      const y = el.y + offsetY;
+      out.push({ el, depth: level, x, y });
+      if (el.children?.length) visit(el.children, level + 1, x, y);
+    }
+  };
+  visit(els, depth, dx, dy);
   return out;
 }
 
