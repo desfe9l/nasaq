@@ -198,7 +198,7 @@ export function PricingSection({
               <div
                 role="group"
                 aria-label="فترة الاشتراك"
-                className="inline-flex rounded-[10px] border border-line bg-surface p-1"
+                className="inline-flex rounded-xl border border-line bg-surface p-1 shadow-sm"
               >
                 {availablePeriods.map((option) => {
                   const active = activePeriod === option;
@@ -208,9 +208,9 @@ export function PricingSection({
                       type="button"
                       onClick={() => setPeriod(option)}
                       aria-pressed={active}
-                      className={`inline-flex items-center gap-1.5 rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold transition-all duration-150 ${
                         active
-                          ? "bg-inverse text-on-inverse shadow-sm ring-1 ring-inverse"
+                          ? "bg-navy text-on-brand shadow-sm ring-1 ring-brand/30"
                           : "text-muted hover:bg-surface-2 hover:text-ink"
                       }`}
                     >
@@ -337,9 +337,9 @@ function PlanCard({
           type="button"
           onClick={onActivate}
           disabled={busy}
-          className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] text-[13px] font-bold transition ${
+          className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-extrabold transition-all duration-150 active:scale-[0.98] ${
             free
-              ? "border border-line bg-surface text-ink hover:bg-surface-2"
+              ? "border border-line bg-surface text-ink hover:border-brand/40 hover:bg-surface-2"
               : "subscription-cta"
           } disabled:cursor-wait disabled:opacity-70`}
         >
