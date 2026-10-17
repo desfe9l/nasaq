@@ -4003,7 +4003,33 @@ body.is-resizing-panel .editor-dock-strip::before {
   object-fit: contain;
   background: color-mix(in srgb, var(--editor-surface) 88%, var(--editor-text));
 }
-.asset-card { display: grid; padding: 6px; }
+.asset-lib-icon-btn {
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid var(--editor-border);
+  background: var(--editor-surface);
+  color: var(--editor-text-secondary);
+  transition: all 130ms ease;
+}
+.asset-lib-icon-btn:hover:not(:disabled) {
+  border-color: var(--editor-accent);
+  color: var(--editor-text);
+  background: var(--editor-hover);
+}
+.asset-lib-icon-btn[aria-pressed="true"] {
+  border-color: var(--editor-accent);
+  background: var(--editor-accent-soft);
+  color: var(--editor-accent-ink);
+}
+.asset-card {
+  display: grid;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--editor-border);
+  background: var(--editor-surface);
+  transition: all 140ms ease;
+}
 .asset-card-actions { flex-wrap: nowrap; }
 .asset-card-actions > button { flex: 0 0 auto; min-width: 28px; min-height: 28px; }
 .asset-card-check::after { content: ""; position: absolute; inset: -6px; }
