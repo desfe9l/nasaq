@@ -308,9 +308,9 @@ export function HomePage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Badge variant="neutral">تخزين محلي أولًا</Badge>
-                <Badge variant="neutral">جاهز للطباعة 300 DPI</Badge>
-                <Badge variant="neutral">دعم الخطوط العربية الرسمية</Badge>
+                <Badge variant="emerald" dot>تخزين محلي أولًا</Badge>
+                <Badge variant="gold" dot>جاهز للطباعة 300 DPI</Badge>
+                <Badge variant="brand" dot>دعم الخطوط العربية الرسمية</Badge>
               </div>
 
               {/* Secondary utility row: opening an existing project file. */}

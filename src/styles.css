@@ -1261,8 +1261,8 @@ html.dark .report-page {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(37, 99, 235, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 99, 235, 0.09) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--editor-accent, #006C35) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--editor-accent, #006C35) 8%, transparent) 1px, transparent 1px);
   background-size: 5mm 5mm;
 }
 
@@ -1277,7 +1277,7 @@ html.dark .report-page {
   position: absolute;
   pointer-events: none;
   overflow: visible;
-  color: rgba(37, 99, 235, 0.75);
+  color: color-mix(in srgb, var(--editor-accent, #006C35) 75%, transparent);
   /* The page is RTL. Guides are millimetre geometry, so they must not inherit
      that direction — Arabic SVG text used to shatter around the trim. */
   direction: ltr;
@@ -1285,7 +1285,7 @@ html.dark .report-page {
 }
 
 .print-guides .pg-safe {
-  color: rgba(37, 99, 235, 0.6);
+  color: color-mix(in srgb, var(--editor-accent, #006C35) 60%, transparent);
 }
 
 .print-guides .pg-gutter rect {
@@ -1405,28 +1405,28 @@ html.dark .report-page {
    * Illustrator both pair their selection colour with a light outer ring); the
    * studio-dark theme overrides it with a dark ring instead.
    */
-  --sel-color: #1d64d8;
-  --sel-ring: rgba(255, 255, 255, 0.92);
-  --hover-outline: rgba(29, 78, 216, 0.55);
+  --sel-color: #006C35;
+  --sel-ring: rgba(255, 255, 255, 0.95);
+  --hover-outline: rgba(0, 108, 53, 0.45);
 }
 /*
- * The studio-dark selection is the interface's own blue — a brighter step of
- * the #3b6e9c accent so the frame stays unmistakable on the dark charcoal
+ * The studio-dark selection is the interface's vibrant emerald accent
+ * so the frame stays unmistakable on the dark charcoal
  * stage, on the still-white page, and on top of any artwork.
  */
 .editor-ui.editor-dark {
-  --primary-accent: #58a2d8;
-  --library-active-bg: rgba(88, 162, 216, 0.16);
-  --sel-color: #58a2d8;
-  --sel-ring: rgba(17, 23, 34, 0.94);
-  --hover-outline: rgba(88, 162, 216, 0.6);
+  --primary-accent: #10b981;
+  --library-active-bg: rgba(16, 185, 129, 0.16);
+  --sel-color: #10b981;
+  --sel-ring: rgba(15, 23, 42, 0.95);
+  --hover-outline: rgba(16, 185, 129, 0.55);
 }
 .editor-ui.editor-dim {
-  --primary-accent: #83c8ed;
-  --library-active-bg: rgba(131, 200, 237, 0.16);
-  --sel-color: #83c8ed;
-  --sel-ring: rgba(48, 55, 62, 0.96);
-  --hover-outline: rgba(131, 200, 237, 0.72);
+  --primary-accent: #34d399;
+  --library-active-bg: rgba(52, 211, 153, 0.16);
+  --sel-color: #34d399;
+  --sel-ring: rgba(30, 41, 59, 0.95);
+  --hover-outline: rgba(52, 211, 153, 0.6);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
 .selection-layer {
@@ -1709,15 +1709,15 @@ html.dark .report-page {
  * stage.
  */
 .editor-ui.editor-light .handle::after {
-  background: var(--sel-color, #2f6fb0);
+  background: var(--sel-color, #006C35);
   border-color: #ffffff;
-  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(255, 255, 255, 0.92));
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(255, 255, 255, 0.95));
 }
 
 .editor-ui.editor-dark .handle::after {
-  background: var(--sel-color, #58a2d8);
+  background: var(--sel-color, #10b981);
   border-color: #ffffff;
-  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(17, 23, 34, 0.94));
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(15, 23, 42, 0.95));
 }
 
 /*
@@ -1729,7 +1729,7 @@ html.dark .report-page {
 .handle:focus-visible::after {
   box-shadow:
     0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(255, 255, 255, 0.95),
-    0 0 0 calc(4px / var(--editor-zoom, 1)) color-mix(in srgb, var(--sel-color, #2f6fb0) 35%, transparent);
+    0 0 0 calc(4px / var(--editor-zoom, 1)) color-mix(in srgb, var(--sel-color, #006C35) 35%, transparent);
 }
 .handle.is-axis-locked:hover::after { box-shadow: none; }
 .selection-frame .handle.is-axis-locked { cursor: not-allowed; }
@@ -3654,15 +3654,18 @@ body.is-resizing-panel .editor-dock-strip::before {
   display: grid;
   gap: 1px;
   max-height: min(70vh, 520px);
-  padding: 5px;
+  padding: 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--editor-border);
-  border-radius: 12px;
-  background: var(--editor-panel);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--editor-panel) 94%, var(--editor-surface));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: var(--editor-text);
   direction: rtl;
   scrollbar-width: thin;
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--editor-border) 60%, transparent);
 }
 .editor-menu-row {
   display: flex;
@@ -4224,21 +4227,25 @@ body.is-resizing-panel .editor-dock-strip::before {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 26px;
   min-width: 0;
-  max-width: 17ch;
+  max-width: 18ch;
   margin-inline-end: 4px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--editor-border) 70%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--editor-surface) 75%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--editor-text-secondary);
   font-family: inherit;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
   flex: 0 1 auto;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .editor-sync-status .label {
   overflow: hidden;
@@ -4246,10 +4253,11 @@ body.is-resizing-panel .editor-dock-strip::before {
   white-space: nowrap;
 }
 .editor-sync-status .dot {
-  width: 7px;
-  height: 7px;
+  width: 6.5px;
+  height: 6.5px;
   border-radius: 999px;
   background: currentColor;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 24%, transparent);
   flex: 0 0 auto;
 }
 .editor-sync-status .glyph {
@@ -4259,15 +4267,23 @@ body.is-resizing-panel .editor-dock-strip::before {
 }
 .editor-sync-status.is-ok {
   color: var(--editor-success);
+  background: color-mix(in srgb, var(--editor-success) 8%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--editor-success) 24%, transparent);
 }
 .editor-sync-status.is-pending {
   color: var(--editor-accent-ink);
+  background: color-mix(in srgb, var(--editor-accent) 8%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--editor-accent) 26%, transparent);
 }
 .editor-sync-status.is-warn {
   color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--color-warning) 28%, transparent);
 }
 .editor-sync-status.is-danger {
   color: var(--editor-danger);
+  background: color-mix(in srgb, var(--editor-danger) 10%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--editor-danger) 28%, transparent);
 }
 /* A failure is the one state that is worth a tap. */
 .editor-sync-status.is-action {
@@ -4275,7 +4291,9 @@ body.is-resizing-panel .editor-dock-strip::before {
   border-color: currentColor;
 }
 .editor-sync-status.is-action:hover {
-  background: var(--editor-hover);
+  background: color-mix(in srgb, currentColor 14%, var(--editor-surface));
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
 }
 /* Real work only: opening, writing, syncing. */
 .editor-sync-status.is-busy .dot {
@@ -5719,16 +5737,16 @@ button.license-badge-locked:focus-visible {
  */
 .editor-brand-lockup .editor-sync-status {
   height: 24px;
-  max-width: 16ch;
-  gap: 5px;
+  max-width: 17ch;
+  gap: 5.5px;
   margin-inline-end: 0;
-  padding: 0 7px;
-  border-radius: 999px;
+  padding: 0 9px;
+  border-radius: 9999px;
 }
 .editor-brand-lockup .editor-sync-status .dot {
-  width: 8px;
-  height: 8px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 22%, transparent);
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, currentColor 22%, transparent);
 }
 /*
  * iPad portrait, landscape phone and the tightest desktop band: the lockup
@@ -5955,8 +5973,8 @@ button.license-badge-locked:focus-visible {
 .selection-region {
   position: absolute;
   z-index: 4995;
-  outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(37, 99, 235, 0.95);
-  background: rgba(37, 99, 235, 0.08);
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid var(--sel-color, #006C35);
+  background: color-mix(in srgb, var(--sel-color, #006C35) 9%, transparent);
   touch-action: none;
 }
 .selection-region[data-region-shape="ellipse"] {
@@ -5990,8 +6008,9 @@ button.license-badge-locked:focus-visible {
   position: absolute;
   inset: 35%;
   background: #fff;
-  border: calc(1px / var(--editor-zoom, 1)) solid #1d4ed8;
-  border-radius: calc(1px / var(--editor-zoom, 1));
+  border: calc(1.2px / var(--editor-zoom, 1)) solid var(--sel-color, #006C35);
+  border-radius: calc(2px / var(--editor-zoom, 1));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 .selection-region-handle.is-nw { top: 0; left: 0; cursor: nwse-resize; }
 .selection-region-handle.is-n  { top: 0; left: 50%; cursor: ns-resize; }
@@ -6003,15 +6022,18 @@ button.license-badge-locked:focus-visible {
 .selection-region-handle.is-w  { top: 50%; left: 0; cursor: ew-resize; }
 .selection-region-size {
   position: absolute;
-  bottom: calc(100% + 4px / var(--editor-zoom, 1));
+  bottom: calc(100% + 6px / var(--editor-zoom, 1));
   left: 50%;
   translate: -50% 0;
-  padding: calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1));
-  border-radius: calc(5px / var(--editor-zoom, 1));
-  background: var(--editor-panel, #1e293b);
-  color: var(--editor-text, #f8fafc);
-  font-size: calc(10px / var(--editor-zoom, 1));
+  padding: calc(2.5px / var(--editor-zoom, 1)) calc(8px / var(--editor-zoom, 1));
+  border-radius: calc(6px / var(--editor-zoom, 1));
+  background: var(--editor-panel, #0f1e33);
+  color: var(--editor-text, #fcfbfa);
+  border: calc(1px / var(--editor-zoom, 1)) solid color-mix(in srgb, var(--color-gold, #c9a86a) 30%, var(--editor-border, rgba(255, 255, 255, 0.15)));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: calc(10.5px / var(--editor-zoom, 1));
   font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
 }

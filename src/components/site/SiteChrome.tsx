@@ -511,7 +511,7 @@ export function SiteFooter() {
               never competing with the platform name. */}
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-3 w-px bg-line" />
-            بواسطة <strong className="font-extrabold text-ink">{BRAND.team}</strong>
+            <strong className="font-extrabold text-ink">{BRAND.developer}</strong>
           </span>
         </div>
       </div>

@@ -4006,7 +4006,7 @@ function Field({
       )}
     >
       {label}
-      <div className="field-control [&_input]:h-9 [&_input]:w-full [&_input]:rounded-[8px] [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:px-2.5 [&_input]:text-[13px] [&_input]:font-semibold [&_input]:text-ink [&_input[type=color]]:p-1 [&_input[type=range]]:h-9 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-[8px] [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:text-[13px] [&_textarea]:min-h-[80px] [&_textarea]:w-full [&_textarea]:rounded-[8px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:bg-surface [&_textarea]:p-2.5 [&_textarea]:text-[13px] [&_textarea]:leading-6">
+      <div className="field-control [&_input]:h-9 [&_input]:w-full [&_input]:rounded-[8px] [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:px-2.5 [&_input]:text-[13px] [&_input]:font-semibold [&_input]:text-ink [&_input]:transition-colors [&_input]:duration-150 [&_input:focus]:border-brand [&_input:focus]:outline-none [&_input:focus]:ring-1 [&_input:focus]:ring-brand/30 [&_input[type=color]]:p-1 [&_input[type=range]]:h-9 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-[8px] [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:text-[13px] [&_select]:transition-colors [&_select]:duration-150 [&_select:focus]:border-brand [&_select:focus]:outline-none [&_select:focus]:ring-1 [&_select:focus]:ring-brand/30 [&_textarea]:min-h-[80px] [&_textarea]:w-full [&_textarea]:rounded-[8px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:bg-surface [&_textarea]:p-2.5 [&_textarea]:text-[13px] [&_textarea]:leading-6 [&_textarea]:transition-colors [&_textarea]:duration-150 [&_textarea:focus]:border-brand [&_textarea:focus]:outline-none [&_textarea:focus]:ring-1 [&_textarea:focus]:ring-brand/30">
         {children}
       </div>
     </label>
@@ -4029,12 +4029,14 @@ function Action({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border text-[11px] font-extrabold",
-        danger ? "border-danger/30 bg-danger/10 text-error" : "border-line",
+        "inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border text-[11px] font-extrabold transition-all duration-150 active:scale-[0.98]",
+        danger
+          ? "border-danger/30 bg-danger/10 text-error hover:bg-danger/15"
+          : "border-line bg-surface text-ink hover:border-brand/40 hover:bg-surface-2",
       )}
     >
-      <Icon className="size-3.5" />
-      {label}
+      <Icon className="size-3.5 shrink-0" />
+      <span>{label}</span>
     </button>
   );
 }

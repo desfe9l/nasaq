@@ -27,6 +27,7 @@ export function Badge({
   variant = "neutral",
   size = "md",
   icon: Icon,
+  dot = false,
   ltr = false,
   className,
   ...props
@@ -35,6 +36,7 @@ export function Badge({
   variant?: BadgeVariant;
   size?: BadgeSize;
   icon?: React.ComponentType<{ className?: string }>;
+  dot?: boolean;
   ltr?: boolean;
   className?: string;
 } & React.HTMLAttributes<HTMLSpanElement>) {
@@ -44,6 +46,12 @@ export function Badge({
       className={cn(badgeBase, badgeVariants[variant], badgeSizes[size], className)}
       {...props}
     >
+      {dot && (
+        <span
+          className="size-1.5 rounded-full bg-current opacity-80"
+          aria-hidden
+        />
+      )}
       {Icon && <Icon className="size-2.5 shrink-0" aria-hidden />}
       {children}
     </span>
