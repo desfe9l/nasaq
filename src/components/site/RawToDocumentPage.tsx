@@ -43,6 +43,12 @@ import {
   type RawDocumentResult,
 } from "@/lib/intelligence/raw-to-document";
 
+/**
+ * Page counts a visitor can ask for. One page is the conservative default; more
+ * pages let the composer build each one on a different structure.
+ */
+const PAGE_CHOICES = [1, 2, 3, 4, 6, 8] as const;
+
 const SAMPLE = `تقرير الأداء التشغيلي — الربع الثالث
 عملت الفرق على ثلاث مبادرات: رقمنة الطلبات، وتقليل زمن المعالجة إلى 3 أيام، وتدريب 45 موظفًا.
 بلغت نسبة الإنجاز 92٪ مقارنة بالخطة، وارتفع رضا المستفيدين إلى 4.7 من 5.
@@ -56,6 +62,7 @@ export function RawToDocumentPage() {
 
   const [raw, setRaw] = useState("");
   const [title, setTitle] = useState("");
+  const [pages, setPages] = useState(1);
   const [busy, setBusy] = useState(false);
   const [demo, setDemo] = useState<RawDocumentResult | null>(null);
 
@@ -68,7 +75,13 @@ export function RawToDocumentPage() {
     }
     setBusy(true);
     try {
-      setDemo(improveRawText({ text: raw, title: title.trim() || undefined }));
+      setDemo(
+        improveRawText({
+          text: raw,
+          title: title.trim() || undefined,
+          total: pages,
+        }),
+      );
       toast.success("تم قياس المحتوى وتكوين المستند — راجع المقارنة");
     } catch {
       toast.error("تعذر تكوين المستند من هذا النص");
@@ -185,6 +198,27 @@ export function RawToDocumentPage() {
                 placeholder="يُشتق من أول سطر إذا تركته فارغًا"
                 className="mt-1 h-10 w-full rounded-[9px] border border-line bg-page px-2.5 text-[12.5px] font-semibold text-ink focus:border-brand focus:outline-none"
               />
+            </label>
+
+            <label className="mt-3 block text-[11px] font-bold text-muted">
+              عدد الصفحات
+              <select
+                value={pages}
+                onChange={(event) => setPages(Number(event.target.value))}
+                className="mt-1 h-10 w-full rounded-[9px] border border-line bg-page px-2.5 text-[12.5px] font-semibold text-ink focus:border-brand focus:outline-none"
+              >
+                {PAGE_CHOICES.map((choice) => (
+                  <option key={choice} value={choice}>
+                    {choice === 1
+                      ? "صفحة واحدة"
+                      : `${choice} صفحات — توزيع المكوّنات على ما ورد في النص`}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[10.5px] font-medium leading-5 text-muted/80">
+                عند اختيار أكثر من صفحة تُبنى كل صفحة ببنية مختلفة عن سابقتها، بدل تكرار
+                تخطيط واحد.
+              </span>
             </label>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
