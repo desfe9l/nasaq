@@ -1,15 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Baseline,
   Blocks,
   FileText,
+  Files,
   FolderOpen,
   Layers,
   LayoutTemplate,
-  PanelTop,
   Palette,
+  PencilRuler,
   Settings2,
+  Shapes,
   SlidersHorizontal,
+  Type,
 } from "lucide-react";
 import type { LeftTab, RightTab } from "@/lib/editor/store";
 
@@ -19,13 +21,13 @@ import type { LeftTab, RightTab } from "@/lib/editor/store";
  */
 export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[] = [
   { id: "library", label: "المكتبة", icon: FolderOpen },
-  { id: "tools", label: "أدوات العناصر", icon: Blocks },
-  { id: "elements", label: "العناصر", icon: LayoutTemplate },
-  { id: "shapes", label: "المستند والتخطيط", icon: PanelTop },
-  { id: "templates", label: "قوالب", icon: FileText },
-  { id: "pages", label: "صفحات", icon: Layers },
+  { id: "tools", label: "أدوات العناصر", icon: PencilRuler },
+  { id: "elements", label: "العناصر", icon: Blocks },
+  { id: "shapes", label: "المستند والتخطيط", icon: Shapes },
+  { id: "templates", label: "قوالب", icon: LayoutTemplate },
+  { id: "pages", label: "صفحات", icon: Files },
   { id: "theme", label: "المظهر", icon: Palette },
-  { id: "fonts", label: "خطوط", icon: Baseline },
+  { id: "fonts", label: "خطوط", icon: Type },
 ];
 
 export const RIGHT_PANEL_TABS: { id: RightTab; label: string; icon: LucideIcon }[] = [
@@ -43,8 +45,8 @@ export const PANEL_META: Record<
   { title: string; icon: LucideIcon }
 > = {
   library: { title: "المكتبة", icon: FolderOpen },
-  tools: { title: "أدوات العناصر", icon: Blocks },
-  elements: { title: "لوحة العناصر", icon: LayoutTemplate },
+  tools: { title: "أدوات العناصر", icon: PencilRuler },
+  elements: { title: "لوحة العناصر", icon: Blocks },
   properties: { title: "الخصائص", icon: SlidersHorizontal },
   settings: { title: "الإعدادات", icon: Settings2 },
   layers: { title: "الطبقات", icon: Layers },

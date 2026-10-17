@@ -20,6 +20,7 @@ import {
   PencilRuler,
   Shapes,
   SlidersHorizontal,
+  Sparkles,
   Type,
 } from "lucide-react";
 import type { SurfaceNavItem } from "@/lib/nav/surface-nav";
@@ -54,6 +55,7 @@ const ICONS: Record<string, LucideIcon> = {
   properties: SlidersHorizontal,
   layers: Layers,
   report: FileText,
+  ai: Sparkles,
 };
 
 /**

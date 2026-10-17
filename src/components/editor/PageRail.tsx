@@ -11,6 +11,7 @@ import {
   GripVertical,
   PanelBottomClose,
   Plus,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import { pageSize, type CanvasEl, type Page } from "@/lib/editor/model";
@@ -260,7 +261,7 @@ export function PageRail({
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="page-rail-nav grid size-7 place-items-center rounded-[7px] bg-navy text-white"
+          className="page-rail-nav grid size-7 place-items-center rounded-[7px] bg-navy text-on-brand shadow-xs"
         >
           <Plus className="size-4" aria-hidden />
         </button>
@@ -393,6 +394,19 @@ export function PageRail({
               </div>
 
               <span className="page-rail-actions flex flex-col gap-px">
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent(OPEN_PAGE_SETTINGS_EVENT, { detail: p.id }),
+                    )
+                  }
+                  title="إعدادات ومقاس الصفحة"
+                  aria-label={`إعدادات ${p.name}`}
+                  className="grid size-5 place-items-center rounded text-muted hover:text-ink hover:bg-line/50"
+                >
+                  <Settings2 className="size-3.5" />
+                </button>
                 <button
                   type="button"
                   onPointerDown={startDrag(i)}

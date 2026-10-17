@@ -89,8 +89,8 @@ export interface FloatingPanelProps {
   onToggleCollapsed?: () => void;
 }
 
-const DEFAULT_SIZE = { width: 320, height: 520 };
-const DEFAULT_MIN = { width: 248, height: 180 };
+const DEFAULT_SIZE = { width: 300, height: 520 };
+const DEFAULT_MIN = { width: 240, height: 180 };
 /**
  * Free strip kept below a freshly opened panel so it can still be dragged:
  * a card that fills the whole band is docked in everything but name.

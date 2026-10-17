@@ -40,7 +40,7 @@ const PAINT_ICONS: Record<"brush" | "eraser" | "text" | "shape", typeof Brush> =
   brush: Brush,
   eraser: Eraser,
   text: TypeIcon,
-  shape: RectangleHorizontal,
+  shape: Shapes,
 };
 
 /**
@@ -159,7 +159,7 @@ const PANEL_IDS: readonly PanelId[] = [
 ];
 
 /** Docked strip bounds (px) — shared by the drag handlers and the defaults. */
-const DOCK_MIN_W = 264;
+const DOCK_MIN_W = 240;
 const DOCK_MIN_H = 200;
 /** Opening height of a window docked to the top or bottom edge. */
 const DOCK_BAND_H = 236;
@@ -211,7 +211,7 @@ import {
   Scan,
   Search,
   SlidersHorizontal,
-  RectangleHorizontal,
+  Shapes,
   Square,
   SquareDashed,
   Type as TypeIcon,
@@ -1678,55 +1678,51 @@ function Studio({
     library: {
       title: "المكتبة",
       side: "left",
-      defaultSize: { width: 420, height: 520 },
-      minSize: { width: 340, height: 240 },
+      defaultSize: { width: 340, height: 520 },
+      minSize: { width: 280, height: 240 },
       spawnShift: 0,
     },
-    // أدوات العناصر — the smart library. WIDER default on purpose: its 4-column
-    // card grids clip badly below ~420px, and the window is fully resizable.
+    // أدوات العناصر — the smart library.
     tools: {
       title: "أدوات العناصر",
       side: "left",
-      // Wider floor: its card grids wrapped into a horizontal scroll below
-      // ~460px and authors read that as "tools keep hiding". auto-fill grids
-      // plus this floor keep ONE visible surface at every width.
-      defaultSize: { width: 520, height: 560 },
-      minSize: { width: 420, height: 260 },
+      defaultSize: { width: 380, height: 560 },
+      minSize: { width: 320, height: 260 },
       spawnShift: 28,
     },
     elements: {
       title: "لوحة العناصر",
       side: "left",
-      defaultSize: { width: 380, height: 560 },
-      minSize: { width: 300, height: 240 },
+      defaultSize: { width: 320, height: 560 },
+      minSize: { width: 280, height: 240 },
       spawnShift: 56,
     },
     properties: {
       title: "الخصائص",
       side: "right",
-      defaultSize: { width: 340, height: 560 },
-      minSize: { width: 280, height: 240 },
+      defaultSize: { width: 300, height: 560 },
+      minSize: { width: 260, height: 240 },
       spawnShift: 0,
     },
     settings: {
       title: "الإعدادات",
       side: "right",
-      defaultSize: { width: 340, height: 560 },
-      minSize: { width: 280, height: 240 },
+      defaultSize: { width: 300, height: 560 },
+      minSize: { width: 260, height: 240 },
       spawnShift: 0,
     },
     layers: {
       title: "الطبقات",
       side: "right",
-      defaultSize: { width: 320, height: 480 },
-      minSize: { width: 260, height: 200 },
+      defaultSize: { width: 280, height: 480 },
+      minSize: { width: 240, height: 200 },
       spawnShift: 28,
     },
     report: {
       title: "أدوات التقرير",
       side: "right",
-      defaultSize: { width: 400, height: 520 },
-      minSize: { width: 320, height: 240 },
+      defaultSize: { width: 340, height: 520 },
+      minSize: { width: 280, height: 240 },
       spawnShift: 56,
     },
   };

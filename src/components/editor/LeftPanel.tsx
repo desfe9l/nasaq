@@ -2,21 +2,25 @@ import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
 import { DocumentAppearancePanel } from "./DocumentAppearancePanel";
 import { useMemo, useState } from "react";
 import {
-  Type,
-  Image as ImageIcon,
-  Minus,
-  Star,
-  Table2,
-  Square,
-  SeparatorHorizontal,
-  Stamp,
-  QrCode,
+  Award,
   BadgePercent,
-  Gauge,
-  FileCode2,
   ChevronDown,
   Eye,
+  FileCode2,
+  Gauge,
+  Image as ImageIcon,
+  LayoutPanelTop,
+  Minus,
+  QrCode,
+  SeparatorHorizontal,
+  Shapes,
+  Square,
+  Stamp,
+  Star,
+  Table2,
   Trash2,
+  TrendingUp,
+  Type,
   Upload,
   X,
 } from "lucide-react";
@@ -67,14 +71,14 @@ const TOOL_GROUPS: {
     title: "نص",
     items: [
       { type: "text", label: "نص", icon: Type },
-      { type: "box", label: "مربع محتوى", icon: Square },
+      { type: "box", label: "مربع محتوى", icon: LayoutPanelTop },
     ],
   },
   {
     title: "صور وشعارات",
     items: [
       { type: "image", label: "صورة", icon: ImageIcon },
-      { type: "logo", label: "شعار", icon: BadgePercent },
+      { type: "logo", label: "شعار", icon: Award },
       { type: "svg", label: "إضافة SVG من الجهاز", icon: FileCode2 },
       { type: "qr", label: "رمز QR", icon: QrCode },
     ],
@@ -83,7 +87,7 @@ const TOOL_GROUPS: {
     title: "جداول وإحصاءات",
     items: [
       { type: "table", label: "جدول", icon: Table2 },
-      { type: "stat", label: "بطاقة رقم", icon: BadgePercent },
+      { type: "stat", label: "بطاقة رقم", icon: TrendingUp },
       { type: "progress", label: "شريط تقدم", icon: Gauge },
       { type: "stamp", label: "ختم", icon: Stamp },
     ],
@@ -93,7 +97,7 @@ const TOOL_GROUPS: {
     items: [
       { type: "line", label: "خط", icon: Minus },
       { type: "divider", label: "فاصل", icon: SeparatorHorizontal },
-      { type: "icon", label: "أيقونة", icon: Star },
+      { type: "icon", label: "أيقونة", icon: Shapes },
     ],
   },
 ];
@@ -390,7 +394,7 @@ export function LeftPanel({
                           <button
                             type="button"
                             onClick={() => onUpload("image")}
-                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-on-brand"
                           >
                             <ImageIcon className="size-3.5" /> صورة
                           </button>
@@ -399,7 +403,7 @@ export function LeftPanel({
                             onClick={() => onUpload("logo")}
                             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold "
                           >
-                            <BadgePercent className="size-3.5" /> شعار
+                            <Award className="size-3.5" /> شعار
                           </button>
                           <button
                             type="button"
@@ -616,7 +620,7 @@ export function LeftPanel({
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent(OPEN_NEW_PAGE_EVENT))}
-              className="h-10 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
+              className="h-10 rounded-[8px] bg-navy text-[12px] font-extrabold text-on-brand"
             >
               إضافة صفحة
             </button>
@@ -717,7 +721,7 @@ function TemplatePreviewDialog({
         <button
           type="button"
           onClick={() => onAdd(template.id)}
-          className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
+          className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-on-brand"
         >
           إضافة القالب كصفحة قابلة للتحرير
         </button>
@@ -1074,8 +1078,8 @@ function CategoryChip({
       className={cn(
         "rounded-full border px-2.5 py-1 text-[11px] font-bold",
         active
-          ? "border-navy-2 bg-navy-2 text-white"
-          : "border-line text-muted ",
+          ? "border-navy bg-navy text-on-brand shadow-xs"
+          : "border-line text-muted hover:text-ink hover:bg-line-2",
       )}
     >
       {label}
