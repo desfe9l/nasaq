@@ -126,12 +126,17 @@ export function applyAssetDecisions(
 ): { project: Project; saves: LibrarySave[] } {
   const next = clone(project);
   const byHash = new Map(assets.map((asset) => [asset.hash, asset]));
+  const hashByElementId = new Map<string, string>();
+  for (const asset of assets) {
+    // Preserve Array.find's first-match behavior if a malformed report repeats an element id.
+    if (!hashByElementId.has(asset.elementId)) hashByElementId.set(asset.elementId, asset.hash);
+  }
   const decisionOf = new Map(decisions.map((row) => [row.hash, row]));
   const saves: LibrarySave[] = [];
   const saved = new Set<string>();
   const visit = (els: Project["pages"][number]["elements"]) => {
     for (const el of els) {
-      const hash = assets.find((asset) => asset.elementId === el.id)?.hash;
+      const hash = hashByElementId.get(el.id);
       if (hash && el.src) {
         const asset = byHash.get(hash)!;
         const decision = decisionOf.get(hash);
