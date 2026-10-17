@@ -141,6 +141,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "استيراد وتحويل",
   },
   {
+    // The motion studio sits next to import because both are "input becomes a
+    // finished artefact" surfaces, not authoring surfaces like the editor.
+    to: "/motion",
+    label: "استوديو الحركة",
+  },
+  {
     to: "/الهوية",
     label: "الهوية",
   },
