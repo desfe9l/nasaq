@@ -111,8 +111,8 @@ export function EditorSettingsDialog({
               className={cn(
                 "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
                 tab === item.id
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2",
+                  ? "bg-navy text-on-brand shadow-sm ring-1 ring-brand/30"
+                  : "text-muted hover:bg-line-2 hover:text-ink",
               )}
             >
               {item.label}
@@ -256,7 +256,7 @@ function AccountSection() {
             type="button"
             onClick={() => void submitKey()}
             disabled={activating || !key.trim()}
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-wait disabled:opacity-60"
           >
             {activating ? (
               <Loader2 className="size-3.5 animate-spin" aria-hidden />

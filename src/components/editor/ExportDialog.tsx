@@ -460,8 +460,8 @@ export function ExportDialog() {
                     locked
                       ? "border-dashed border-line bg-line-2/40 opacity-80 hover:border-brand hover:opacity-100"
                       : format === f.id
-                        ? "border-navy bg-navy text-white"
-                        : "border-line hover:border-navy-2",
+                        ? "border-brand bg-navy text-on-brand shadow-card"
+                        : "border-line bg-surface hover:border-brand/60 hover:bg-surface-2",
                   )}
                 >
                   <Icon
@@ -474,7 +474,7 @@ export function ExportDialog() {
                   <span
                     className={cn(
                       "mt-0.5 text-[11px] leading-4",
-                      format === f.id ? "text-white/70" : "text-muted",
+                      format === f.id ? "text-on-brand/75" : "text-muted",
                     )}
                   >
                     {f.desc}
@@ -692,7 +692,7 @@ export function ExportDialog() {
               type="button"
               disabled={busy || previewBusy || !formatAllowed}
               onClick={() => void preview()}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line bg-surface px-4 text-[13px] font-bold text-ink transition hover:bg-line-2 disabled:opacity-40"
             >
               <Eye className="size-4" />
               {previewBusy ? "جاري المعاينة…" : "معاينة"}
@@ -701,15 +701,16 @@ export function ExportDialog() {
               type="button"
               disabled={busy}
               onClick={() => void run()}
-              className="h-11 flex-1 rounded-[10px] bg-navy text-[14px] font-extrabold text-white disabled:opacity-50"
+              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] bg-navy text-[14px] font-extrabold text-on-brand shadow-card transition hover:bg-navy-2 active:translate-y-[1px] disabled:opacity-50"
             >
+              <FileDown className="size-4" />
               {busy ? "جاري التصدير…" : "تنزيل الملف"}
             </button>
             <button
               type="button"
               disabled={busy || previewBusy}
               onClick={() => toggle("exportOpen")}
-              className="h-11 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40"
+              className="h-11 rounded-[10px] border border-line bg-surface px-4 text-[13px] font-bold text-muted transition hover:bg-line-2 hover:text-ink disabled:opacity-40"
             >
               إلغاء
             </button>

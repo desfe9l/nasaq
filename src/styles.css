@@ -1234,6 +1234,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   user-select: none;
 }
 
+.editor-ui.editor-dark .report-page,
+.editor-ui.editor-dim .report-page,
+html.dark .report-page {
+  box-shadow:
+    0 28px 65px -12px rgba(0, 0, 0, 0.75),
+    0 12px 28px -10px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
 .page-frame-content {
   overflow: visible;
 }
@@ -2574,11 +2583,13 @@ body.is-resizing-rail {
   height: 42px;
   min-height: 42px;
   padding: 4px 8px; /* BUBBLE_PAD */
-  border-radius: 8px;
-  border: 1px solid var(--editor-border, #c9cacc);
-  background: var(--editor-panel, #fff);
-  color: var(--editor-text, #172033);
-  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
+  border-radius: 12px;
+  border: 1px solid var(--editor-border);
+  background: color-mix(in srgb, var(--editor-panel) 94%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: var(--editor-text);
+  box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.2);
   animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
   max-width: min(calc(100vw - 16px), 760px);
   white-space: nowrap;
@@ -2726,8 +2737,9 @@ body.is-resizing-rail {
 }
 
 .floating-toolbar-btn[aria-pressed="true"] {
-  background: var(--editor-accent, #3b82f6);
-  color: var(--editor-accent-text, #fff);
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .floating-toolbar-btn:disabled {

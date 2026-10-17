@@ -395,7 +395,7 @@ export function SiteHeader({ current }: { current: string }) {
      * gestures and toolbars never own it. Every route is a visible tab;
      * a narrow width scrolls the strip instead of hiding it behind a menu.
      */}
-    <header className="site-header sticky top-0 z-40 border-b border-line bg-page">
+    <header className="site-header sticky top-0 z-40 border-b border-line/80 bg-page/90 backdrop-blur-md transition-colors duration-200">
       <div className="site-header-bar mx-auto flex min-h-16 w-full max-w-7xl items-center gap-2 px-3 sm:px-4">
         <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />
