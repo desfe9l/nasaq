@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   Check,
+  Grid2x2,
   KeyRound,
   Loader2,
   Moon,
+  Printer,
+  ShieldCheck,
+  SlidersHorizontal,
   Sun,
   SunDim,
   UserRound,
@@ -39,14 +43,14 @@ import { documentBuildId } from "@/lib/app-update";
 
 type Tab = "account" | "editor";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "account", label: "الحساب" },
-  { id: "editor", label: "المحرر" },
+const TABS: { id: Tab; label: string; Icon: typeof SlidersHorizontal }[] = [
+  { id: "editor", label: "المحرر والمظهر", Icon: SlidersHorizontal },
+  { id: "account", label: "الحساب والترخيص", Icon: ShieldCheck },
 ];
 
 export function EditorSettingsDialog({
   onClose,
-  initialTab = "account",
+  initialTab = "editor",
 }: {
   onClose: () => void;
   initialTab?: Tab;
@@ -75,14 +79,14 @@ export function EditorSettingsDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-surface shadow-2xl">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3">
-          <div className="flex items-center gap-2">
+      <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+        <header className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
             <span className="editor-brand-mark"><BrandLogo compact markOnly /></span>
             <div>
-              <h2 className="text-[13px] font-extrabold">الإعدادات</h2>
-              <p className="text-[10px] text-muted">
-                الحساب ومزايا الترخيص · تفضيلات المحرر
+              <h2 className="text-[14px] font-black text-ink">إعدادات المحرر</h2>
+              <p className="text-[11px] font-medium text-muted">
+                المظهر ومساحة العمل · أدلة الطباعة · الحساب والترخيص
               </p>
             </div>
           </div>
@@ -90,7 +94,7 @@ export function EditorSettingsDialog({
             type="button"
             onClick={onClose}
             aria-label="إغلاق الإعدادات"
-            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2"
+            className="grid size-8 place-items-center rounded-xl border border-line/60 text-muted transition hover:bg-line-2 hover:text-ink"
           >
             <X className="size-4" />
           </button>
@@ -99,7 +103,7 @@ export function EditorSettingsDialog({
         <div
           role="tablist"
           aria-label="أقسام الإعدادات"
-          className="flex gap-1 border-b border-line px-3 py-2"
+          className="flex gap-1.5 border-b border-line bg-surface-2/40 px-4 py-2.5"
         >
           {TABS.map((item) => (
             <button
@@ -109,18 +113,19 @@ export function EditorSettingsDialog({
               aria-selected={tab === item.id}
               onClick={() => setTab(item.id)}
               className={cn(
-                "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
+                "flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-[12px] font-extrabold transition",
                 tab === item.id
-                  ? "bg-navy text-on-brand shadow-sm ring-1 ring-brand/30"
+                  ? "bg-navy text-on-brand shadow-sm"
                   : "text-muted hover:bg-line-2 hover:text-ink",
               )}
             >
-              {item.label}
+              <item.Icon className="size-3.5" strokeWidth={1.8} />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
 
-        <div className="editor-pane-scroll min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="editor-pane-scroll min-h-0 flex-1 overflow-y-auto p-5">
           {tab === "account" ? <AccountSection /> : <EditorSection />}
         </div>
       </div>
@@ -301,9 +306,9 @@ function PrefSwitch({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div className="flex items-center justify-between gap-4 py-2.5">
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-extrabold">{label}</p>
+        <p className="truncate text-[12px] font-extrabold text-ink">{label}</p>
         {hint && (
           <p className="mt-0.5 text-[10px] leading-4 text-muted">{hint}</p>
         )}
@@ -315,14 +320,14 @@ function PrefSwitch({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full border transition",
-          checked ? "border-brand bg-ok/80" : "border-line bg-line-2",
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150",
+          checked ? "border-brand bg-brand" : "border-line bg-line-2",
         )}
       >
         <span
           aria-hidden
           className={cn(
-            "absolute top-0.5 size-3.5 rounded-full bg-surface shadow transition-all",
+            "absolute top-0.5 size-3.5 rounded-full bg-surface shadow-xs transition-all duration-150",
             // RTL: "on" slides toward the start of the track.
             checked ? "start-0.5" : "start-[18px]",
           )}
@@ -352,12 +357,15 @@ function EditorSection() {
 
   return (
     <div className="grid gap-4">
-      <section className="rounded-[12px] border border-line p-4">
-        <h3 className="text-[11px] font-extrabold text-muted">المظهر</h3>
+      <section className="rounded-xl border border-line bg-surface p-4 shadow-xs">
+        <div className="flex items-center gap-2 border-b border-line/60 pb-2.5">
+          <Sun className="size-3.5 text-brand" strokeWidth={1.8} />
+          <h3 className="text-[12px] font-extrabold text-ink">مظهر الواجهة</h3>
+        </div>
         <div
           role="radiogroup"
           aria-label="سمة المحرر"
-          className="mt-2 flex gap-1 rounded-[10px] border border-line p-1"
+          className="mt-3 flex gap-1.5 rounded-xl border border-line bg-surface-2/40 p-1"
         >
           {(
             [
@@ -373,10 +381,10 @@ function EditorSection() {
               aria-checked={appearance === value}
               onClick={() => setAppearance(value)}
               className={cn(
-                "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
+                "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12px] font-extrabold transition",
                 appearance === value
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2",
+                  ? "bg-navy text-on-brand shadow-xs"
+                  : "text-muted hover:bg-line-2 hover:text-ink",
               )}
             >
               <Icon className="size-3.5" aria-hidden />
@@ -384,14 +392,17 @@ function EditorSection() {
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[10px] leading-5 text-muted">
+        <p className="mt-2 text-[10.5px] leading-5 text-muted">
           مظهر الواجهة فقط؛ لا يغيّر خلفية الصفحة أو ألوان التصميم.
         </p>
       </section>
 
-      <section className="rounded-[12px] border border-line p-4">
-        <h3 className="text-[11px] font-extrabold text-muted">مساحة العمل</h3>
-        <div className="mt-1 divide-y divide-line">
+      <section className="rounded-xl border border-line bg-surface p-4 shadow-xs">
+        <div className="flex items-center gap-2 border-b border-line/60 pb-2.5">
+          <Grid2x2 className="size-3.5 text-brand" strokeWidth={1.8} />
+          <h3 className="text-[12px] font-extrabold text-ink">مساحة العمل والمحاذاة الذكية</h3>
+        </div>
+        <div className="mt-1 divide-y divide-line/60">
           <PrefSwitch
             label="الشبكة"
             hint="إظهار شبكة المحاذاة على الصفحة"
@@ -432,10 +443,10 @@ function EditorSection() {
             onChange={() => toggleBubble()}
           />
         </div>
-        <div className="mt-3 border-t border-line pt-3">
+        <div className="mt-3 border-t border-line/60 pt-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <span className="block text-[12px] font-bold">
+              <span className="block text-[12px] font-bold text-ink">
                 تخطيط شبكة اللوحات (أعمدة)
               </span>
               <span className="block text-[10px] text-muted">
@@ -449,10 +460,10 @@ function EditorSection() {
                   type="button"
                   onClick={() => setArtboardGridCols(c)}
                   className={cn(
-                    "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
+                    "grid size-7 place-items-center rounded-md text-[11px] font-extrabold transition",
                     artboardGridCols === c
-                      ? "bg-navy text-white shadow-xs"
-                      : "border border-line/60 hover:bg-line-2",
+                      ? "bg-navy text-on-brand shadow-xs"
+                      : "border border-line/70 hover:bg-line-2",
                   )}
                 >
                   {c}
@@ -463,9 +474,12 @@ function EditorSection() {
         </div>
       </section>
 
-      <section className="rounded-[12px] border border-line p-4">
-        <h3 className="text-[11px] font-extrabold text-muted">أدلة الطباعة</h3>
-        <div className="mt-1 divide-y divide-line">
+      <section className="rounded-xl border border-line bg-surface p-4 shadow-xs">
+        <div className="flex items-center gap-2 border-b border-line/60 pb-2.5">
+          <Printer className="size-3.5 text-brand" strokeWidth={1.8} />
+          <h3 className="text-[12px] font-extrabold text-ink">أدلة وهوامش الطباعة</h3>
+        </div>
+        <div className="mt-1 divide-y divide-line/60">
           <PrefSwitch
             label="منطقة النص الآمنة"
             checked={printGuides.safe}

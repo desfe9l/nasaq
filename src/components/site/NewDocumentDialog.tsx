@@ -14,6 +14,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
+  Building2,
   FileText,
   LayoutTemplate,
   Loader2,
@@ -21,6 +22,7 @@ import {
   Plus,
   RectangleHorizontal,
   RectangleVertical,
+  Sparkles,
 } from "lucide-react";
 import { THEMES, pageSize, type ThemeId } from "@/lib/editor/model";
 import { PACKS } from "@/lib/editor/templates";
@@ -113,10 +115,10 @@ function Choice({
       aria-pressed={active}
       aria-label={label}
       className={cn(
-        "rounded-lg border text-right transition-all duration-150",
+        "rounded-xl border text-right transition-all duration-150",
         active
-          ? "border-brand bg-navy/[0.06] ring-2 ring-navy/20"
-          : "border-line bg-surface hover:border-brand hover:bg-paper/60",
+          ? "border-brand bg-navy/[0.08] ring-2 ring-brand/30 shadow-sm"
+          : "border-line bg-surface hover:border-brand/50 hover:bg-surface-2",
         className,
       )}
     >
@@ -181,7 +183,7 @@ function CustomSizeField({
   );
 }
 
-/** A tiny sheet drawn at the page's own proportions. */
+/** A refined sheet drawn at the page's own proportions. */
 function SheetGlyph({
   w,
   h,
@@ -191,18 +193,20 @@ function SheetGlyph({
   h: number;
   active?: boolean;
 }) {
-  const box = 26;
+  const box = 32;
   const scale = box / Math.max(w, h);
+  const widthPx = Math.max(12, Math.round(w * scale));
+  const heightPx = Math.max(12, Math.round(h * scale));
   return (
-    <span className="grid size-8 place-items-center" aria-hidden>
+    <span className="grid size-9 place-items-center" aria-hidden>
       <span
         className={cn(
-          "block rounded-[2px] border-[1.5px]",
+          "block rounded-[3px] border shadow-xs transition-colors",
           active
-            ? "border-brand bg-navy/10"
-            : "border-muted/60",
+            ? "border-brand bg-brand/15 shadow-sm"
+            : "border-muted/50 bg-surface-2/60",
         )}
-        style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
+        style={{ width: widthPx, height: heightPx }}
       />
     </span>
   );
@@ -333,7 +337,7 @@ export function NewDocumentForm({
         />
       )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_320px] items-start">
           {/* ── configuration ─────────────────────────────────────────── */}
           <div className="grid min-w-0 content-start gap-4">
             <Section title="نقطة البداية">
@@ -446,115 +450,67 @@ export function NewDocumentForm({
                   </div>
                 </Section>
 
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <Section
-                    title="مقاس الصفحة"
-                    hint="المقاسات المتعارف عليها + مقاس مخصص"
-                  >
-                    {/* One unit switcher for the whole dialog — stored per author. */}
+                <div className="grid gap-3 rounded-xl border border-line bg-surface-2/30 p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[12px] font-extrabold text-ink">
+                        مقاس الصفحة والاتجاه
+                      </h3>
+                      <span className="text-[10px] font-bold text-muted">
+                        قياسات دقيقة بالملمتر
+                      </span>
+                    </div>
+
+                    {/* Unit Switcher */}
                     <div
-                      className="flex flex-wrap items-center gap-1.5"
+                      className="flex items-center gap-1"
                       role="group"
                       aria-label="وحدة القياس"
                     >
-                      <span className="me-1 text-[11px] font-bold text-muted">
-                        وحدة القياس
+                      <span className="me-1 text-[10px] font-bold text-muted">
+                        الوحدة:
                       </span>
                       {LENGTH_UNITS.map((id) => (
-                        <Choice
+                        <button
                           key={id}
-                          active={unit === id}
+                          type="button"
                           onClick={() => setUnit(id)}
-                          label={LENGTH_UNIT_LABELS[id]}
-                          className="px-2.5 py-1.5"
+                          aria-label={LENGTH_UNIT_LABELS[id]}
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-[10px] font-extrabold transition",
+                            unit === id
+                              ? "bg-navy text-on-brand shadow-xs"
+                              : "border border-line/70 bg-surface text-muted hover:text-ink hover:bg-surface-2",
+                          )}
                         >
-                          <span
-                            className="block text-[11px] font-extrabold text-ink"
-                            dir="ltr"
-                          >
-                            {id}
-                          </span>
-                        </Choice>
+                          <span dir="ltr">{id}</span>
+                        </button>
                       ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {PAGE_SIZES.map((size) => {
-                        const active = config.size === size.id;
-                        const landscape = config.orientation === "landscape";
-                        const long = Math.max(size.w, size.h);
-                        const short = Math.min(size.w, size.h);
-                        return (
-                          <Choice
-                            key={size.id}
-                            active={active}
-                            onClick={() => {
-                              // A slide is wide and a story is tall by nature;
-                              // leaving one restores upright paper.
-                              const orientation: Orientation =
-                                PRESET_ORIENTATION[size.id as PageSizeId] ??
-                                (PRESET_ORIENTATION[config.size]
-                                  ? "portrait"
-                                  : config.orientation);
-                              // Entering «مخصص»: start from the sheet the author
-                              // was looking at, laid out in the current orientation,
-                              // so the fields never contradict the preview.
-                              const base =
-                                size.id === "custom"
-                                  ? pageDimensions(
-                                      config.size === "custom" ? "custom" : config.size,
-                                      orientation,
-                                      config.custom,
-                                    )
-                                  : config.custom;
-                              set({
-                                size: size.id as PageSizeId,
-                                orientation,
-                                custom: base,
-                              });
-                            }}
-                            className="flex flex-col items-center gap-1 px-2 py-2.5 text-center"
-                          >
-                            <SheetGlyph
-                              w={landscape ? long : short}
-                              h={landscape ? short : long}
-                              active={active}
-                            />
-                            <span className="text-[12px] font-extrabold text-ink">
-                              {size.name}
-                            </span>
-                            <span
-                              className="text-[10px] font-bold text-muted"
-                              dir="ltr"
-                            >
-                              {size.id === "custom"
-                                ? unit
-                                : describeSize(size.w, size.h, unit)}
-                            </span>
-                          </Choice>
-                        );
-                      })}
-                    </div>
-                  </Section>
+                  </div>
 
-                  <Section title="الاتجاه">
-                    <div className="grid grid-cols-2 gap-2 sm:w-[168px]">
+                  {/* Orientation row - sleek segmented toggle */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-bold text-muted">
+                      اتجاه الورقة:
+                    </span>
+                    <div className="flex rounded-lg border border-line bg-surface p-0.5">
                       {(
                         [
                           ["portrait", "رأسي", RectangleVertical],
                           ["landscape", "أفقي", RectangleHorizontal],
                         ] as [Orientation, string, typeof RectangleVertical][]
                       ).map(([id, label, Icon]) => (
-                        <Choice
+                        <button
                           key={id}
-                          active={config.orientation === id}
+                          type="button"
+                          disabled={orientationDisabled}
                           onClick={() => {
                             if (orientationDisabled) return;
                             if (config.size !== "custom") {
                               set({ orientation: id });
                               return;
                             }
-                            // Custom sheet: the orientation IS the numbers, so
-                            // flipping it swaps width and height in the fields.
                             const long = Math.max(config.custom.w, config.custom.h);
                             const short = Math.min(config.custom.w, config.custom.h);
                             set({
@@ -566,54 +522,108 @@ export function NewDocumentForm({
                             });
                           }}
                           className={cn(
-                            "flex flex-col items-center gap-1 px-2 py-2.5 text-center",
-                            orientationDisabled &&
-                              "cursor-not-allowed opacity-50",
+                            "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-extrabold transition",
+                            config.orientation === id
+                              ? "bg-navy text-on-brand shadow-xs"
+                              : "text-muted hover:text-ink hover:bg-line-2/50",
+                            orientationDisabled && "cursor-not-allowed opacity-40",
                           )}
                         >
-                          <Icon className="size-6 text-muted" aria-hidden />
-                          <span className="text-[12px] font-extrabold text-ink">
-                            {label}
-                          </span>
-                        </Choice>
+                          <Icon className="size-3.5" strokeWidth={1.8} />
+                          <span>{label}</span>
+                        </button>
                       ))}
                     </div>
-                  </Section>
-                </div>
+                  </div>
 
-                {config.size === "custom" && (
-                  <div className="grid gap-1.5">
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {(["w", "h"] as const).map((axis) => (
-                        <CustomSizeField
-                          key={`${axis}-${unit}`}
-                          axis={axis}
-                          unit={unit}
-                          valueMm={config.custom[axis]}
-                          onCommit={(mm) => {
-                            const custom = { ...config.custom, [axis]: mm };
-                            // The numbers decide the orientation — never the
-                            // other way round — so a typed 300 × 200 stays wide.
+                  {/* Page Sizes Grid */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {PAGE_SIZES.map((size) => {
+                      const active = config.size === size.id;
+                      const landscape = config.orientation === "landscape";
+                      const long = Math.max(size.w, size.h);
+                      const short = Math.min(size.w, size.h);
+                      return (
+                        <Choice
+                          key={size.id}
+                          active={active}
+                          onClick={() => {
+                            const orientation: Orientation =
+                              PRESET_ORIENTATION[size.id as PageSizeId] ??
+                              (PRESET_ORIENTATION[config.size]
+                                ? "portrait"
+                                : config.orientation);
+                            const base =
+                              size.id === "custom"
+                                ? pageDimensions(
+                                    config.size === "custom" ? "custom" : config.size,
+                                    orientation,
+                                    config.custom,
+                                  )
+                                : config.custom;
                             set({
-                              custom,
-                              orientation:
-                                custom.w > custom.h
-                                  ? "landscape"
-                                  : custom.w < custom.h
-                                    ? "portrait"
-                                    : config.orientation,
+                              size: size.id as PageSizeId,
+                              orientation,
+                              custom: base,
                             });
                           }}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-[10px] font-bold text-muted" dir="auto">
-                      من {roundUnit(fromMm(MIN_CUSTOM_MM, unit), unit)} إلى{" "}
-                      {roundUnit(fromMm(MAX_CUSTOM_MM, unit), unit)} {unit} —
-                      اكتب الرقم ثم اضغط Enter أو انتقل للحقل التالي
-                    </p>
+                          className="flex flex-col items-center gap-1.5 p-2.5 text-center"
+                        >
+                          <SheetGlyph
+                            w={landscape ? long : short}
+                            h={landscape ? short : long}
+                            active={active}
+                          />
+                          <div className="min-w-0">
+                            <span className="block text-[12px] font-extrabold text-ink">
+                              {size.name}
+                            </span>
+                            <span
+                              className="block text-[10px] font-bold text-muted tabular-nums"
+                              dir="ltr"
+                            >
+                              {size.id === "custom"
+                                ? unit
+                                : describeSize(size.w, size.h, unit)}
+                            </span>
+                          </div>
+                        </Choice>
+                      );
+                    })}
                   </div>
-                )}
+
+                  {config.size === "custom" && (
+                    <div className="grid gap-1.5 border-t border-line/60 pt-2.5">
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {(["w", "h"] as const).map((axis) => (
+                          <CustomSizeField
+                            key={`${axis}-${unit}`}
+                            axis={axis}
+                            unit={unit}
+                            valueMm={config.custom[axis]}
+                            onCommit={(mm) => {
+                              const custom = { ...config.custom, [axis]: mm };
+                              set({
+                                custom,
+                                orientation:
+                                  custom.w > custom.h
+                                    ? "landscape"
+                                    : custom.w < custom.h
+                                      ? "portrait"
+                                      : config.orientation,
+                              });
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-[10px] font-bold text-muted" dir="auto">
+                        من {roundUnit(fromMm(MIN_CUSTOM_MM, unit), unit)} إلى{" "}
+                        {roundUnit(fromMm(MAX_CUSTOM_MM, unit), unit)} {unit} —
+                        اكتب الرقم ثم اضغط Enter أو انتقل للحقل التالي
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <Section
                   title="محتوى الصفحة الفارغة"
@@ -759,11 +769,11 @@ export function NewDocumentForm({
                       aria-hidden
                     >
                       <span
-                        className="size-3.5 rounded-full ring-2 ring-white"
+                        className="size-3.5 rounded-full ring-2 ring-surface shadow-xs"
                         style={{ background: THEMES[id].primary }}
                       />
                       <span
-                        className="size-3.5 rounded-full ring-2 ring-white"
+                        className="size-3.5 rounded-full ring-2 ring-surface shadow-xs"
                         style={{ background: THEMES[id].accent }}
                       />
                     </span>
@@ -805,65 +815,71 @@ export function NewDocumentForm({
 
           {/* ── live preview ──────────────────────────────────────────── */}
           <aside className="order-first lg:order-none">
-            <div className="grid gap-3 rounded-2xl border border-line bg-paper/60 p-4 lg:sticky lg:top-0">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-extrabold tracking-wide text-muted">
-                  معاينة الصفحة الأولى
+            <div className="grid gap-3.5 rounded-2xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-0">
+              <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wide text-ink">
+                  <Sparkles className="size-3.5 text-brand" />
+                  معاينة المستند
                 </span>
-                <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-extrabold text-muted">
+                <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-brand">
                   {pagesText(preview.pages.length)}
                 </span>
               </div>
-              {/* Compact beside the summary on tablets; full height beside the form on desktop. */}
-              <div className="grid gap-3 [--pv-h:170px] sm:grid-cols-[minmax(0,240px)_minmax(0,1fr)] sm:items-center lg:grid-cols-1 lg:[--pv-h:300px]">
-                <div className="grid place-items-center rounded-xl bg-surface-2 p-3">
-                  <div
-                    className="mx-auto w-full"
-                    style={{
-                      width: `min(100%, calc(var(--pv-h) * ${(previewSize.w / previewSize.h).toFixed(4)}))`,
-                    }}
-                  >
-                    <TemplatePreview
-                      page={previewPage}
-                      className="rounded-[3px] border border-line shadow-lg"
-                    />
-                  </div>
+
+              {/* Elevated realistic paper stage */}
+              <div className="grid place-items-center rounded-xl border border-line/60 bg-surface-2/60 p-4">
+                <div
+                  className="mx-auto"
+                  style={{
+                    width: `min(100%, calc(220px * ${(previewSize.w / previewSize.h).toFixed(4)}))`,
+                    maxHeight: "260px",
+                  }}
+                >
+                  <TemplatePreview
+                    page={previewPage}
+                    className="rounded-[3px] border border-line/80 shadow-md ring-1 ring-black/5"
+                  />
                 </div>
-                <dl className="grid gap-1.5 text-[12px]">
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">البداية</dt>
-                    <dd className="font-bold text-ink">
-                      {isTemplate
-                        ? PACKS.find((p) => p.id === config.pack)?.title
-                        : `مستند فارغ · ${docKind(config.kind).title}`}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">المقاس</dt>
-                    <dd className="font-bold text-ink">
-                      {describeConfig({
-                        ...config,
-                        pages: clampPages(config.pages, maxPages),
-                      })}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">الأبعاد</dt>
-                    <dd
-                      className="font-bold tabular-nums text-ink"
-                      dir="ltr"
-                    >
-                      {describeSize(previewSize.w, previewSize.h, unit)}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted">السمة</dt>
-                    <dd className="font-bold text-ink">
-                      {THEMES[preview.theme]?.name}
-                    </dd>
-                  </div>
-                </dl>
               </div>
+
+              <dl className="grid gap-1.5 rounded-xl border border-line/70 bg-surface-2/40 p-3 text-[11px]">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-bold text-muted">البداية</dt>
+                  <dd className="font-extrabold text-ink">
+                    {isTemplate
+                      ? PACKS.find((p) => p.id === config.pack)?.title
+                      : `مستند فارغ · ${docKind(config.kind).title}`}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-line/40 pt-1.5">
+                  <dt className="font-bold text-muted">المقاس</dt>
+                  <dd className="font-extrabold text-ink">
+                    {describeConfig({
+                      ...config,
+                      pages: clampPages(config.pages, maxPages),
+                    })}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-line/40 pt-1.5">
+                  <dt className="font-bold text-muted">الأبعاد</dt>
+                  <dd
+                    className="font-bold tabular-nums text-ink"
+                    dir="ltr"
+                  >
+                    {describeSize(previewSize.w, previewSize.h, unit)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-line/40 pt-1.5">
+                  <dt className="font-bold text-muted">السمة</dt>
+                  <dd className="flex items-center gap-1.5 font-extrabold text-ink">
+                    <span
+                      className="size-2.5 rounded-full ring-1 ring-line shadow-xs"
+                      style={{ background: THEMES[preview.theme]?.primary }}
+                    />
+                    {THEMES[preview.theme]?.name}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </aside>
         </div>
@@ -926,7 +942,7 @@ export function NewDocumentForm({
     <Modal
       label="إنشاء مستند جديد"
       onClose={busy ? () => undefined : () => onClose?.()}
-      className="max-w-5xl"
+      className="max-w-4xl"
     >
       {body}
     </Modal>

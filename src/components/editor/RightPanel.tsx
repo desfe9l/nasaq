@@ -498,39 +498,36 @@ export function PropertiesPanel({
                * touch. `auto-fit` is what lets the four fields reflow to two or
                * one column as the panel narrows instead of overlapping.
                */}
-              <div className="property-grid">
-                {(["x", "y", "w", "h"] as const).map((k) => {
-                  /*
-                   * The resize lock protects width/height everywhere they can
-                   * be typed, not only on the canvas handles: position (x/y)
-                   * stays free, and so do rotate, flip and every other field.
-                   */
-                  const sizeLocked =
-                    Boolean(el.resizeLocked) ||
-                    (k === "w" && Boolean(el.widthLocked)) ||
-                    (k === "h" && Boolean(el.heightLocked));
-                  return (
-                    <ScrubField
-                      key={k}
-                      label={LABELS[k]}
-                      value={round(el[k])}
-                      min={k === "w" || k === "h" ? 1 : -500}
-                      step={0.5}
-                      suffix="مم"
-                      disabled={sizeLocked}
-                      onChange={(v) => updateElement(el.id, { [k]: v }, true)}
-                      onCommit={(v) => updateElement(el.id, { [k]: v })}
-                    />
-                  );
-                })}
-                {/*
-                 * Step 7 — quarter-turn helpers next to the free-form angle: the
-                 * scrubbable field is right for exactness, these two are right
-                 * for the 90% case (straighten, then mirror).
-                 */}
-                <div className="property-grid-span flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-muted">
-                    الاتجاه
+              {/*
+               * Scrubbable geometry: 2x2 CAD grid for exactness and tight alignment.
+               */}
+              <div className="grid gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  {(["x", "y", "w", "h"] as const).map((k) => {
+                    const sizeLocked =
+                      Boolean(el.resizeLocked) ||
+                      (k === "w" && Boolean(el.widthLocked)) ||
+                      (k === "h" && Boolean(el.heightLocked));
+                    return (
+                      <ScrubField
+                        key={k}
+                        label={LABELS[k]}
+                        value={round(el[k])}
+                        min={k === "w" || k === "h" ? 1 : -500}
+                        step={0.5}
+                        suffix="مم"
+                        disabled={sizeLocked}
+                        onChange={(v) => updateElement(el.id, { [k]: v }, true)}
+                        onCommit={(v) => updateElement(el.id, { [k]: v })}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Quarter-turn & Flip tools in a sleek capsule */}
+                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-line bg-surface-2/40 p-1.5">
+                  <span className="px-1 text-[10px] font-extrabold text-muted">
+                    الاتجاه:
                   </span>
                   <button
                     type="button"
@@ -542,8 +539,8 @@ export function PropertiesPanel({
                       })
                     }
                   >
-                    <RotateCcw className="size-3.5" />
-                    90°
+                    <RotateCcw className="size-3" />
+                    <span>90°</span>
                   </button>
                   <button
                     type="button"
@@ -555,8 +552,8 @@ export function PropertiesPanel({
                       })
                     }
                   >
-                    <RotateCw className="size-3.5" />
-                    90°
+                    <RotateCw className="size-3" />
+                    <span>90°</span>
                   </button>
                   <button
                     type="button"
@@ -568,8 +565,8 @@ export function PropertiesPanel({
                     title="قلب أفقي"
                     onClick={() => flipSelected("x")}
                   >
-                    <FlipHorizontal2 className="size-3.5" />
-                    قلب أفقي
+                    <FlipHorizontal2 className="size-3" />
+                    <span>أفقي</span>
                   </button>
                   <button
                     type="button"
@@ -581,58 +578,63 @@ export function PropertiesPanel({
                     title="قلب رأسي"
                     onClick={() => flipSelected("y")}
                   >
-                    <FlipVertical2 className="size-3.5" />
-                    قلب رأسي
+                    <FlipVertical2 className="size-3" />
+                    <span>رأسي</span>
                   </button>
                 </div>
-                <ScrubField
-                  label="زاوية الدوران"
-                  value={round(el.rotation)}
-                  min={-360}
-                  max={360}
-                  step={1}
-                  precision={1}
-                  suffix="°"
-                  onChange={(v) => updateElement(el.id, { rotation: v }, true)}
-                  onCommit={(v) => updateElement(el.id, { rotation: v })}
-                />
-                <ScrubField
-                  label="الشفافية"
-                  value={round((el.opacity ?? 1) * 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  precision={0}
-                  suffix="%"
-                  onChange={(v) =>
-                    updateElement(el.id, { opacity: v / 100 }, true)
-                  }
-                  onCommit={(v) => updateElement(el.id, { opacity: v / 100 })}
-                />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <ScrubField
+                    label="زاوية الدوران"
+                    value={round(el.rotation)}
+                    min={-360}
+                    max={360}
+                    step={1}
+                    precision={1}
+                    suffix="°"
+                    onChange={(v) => updateElement(el.id, { rotation: v }, true)}
+                    onCommit={(v) => updateElement(el.id, { rotation: v })}
+                  />
+                  <ScrubField
+                    label="الشفافية"
+                    value={round((el.opacity ?? 1) * 100)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    precision={0}
+                    suffix="%"
+                    onChange={(v) =>
+                      updateElement(el.id, { opacity: v / 100 }, true)
+                    }
+                    onCommit={(v) => updateElement(el.id, { opacity: v / 100 })}
+                  />
+                </div>
               </div>
 
-              <div>
+              <div className="mt-2.5 border-t border-line/60 pt-2.5">
                 <p className="mb-1.5 text-[11px] font-extrabold text-muted">
                   محاذاة داخل الصفحة
                 </p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {(
                     [
-                      ["right", "يمين"],
-                      ["center", "وسط"],
-                      ["left", "يسار"],
-                      ["top", "أعلى"],
-                      ["middle", "منتصف"],
-                      ["bottom", "أسفل"],
+                      ["right", "يمين", AlignRight],
+                      ["center", "وسط", AlignCenter],
+                      ["left", "يسار", AlignLeft],
+                      ["top", "أعلى", ArrowUp],
+                      ["middle", "منتصف", AlignJustify],
+                      ["bottom", "أسفل", ArrowDown],
                     ] as const
-                  ).map(([k, l]) => (
+                  ).map(([k, l, Icon]) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => alignPage(k)}
-                      className="h-8 rounded-[8px] border border-line text-[11px] font-bold"
+                      title={`محاذاة ${l}`}
+                      className="editor-mini-btn h-8 justify-center gap-1 text-[11px]"
                     >
-                      {l}
+                      <Icon className="size-3 text-muted" />
+                      <span>{l}</span>
                     </button>
                   ))}
                 </div>

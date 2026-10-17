@@ -6367,10 +6367,10 @@ button.license-badge-locked:focus-visible {
   justify-content: center;
   gap: 6px;
   min-width: 44px;
-  min-height: 40px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
   color: var(--color-muted);
   font-size: 12px;
@@ -6379,7 +6379,7 @@ button.license-badge-locked:focus-visible {
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
-  transition: var(--motion-surface);
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   transform-origin: center bottom;
 }
 
@@ -6391,12 +6391,14 @@ button.license-badge-locked:focus-visible {
 
 .product-nav-tab:hover {
   background: var(--color-line-2);
+  border-color: var(--color-line);
   color: var(--color-ink);
   transform: translateY(calc(-0.125rem * (var(--motion-elevate) != "none")));
 }
 
 .product-nav-tab.is-active {
   background: var(--color-navy);
+  border-color: var(--color-navy);
   color: var(--color-on-brand);
   box-shadow: var(--shadow-card);
   transform: translateY(calc(-0.125rem * (var(--motion-elevate) != "none")));

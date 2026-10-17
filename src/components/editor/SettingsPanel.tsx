@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
-import { Ruler } from "lucide-react";
+import {
+  Check,
+  Grid2x2,
+  HardDrive,
+  Layers,
+  Magnet,
+  Moon,
+  Ruler,
+  Sliders,
+  SlidersHorizontal,
+  Sun,
+  SunDim,
+  Type,
+} from "lucide-react";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { SIZE_PRESETS, sizeIdOf } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -41,6 +54,8 @@ export function SettingsPanel() {
   const showGrid = useEditor((s) => s.showGrid);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
+  const appearance = useEditor((s) => s.appearance);
+  const setAppearance = useEditor((s) => s.setAppearance);
   const storage = useEditor((s) => s.storage);
   const [customSize, setCustomSize] = useState(readCustomSize);
 
@@ -60,117 +75,184 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="editor-pane-scroll editor-panel-body p-3">
+    <div className="editor-pane-scroll editor-panel-body p-3.5">
       <div className="grid gap-4">
-        <section>
-          <h2 className="mb-2 inline-flex items-center gap-1.5 text-[13px] font-extrabold">
-            <Ruler className="size-4" /> مقاس الصفحة
-          </h2>
-          <div className="grid gap-1.5">
-            {SIZE_PRESETS.filter((size) => size.id !== "custom").map((size) => (
-              <button
-                key={size.id}
-                type="button"
-                onClick={() => activePageId && setPageSize(activePageId, size.id)}
-                className={cn(
-                  "rounded-[8px] border px-2.5 py-2 text-right",
-                  activeSizeId === size.id
-                    ? "border-navy-2 bg-navy-2/5"
-                    : "border-line ",
-                )}
-              >
-                <strong className="block text-[12px]">{size.name}</strong>
-                <span className="text-[11px] text-muted">{size.desc}</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <ScrubField
-              label="العرض مم"
-              value={customSize.w}
-              min={20}
-              max={2000}
-              step={1}
-              precision={0}
-              suffix="مم"
-              onChange={(w) => setCustomSize((value) => ({ ...value, w }))}
-            />
-            <ScrubField
-              label="الارتفاع مم"
-              value={customSize.h}
-              min={20}
-              max={2000}
-              step={1}
-              precision={0}
-              suffix="مم"
-              onChange={(h) => setCustomSize((value) => ({ ...value, h }))}
-            />
-          </div>
-          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+        {/* Appearance Quick Selector */}
+        <section className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between border-b border-line/60 pb-2">
+            <h2 className="flex items-center gap-1.5 text-[12px] font-extrabold text-ink">
+              <Sun className="size-3.5 text-brand" strokeWidth={1.8} />
+              مظهر المحرر
+            </h2>
             <button
               type="button"
-              onClick={() => applyCustomSize("page")}
-              className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
-            >
-              تطبيق على الصفحة
-            </button>
-            <button
-              type="button"
-              onClick={() => applyCustomSize("all")}
-              className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
-            >
-              تطبيق على الكل
-            </button>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-2 text-[13px] font-extrabold">الدقة والمحاذاة</h2>
-          <div className="grid gap-1.5">
-            <button
-              type="button"
-              className="h-11 rounded-lg border border-line text-[12px] font-bold"
               onClick={() =>
                 window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))
               }
+              className="text-[10.5px] font-bold text-brand hover:underline"
             >
-              مظهر المحرر — فاتح / داكن
+              خيارات متقدمة
             </button>
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="سمة المحرر"
+            className="mt-2.5 flex gap-1 rounded-xl border border-line bg-surface-2/40 p-1"
+          >
+            {(
+              [
+                { value: "light" as const, label: "فاتح", Icon: Sun },
+                { value: "dim" as const, label: "خافت", Icon: SunDim },
+                { value: "dark" as const, label: "داكن", Icon: Moon },
+              ] as const
+            ).map(({ value, label, Icon }) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={appearance === value}
+                onClick={() => setAppearance(value)}
+                className={cn(
+                  "inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[11px] font-extrabold transition",
+                  appearance === value
+                    ? "bg-navy text-on-brand shadow-xs"
+                    : "text-muted hover:bg-line-2 hover:text-ink",
+                )}
+              >
+                <Icon className="size-3" aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Page Size & Geometry */}
+        <section className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <h2 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-extrabold text-ink">
+            <Ruler className="size-3.5 text-brand" strokeWidth={1.8} /> مقاس الصفحة
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            {SIZE_PRESETS.filter((size) => size.id !== "custom").map((size) => {
+              const active = activeSizeId === size.id;
+              return (
+                <button
+                  key={size.id}
+                  type="button"
+                  onClick={() => activePageId && setPageSize(activePageId, size.id)}
+                  className={cn(
+                    "flex flex-col rounded-xl border p-2.5 text-right transition-all duration-150",
+                    active
+                      ? "border-brand bg-navy/[0.07] ring-1 ring-brand/30 shadow-xs"
+                      : "border-line bg-surface-2/30 hover:border-brand/40 hover:bg-surface-2",
+                  )}
+                >
+                  <strong className="block text-[11.5px] font-extrabold text-ink">{size.name}</strong>
+                  <span className="mt-0.5 block text-[10px] font-semibold text-muted">{size.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Size Fields */}
+          <div className="mt-3 rounded-xl border border-line/70 bg-surface-2/30 p-2.5">
+            <span className="mb-2 block text-[10.5px] font-bold text-muted">
+              أبعاد مخصصة (20 – 2000 مم):
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <ScrubField
+                label="العرض"
+                value={customSize.w}
+                min={20}
+                max={2000}
+                step={1}
+                precision={0}
+                suffix="مم"
+                onChange={(w) => setCustomSize((value) => ({ ...value, w }))}
+              />
+              <ScrubField
+                label="الارتفاع"
+                value={customSize.h}
+                min={20}
+                max={2000}
+                step={1}
+                precision={0}
+                suffix="مم"
+                onChange={(h) => setCustomSize((value) => ({ ...value, h }))}
+              />
+            </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => applyCustomSize("page")}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-[11px] font-bold text-ink transition hover:bg-line-2"
+              >
+                <Check className="size-3 text-brand" />
+                للصفحة الحالية
+              </button>
+              <button
+                type="button"
+                onClick={() => applyCustomSize("all")}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-[11px] font-bold text-ink transition hover:bg-line-2"
+              >
+                <Layers className="size-3 text-brand" />
+                لكل الصفحات
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Snapping & Alignment */}
+        <section className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <h2 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-extrabold text-ink">
+            <SlidersHorizontal className="size-3.5 text-brand" strokeWidth={1.8} />
+            الدقة والمحاذاة الذكية
+          </h2>
+          <div className="grid gap-2">
             <ToggleRow
-              label="إظهار الشبكة"
+              label="إظهار شبكة التصميم"
+              icon={Grid2x2}
               value={showGrid}
               onChange={() => toggle("showGrid")}
             />
             <ToggleRow
-              label="التقاط للشبكة"
+              label="جذب العناصر للشبكة (Snap)"
+              icon={Magnet}
               value={snapGrid}
               onChange={() => toggle("snapGrid")}
             />
             <ToggleRow
-              label="محاذاة العناصر"
+              label="محاذاة العناصر المجاورة"
+              icon={Sliders}
               value={snapElements}
               onChange={() => toggle("snapElements")}
             />
           </div>
         </section>
 
-        <section>
-          <h2 className="mb-2 text-[13px] font-extrabold">مكتبة الخطوط</h2>
-          <p className="text-[11px] leading-5 text-muted">
-            ثمانية خطوط عربية مضمّنة (Tajawal، Cairo، IBM Plex Sans Arabic، Noto
-            Sans/Naskh/Kufi، Amiri، Reem Kufi)، مع إمكانية رفع خط مخصص بصيغة
-            TTF/OTF/WOFF.
-          </p>
-        </section>
+        {/* Font Library & Storage Info */}
+        <div className="grid gap-3">
+          <section className="rounded-xl border border-line bg-surface p-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Type className="size-3.5 text-brand" strokeWidth={1.8} />
+              <h2 className="text-[11.5px] font-extrabold text-ink">مكتبة الخطوط</h2>
+            </div>
+            <p className="mt-1.5 text-[10.5px] leading-5 text-muted">
+              ثمانية خطوط عربية مؤسسية مدمجة (Tajawal, Cairo, IBM Plex Sans, Amiri, Noto)، مع دعم كامل لرفع خطوط TTF/OTF.
+            </p>
+          </section>
 
-        <section>
-          <h2 className="mb-2 text-[13px] font-extrabold">التخزين</h2>
-          <p className="text-[11px] leading-5 text-muted">
-            {storage.mode === "indexeddb"
-              ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك؛ قد تتطلب خدمات الترخيص أو الذكاء الاصطناعي اتصالاً."
-              : "IndexedDB غير متاح في هذا المتصفح؛ يتم الحفظ في LocalStorage بمساحة محدودة."}
-          </p>
-        </section>
+          <section className="rounded-xl border border-line bg-surface p-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <HardDrive className="size-3.5 text-brand" strokeWidth={1.8} />
+              <h2 className="text-[11.5px] font-extrabold text-ink">التخزين المحلي</h2>
+            </div>
+            <p className="mt-1.5 text-[10.5px] leading-5 text-muted">
+              {storage.mode === "indexeddb"
+                ? "المشاريع والصفحات محفوظة محلياً في متصفحك بتقنية IndexedDB لسرعة فائقة وخصوصية تامة."
+                : "الحفظ يتم في الذاكرة المحلية (LocalStorage)."}
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -178,10 +260,12 @@ export function SettingsPanel() {
 
 function ToggleRow({
   label,
+  icon: Icon,
   value,
   onChange,
 }: {
   label: string;
+  icon?: typeof Grid2x2;
   value: boolean;
   onChange: () => void;
 }) {
@@ -190,19 +274,28 @@ function ToggleRow({
       type="button"
       onClick={onChange}
       aria-pressed={value}
-      className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[12px] font-bold "
+      className={cn(
+        "flex items-center justify-between rounded-xl border p-2.5 text-[11.5px] font-extrabold transition-all duration-150",
+        value
+          ? "border-brand/40 bg-navy/[0.04] text-ink"
+          : "border-line bg-surface hover:bg-surface-2 text-muted hover:text-ink",
+      )}
     >
-      <span>{label}</span>
+      <span className="flex items-center gap-2">
+        {Icon && <Icon className="size-3.5 text-brand" strokeWidth={1.8} />}
+        <span>{label}</span>
+      </span>
       <span
         className={cn(
-          "relative h-5 w-9 rounded-full transition-colors",
-          value ? "bg-navy-2" : "bg-line",
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150",
+          value ? "border-brand bg-brand" : "border-line bg-line-2",
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 size-4 rounded-full bg-surface shadow transition-all",
-            value ? "right-0.5" : "right-[18px]",
+            "absolute top-0.5 size-3.5 rounded-full bg-surface shadow-xs transition-all duration-150",
+            // RTL: "on" slides toward the start of the track.
+            value ? "start-0.5" : "start-[18px]",
           )}
         />
       </span>

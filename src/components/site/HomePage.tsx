@@ -420,8 +420,8 @@ export function HomePage() {
             <ul className="divide-y divide-line/60 border-y border-line/60">
               {AUDIENCE.map((c) => (
                 <li key={c.title} className="flex items-start gap-4 py-5">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-[10px] border border-line bg-surface-2 text-brand">
-                    <c.icon className="size-4" aria-hidden />
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-brand shadow-xs">
+                    <c.icon className="size-5" strokeWidth={1.75} aria-hidden />
                   </span>
                   <div className="min-w-0">
                     <h3 className="text-[14.5px] font-extrabold text-ink">{c.title}</h3>
@@ -749,20 +749,24 @@ export function HomePage() {
                 </PremiumButton>
               </div>
             </div>
-            <ul className="mt-6 grid gap-x-12 sm:grid-cols-2">
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {HIGHLIGHTS.map((h) => (
-                <li
+                <div
                   key={h.title}
-                  className="flex items-start gap-3 border-t border-line/60 py-4"
+                  className="group rounded-2xl border border-line bg-surface p-4.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-card"
                 >
-                  <h.icon className="mt-1 size-4 shrink-0 text-brand" aria-hidden />
-                  <div className="min-w-0">
-                    <h3 className="text-[13.5px] font-bold text-ink">{h.title}</h3>
-                    <p className="nsq-wrap mt-1 text-[12px] leading-6 text-muted">{h.desc}</p>
-                  </div>
-                </li>
+                  <span className="grid size-11 place-items-center rounded-xl border border-line/70 bg-surface-2 text-brand shadow-xs transition-colors group-hover:bg-brand/10">
+                    <h.icon className="size-5" strokeWidth={1.75} aria-hidden />
+                  </span>
+                  <h3 className="mt-3.5 text-[13.5px] font-extrabold leading-5 text-ink">
+                    {h.title}
+                  </h3>
+                  <p className="nsq-wrap mt-1.5 text-[11.5px] leading-5 text-muted">
+                    {h.desc}
+                  </p>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         </section>
 
