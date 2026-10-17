@@ -25,7 +25,7 @@
  */
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const target = join(root, "src/lib/storage/verify.server.ts");
@@ -35,7 +35,7 @@ if (!existsSync(target)) {
   process.exit(2);
 }
 
-const { runStorageRoundTrip, runMetadataRoundTrip } = await import(target);
+const { runStorageRoundTrip, runMetadataRoundTrip } = await import(pathToFileURL(target).href);
 
 const line = (step) =>
   `  ${step.ok ? "✓" : "✗"} ${step.step}${step.detail ? ` — ${step.detail}` : ""}`;
@@ -87,8 +87,8 @@ if (!report.configured) {
     };
     // A real, standalone object + row for the metadata half: the round trip in
     // `runStorageRoundTrip` already deleted its own object.
-    const { getObjectStorage } = await import(join(root, "src/lib/storage/r2.server.ts"));
-    const { buildStorageObjectKey } = await import(join(root, "src/lib/storage/provider.ts"));
+    const { getObjectStorage } = await import(pathToFileURL(join(root, "src/lib/storage/r2.server.ts")).href);
+    const { buildStorageObjectKey } = await import(pathToFileURL(join(root, "src/lib/storage/provider.ts")).href);
     const storage = getObjectStorage();
     const suffix = Math.random().toString(16).slice(2, 12);
     const objectKey = buildStorageObjectKey({

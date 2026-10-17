@@ -288,7 +288,9 @@ async function gesture(target, from, waypoints, options = {}) {
   for (const point of points) {
     if (!point) continue;
     window.dispatchEvent(pointer("pointermove", point[0], point[1], extra));
-    if (steps > 1) await wait(2);
+    if (steps > 1 && settle !== 0) {
+      await wait(2);
+    }
   }
   await wait(settle);
   const last = waypoints.at(-1) ?? from;
