@@ -232,7 +232,7 @@ describe("motion/templates", () => {
         if (layer.kind === "text" || layer.kind === "caption") {
           assert.doesNotMatch(
             layer.text,
-            /^[\x00-\x7F]+$/,
+            /^[\p{ASCII}]+$/u,
             `Latin-only text in the Arabic launch template: ${layer.text}`,
           );
         }

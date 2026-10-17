@@ -194,7 +194,7 @@ export const prepareText = (
 /** Split a caption into short beats, preferring natural Arabic punctuation. */
 export const splitBeats = (text: string, maxChars = 42): string[] => {
   const parts = text
-    .split(/(?<=[\.\n،؛!؟])\s+/u)
+    .split(/(?<=[.\n،؛!؟])\s+/u)
     .map((part) => part.trim())
     .filter(Boolean);
 

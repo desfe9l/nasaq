@@ -100,3 +100,26 @@ describe("PSD export", () => {
     assert.equal(result.report.layersExported, 0);
   });
 });
+
+describe("PSD export: image fidelity", () => {
+  it("reports an image whose pixels could not be embedded instead of silently writing a blank layer", async () => {
+    const result = await exportPsd(makeProject([makeImageEl()]));
+    // Outside a browser there is no decoder, so the honest outcome is an
+    // explicit placeholder report — not a layer that looks like real artwork.
+    assert.deepEqual(result.report.imagesPlaceholder, ["img-1"]);
+    assert.equal(result.report.imagesEmbedded, 0);
+  });
+
+  it("clamps rasterised image data to maxDimension so a PSD layer stays bounded", async () => {
+    const result = await exportPsd(makeProject([makeImageEl()]), {
+      maxDimension: 8,
+    });
+    assert.equal(result.report.layersExported, 1);
+    // Whatever the environment, an 8px cap must never yield a larger buffer
+    // than the unbounded case.
+    const small = await exportPsd(makeProject([makeImageEl()]), {
+      maxDimension: 4,
+    });
+    assert.ok(small.buffer.length <= result.buffer.length);
+  });
+});

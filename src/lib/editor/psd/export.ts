@@ -23,9 +23,13 @@ import type { Project, CanvasEl, ElStyle, LayerShadow, LayerGlow, StrokeStyle } 
 import type { Gradient } from "../gradient";
 
 interface PsdExportOptions {
-  /** Include composite preview image. */
-  includeComposite?: boolean;
-  /** Maximum dimension for rasterised content (px). */
+  /**
+   * Maximum edge length in px for rasterised image data.
+   *
+   * A PSD stores uncompressed RGBA, so a full-bleed image at print DPI is
+   * hundreds of megabytes per layer. Defaults to 2048, which keeps a typical
+   * report page in the low megabytes.
+   */
   maxDimension?: number;
 }
 
@@ -35,7 +39,75 @@ interface PsdExportResult {
     layersExported: number;
     layersSkipped: string[];
     unsupportedFeatures: string[];
+    /** Image layers whose real pixels were written into the PSD. */
+    imagesEmbedded: number;
+    /** Image layers that could only be written as a transparent placeholder. */
+    imagesPlaceholder: string[];
   };
+}
+
+interface DecodedRaster {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
+const DATA_IMAGE_RE = /^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i;
+
+/** Transparent placeholder at a clamped size; never larger than `maxDimension`. */
+function blankRaster(width: number, height: number, maxDimension: number): DecodedRaster {
+  const [w, h] = clampToMax(width, height, maxDimension);
+  return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+}
+
+/** Scale (w, h) down so neither edge exceeds `max`, preserving aspect. */
+function clampToMax(width: number, height: number, max: number): [number, number] {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  if (!Number.isFinite(max) || max <= 0) return [w, h];
+  const longest = Math.max(w, h);
+  if (longest <= max) return [w, h];
+  const scale = max / longest;
+  return [Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale))];
+}
+
+/**
+ * Decode an element's image source into raw RGBA for a PSD layer.
+ *
+ * PSD image layers hold uncompressed pixels, so the encoded bytes cannot be
+ * copied across directly. Returns `null` when the source is not a decodable
+ * inline image, so the caller can report the omission instead of writing a
+ * blank layer that looks like real artwork.
+ */
+async function decodeElementImage(
+  src: unknown,
+  targetWidth: number,
+  targetHeight: number,
+  maxDimension: number,
+): Promise<DecodedRaster | null> {
+  if (typeof src !== "string" || !DATA_IMAGE_RE.test(src)) return null;
+  if (typeof document === "undefined" || typeof createImageBitmap !== "function") {
+    return null;
+  }
+  try {
+    const blob = await (await fetch(src)).blob();
+    const bitmap = await createImageBitmap(blob);
+    // Respect the placement box when the source has no usable intrinsic size.
+    const sourceW = bitmap.width || targetWidth;
+    const sourceH = bitmap.height || targetHeight;
+    const [w, h] = clampToMax(sourceW, sourceH, maxDimension);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const imageData = ctx.getImageData(0, 0, w, h);
+    return { width: w, height: h, data: imageData.data };
+  } catch {
+    return null;
+  }
 }
 
 /** Convert a NASAQ color (hex or undefined) to an ag-psd color object. */
@@ -140,7 +212,15 @@ function styleToPsdEffects(style: ElStyle): any {
 }
 
 /** Convert a single CanvasEl to an ag-psd Layer. */
-function elementToPsdLayer(el: CanvasEl, dpi: number): any {
+async function elementToPsdLayer(
+  el: CanvasEl,
+  dpi: number,
+  ctx: {
+    maxDimension: number;
+    embeddedImages: number;
+    placeholderImages: string[];
+  },
+): Promise<any> {
   const s = el.style || {};
   const left = mmToPx(el.x);
   const top = mmToPx(el.y);
@@ -191,14 +271,29 @@ function elementToPsdLayer(el: CanvasEl, dpi: number): any {
     }
 
     case "image": {
-      layer.imageData = {
-        width: mmToPx(el.w),
-        height: mmToPx(el.h),
-        data: new Uint8ClampedArray(mmToPx(el.w) * mmToPx(el.h) * 4),
-      };
-      // Note: actual pixel data would need to be loaded from el.src (data URL).
-      // For now, write a transparent placeholder; the composite preview
-      // carries the real appearance.
+      const targetW = Math.max(1, mmToPx(el.w));
+      const targetH = Math.max(1, mmToPx(el.h));
+      const decoded = await decodeElementImage(
+        el.src,
+        targetW,
+        targetH,
+        ctx.maxDimension,
+      );
+      if (decoded) {
+        layer.imageData = {
+          width: decoded.width,
+          height: decoded.height,
+          data: decoded.data,
+        };
+        ctx.embeddedImages += 1;
+      } else {
+        // Never claim a placeholder is artwork. Record it so the UI can say
+        // the layer exported without its pixels.
+        layer.imageData = {
+          ...blankRaster(targetW, targetH, ctx.maxDimension),
+        };
+        ctx.placeholderImages.push(el.id || "image");
+      }
       break;
     }
 
@@ -216,7 +311,9 @@ function elementToPsdLayer(el: CanvasEl, dpi: number): any {
 
     case "group": {
       // Groups are written as layer groups (folders).
-      layer.children = (el.children || []).map((child) => elementToPsdLayer(child, dpi));
+      layer.children = await Promise.all(
+        (el.children || []).map((child) => elementToPsdLayer(child, dpi, ctx)),
+      );
       break;
     }
 
@@ -291,14 +388,18 @@ export async function exportPsd(
   const widthPx = mmToPx(project.pages[0]?.w || 210);
   const heightPx = mmToPx(project.pages[0]?.h || 297);
 
+  const maxDimension = options.maxDimension ?? 2048;
   const layers: any[] = [];
   const skipped: string[] = [];
   const unsupported: string[] = [];
+  const placeholderImages: string[] = [];
+  // Mutable counters shared with the layer builder; read after the loop.
+  const psdCtx = { maxDimension, embeddedImages: 0, placeholderImages };
 
   for (const page of project.pages) {
     for (const el of page.elements) {
       try {
-        const psdLayer = elementToPsdLayer(el, dpi);
+        const psdLayer = await elementToPsdLayer(el, dpi, psdCtx);
         layers.push(psdLayer);
       } catch (err) {
         skipped.push(`${el.name || el.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -333,6 +434,8 @@ export async function exportPsd(
       layersExported: layers.length,
       layersSkipped: skipped,
       unsupportedFeatures: unsupported,
+      imagesEmbedded: psdCtx.embeddedImages,
+      imagesPlaceholder: psdCtx.placeholderImages,
     },
   };
 }
