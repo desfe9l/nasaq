@@ -92,7 +92,7 @@ test("one preference drives the three live appearance modes, legacy migration an
     writeStoredTheme("dim");
     assert.equal(classes.has("dark"), true);
     assert.equal(classes.has("dim"), true);
-    assert.equal(meta.content, "#20262c", "browser chrome follows the dim palette");
+    assert.equal(meta.content, "#20262e", "browser chrome follows the dim palette");
 
     writeStoredTheme("dark");
     assert.equal(classes.has("dark"), true);

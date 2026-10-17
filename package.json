@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "build": "npm run check:deploy && node scripts/with-app-env.mjs vite build && node scripts/migrate.mjs",
-    "build:cf": "NITRO_PRESET=cloudflare-pages npm run build",
+    "build:cf": "npm run build",
     "deploy:cf": "wrangler pages deploy dist --project-name=nasaq",
     "preview:cf": "wrangler pages dev dist",
     "db:migrate": "node scripts/migrate.mjs",
