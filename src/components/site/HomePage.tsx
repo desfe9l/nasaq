@@ -16,6 +16,9 @@ import {
   FolderOpen,
   Layers,
   Shapes,
+  BadgeCheck,
+  CheckCircle2,
+  Type,
 } from "lucide-react";
 import { PACKS, createProject } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
@@ -250,6 +253,8 @@ export function HomePage() {
   const [packsRef, packsVisible] = useReveal<HTMLElement>({ delay: 120 });
   const [highlightsRef, highlightsVisible] = useReveal<HTMLElement>({ delay: 120 });
   const [importRef, importVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [brandRef, brandVisible] = useReveal<HTMLElement>({ delay: 120 });
+  const [aboutRef, aboutVisible] = useReveal<HTMLElement>({ delay: 120 });
 
   return (
     <div className="min-h-full bg-page">
@@ -597,10 +602,123 @@ export function HomePage() {
         {/* ── Premium templates ── */}
         <PremiumTemplates />
 
+        {/* ── هوية مستندك — Brand Identity Section ── */}
+        <section
+          ref={brandRef}
+          className={cn("border-t border-line/60 bg-surface-2 py-12 sm:py-16", brandVisible && "is-revealed")}
+          data-animate
+        >
+          <div className="nsq-container">
+            <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
+              <div>
+                <p className="nsq-section-eyebrow">هوية مستندك الموحدة</p>
+                <h2 className="nsq-section-title mt-2.5 text-[1.5rem] sm:text-[1.85rem]">
+                  هوية جهتك مطبقة على كل تقرير ومستند بلمسة واحدة
+                </h2>
+                <p className="nsq-wrap mt-3 text-[0.925rem] leading-7 text-muted">
+                  لا داعي لإعادة إدخال رموز الألوان والخطوط والشعارات يدويًا في كل ملف. عرّف «هوية مستندك»
+                  مرة واحدة؛ لتسري مباشرة على التقارير السنوية، الخطابات الرسمية، العروض التقديمية، ولوحات المؤشرات.
+                </p>
+
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                      <CheckCircle2 className="size-3.5" />
+                    </div>
+                    <div>
+                      <strong className="text-[13px] font-bold text-ink">لوحات ألوان متزنة ومقيسة</strong>
+                      <p className="text-[12px] text-muted">تحقق تلقائي لنسب التباين والوضوح الطباعي طبقًا للمعايير المؤسسية.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                      <CheckCircle2 className="size-3.5" />
+                    </div>
+                    <div>
+                      <strong className="text-[13px] font-bold text-ink">الشعار المؤسسي والترويسات الرسمية</strong>
+                      <p className="text-[12px] text-muted">تثبيت وتوزيع دقيق لشعار جهتك وأرقام المستند على الهوامش والترويسات.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                      <CheckCircle2 className="size-3.5" />
+                    </div>
+                    <div>
+                      <strong className="text-[13px] font-bold text-ink">حزم هوية قابلة للتصدير والاستيراد</strong>
+                      <p className="text-[12px] text-muted">تبادل ملفات الهوية المعتمدة بين فرق العمل لضمان اتساق المخرجات بين الإدارات.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <PremiumButton
+                    variant="primary"
+                    size="md"
+                    onClick={() => window.location.assign("/الهوية")}
+                    icon={ArrowLeft}
+                    iconPosition="end"
+                  >
+                    إعداد هوية مستندك
+                  </PremiumButton>
+                  <PremiumButton
+                    variant="outline"
+                    size="md"
+                    onClick={() => window.location.assign("/templates")}
+                  >
+                    استعراض القوالب المتوافقة
+                  </PremiumButton>
+                </div>
+              </div>
+
+              {/* Visual showcase card for Identity */}
+              <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+                <div className="flex items-center justify-between border-b border-line/60 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="size-3 rounded-full" style={{ backgroundColor: "#006C35" }} />
+                    <div className="size-3 rounded-full" style={{ backgroundColor: "#0F1E33" }} />
+                    <div className="size-3 rounded-full" style={{ backgroundColor: "#C9A86A" }} />
+                    <span className="text-[12px] font-bold text-ink">لوحة الهوية المؤسسية</span>
+                  </div>
+                  <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-extrabold text-brand">
+                    معتمدة
+                  </span>
+                </div>
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-xl border border-line/70 bg-surface-2 p-3.5">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="font-bold text-ink">اللون الأساسي (Primary)</span>
+                      <span className="font-mono text-muted" dir="ltr">#006C35</span>
+                    </div>
+                    <div className="mt-2 h-2.5 w-full rounded-full" style={{ backgroundColor: "#006C35" }} />
+                  </div>
+                  <div className="rounded-xl border border-line/70 bg-surface-2 p-3.5">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="font-bold text-ink">اللون الداكن (Navy / Ink)</span>
+                      <span className="font-mono text-muted" dir="ltr">#0F1E33</span>
+                    </div>
+                    <div className="mt-2 h-2.5 w-full rounded-full" style={{ backgroundColor: "#0F1E33" }} />
+                  </div>
+                  <div className="rounded-xl border border-line/70 bg-surface-2 p-3.5">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="font-bold text-ink">لون التمييز (Accent Gold)</span>
+                      <span className="font-mono text-muted" dir="ltr">#C9A86A</span>
+                    </div>
+                    <div className="mt-2 h-2.5 w-full rounded-full" style={{ backgroundColor: "#C9A86A" }} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-line/70 bg-surface-2 p-3.5">
+                    <span className="text-[12px] font-bold text-ink">خط العناوين والطباعة</span>
+                    <span className="text-[12px] text-muted">IBM Plex Sans Arabic / Amiri</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Features — one hairline list, no card wall ── */}
         <section
           ref={highlightsRef}
-          className={cn("border-t border-line/60 bg-surface-2 py-12 sm:py-16", highlightsVisible && "is-revealed")}
+          className={cn("border-t border-line/60 bg-page py-12 sm:py-16", highlightsVisible && "is-revealed")}
           data-animate
         >
           <div className="nsq-container">
@@ -642,6 +760,98 @@ export function HomePage() {
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        {/* ── عن نَسَق — Institutional Editorial Guarantees ── */}
+        <section
+          ref={aboutRef}
+          className={cn("border-t border-line/60 bg-surface-2 py-12 sm:py-16", aboutVisible && "is-revealed")}
+          data-animate
+        >
+          <div className="nsq-container">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="nsq-section-eyebrow">عن نَسَق والضمانات التحريرية</p>
+                <h2 className="nsq-section-title mt-2.5 text-[1.5rem] sm:text-[1.85rem]">
+                  معايير هندسية صارمة للوثائق والتقارير المؤسسية
+                </h2>
+                <p className="nsq-wrap mt-2 text-[0.875rem] text-muted">
+                  بُنيت منصة نَسَق لتجاوز عيوب المحررات العامة: هندسة عربية أصيلة، مخرجات طباعية نقية، وخصوصية حقيقية للبيانات.
+                </p>
+              </div>
+              <PremiumButton
+                variant="outline"
+                size="md"
+                onClick={() => window.location.assign("/about")}
+                icon={ArrowLeft}
+                iconPosition="end"
+              >
+                تفاصيل المنصة والضمانات
+              </PremiumButton>
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <BadgeCheck className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">طباعة رسمية بدقة 300 DPI</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  تصدير PDF متجهي نقي وصور عالية الوضوح مهيأة مباشرة للمطابع وجلسات مجالس الإدارة دون تشوه.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <ShieldCheck className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">تخزين محلي أولًا (Local-First)</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  مشاريعك ومستنداتك تُحفظ بأمان داخل متصفحك. لا تُرسل بيانات تقاريرك الحساسة إلى خوادم خارجية دون إذنك.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <Type className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">محاذاة عربية دقيقة وطباعة متقدمة</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  معالجة أصيلة للنصوص ثنائية الاتجاه، وعلامات الترقيم العربية، وتباعد الفقرات والهوامش دون انكسار.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <FileDown className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">تعدد صيغ التصدير والتسليم</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  تصدير بصيغ PDF، Word، PowerPoint، وحزم .nsq المستقلة مع استعراض ومطابقة قبل الإخراج.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <Workflow className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">إدارة الصفحات والهيكلة المؤسسية</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  تنسيق صفحات متعددة المقاسات (A4، A3، وشرائح 16:9)، مع تحديث آلي لأرقام الصفحات وفهارس المحتوى.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+                <div className="flex items-center gap-2.5 text-brand">
+                  <Building2 className="size-5" />
+                  <h3 className="text-[13.5px] font-bold text-ink">مصممة للشركات والمؤسسات</h3>
+                </div>
+                <p className="mt-2 text-[12px] leading-6 text-muted">
+                  مبنية لفرق العمل والإدارات التنفيذية التي تتطلب احترافية وموثوقية في تقاريرها دون تعقيد الأدوات الأجنبية.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 

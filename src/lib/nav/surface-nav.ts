@@ -41,7 +41,7 @@ const SITE_SHORT: Record<string, string> = {
   "/services/import": "استيراد",
   "/motion": "الحركة",
   "/الهوية": "الهوية",
-  "/about": "المنصة",
+  "/about": "عن نسق",
   "/contact": "تواصل",
 };
 

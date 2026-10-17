@@ -152,7 +152,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     to: "/about",
-    label: "عن المنصة",
+    label: "عن نسق",
   },
   {
     to: "/contact",
