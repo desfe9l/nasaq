@@ -128,10 +128,11 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
     bindUnits: s.bindUnits,
     punctuation: s.arabicPunctuation,
   });
+  const transformed = applyTextTransform(normalized, s.textTransform);
   const base = Number(s.fontSize) || 14;
   /* Paragraph spacing: after + before, combined for line counting. */
   const paragraphSpacing = (s.paragraphSpacing || s.paragraphSpacingAfter || 0) + (s.paragraphSpacingBefore || 0);
-  const spaced = withParagraphSpacing(normalized, paragraphSpacing);
+  const spaced = withParagraphSpacing(transformed, paragraphSpacing);
   const padding = textPadding(el);
   const innerW = Math.max(1, el.w - padding * 2);
   const innerH = Math.max(1, el.h - padding * 2);

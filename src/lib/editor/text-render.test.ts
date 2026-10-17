@@ -157,4 +157,21 @@ describe("prepareText — the shared render pipeline", () => {
     const literal = prepareText(el({ content: "جهة", w: 200 }));
     assert.equal(withMacro.neededHeight, literal.neededHeight);
   });
+
+  it("applies text-transform formatting to content", () => {
+    const uppercase = prepareText(
+      el({ content: "report summary", style: { textTransform: "uppercase" } }),
+    );
+    assert.equal(uppercase.text, "REPORT SUMMARY");
+
+    const capitalize = prepareText(
+      el({ content: "annual financial statement", style: { textTransform: "capitalize" } }),
+    );
+    assert.equal(capitalize.text, "Annual Financial Statement");
+
+    const lowercase = prepareText(
+      el({ content: "EXECUTIVE SUMMARY", style: { textTransform: "lowercase" } }),
+    );
+    assert.equal(lowercase.text, "executive summary");
+  });
 });
