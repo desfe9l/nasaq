@@ -14,6 +14,9 @@
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "build": "npm run check:deploy && node scripts/with-app-env.mjs vite build && node scripts/migrate.mjs",
+    "build:cf": "NITRO_PRESET=cloudflare-pages npm run build",
+    "deploy:cf": "wrangler pages deploy dist --project-name=nasaq",
+    "preview:cf": "wrangler pages dev dist",
     "db:migrate": "node scripts/migrate.mjs",
     "db:import": "node scripts/migrate-import.mjs",
     "security:deps": "node scripts/security-deps.mjs",
@@ -161,6 +164,7 @@
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "wrangler": "^4.151.1"
   }
 }

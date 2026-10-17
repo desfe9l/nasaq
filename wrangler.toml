@@ -1,0 +1,15 @@
+name = "nasaq"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# Default Variables
+[vars]
+VITE_AUTH_ENABLED = "true"
+R2_BUCKET_NAME = "nasaq-sa"
+BETTER_AUTH_URL = "https://www.nasaq.team"
+
+# R2 Object Storage Bucket Binding (Direct Cloudflare Native Binding)
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "nasaq-sa"

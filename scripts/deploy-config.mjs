@@ -772,14 +772,21 @@ export function inspectDeployConfig(root = rootDir) {
       install: null,
     };
   }
-  try {
-    vercel = JSON.parse(
-      readFileSync(resolve(projectRoot, "vercel.json"), "utf8"),
-    );
-  } catch {
+  const hasWrangler = existsSync(resolve(projectRoot, "wrangler.toml")) || existsSync(resolve(projectRoot, "wrangler.jsonc"));
+  const hasVercel = existsSync(resolve(projectRoot, "vercel.json"));
+
+  if (hasVercel) {
+    try {
+      vercel = JSON.parse(
+        readFileSync(resolve(projectRoot, "vercel.json"), "utf8"),
+      );
+    } catch {
+      issues.push("vercel.json is invalid JSON.");
+    }
+  } else if (!hasWrangler) {
     return {
       ok: false,
-      issues: ["vercel.json is missing or invalid."],
+      issues: ["Neither wrangler.toml nor vercel.json was found."],
       graph: null,
       install: null,
     };
@@ -795,8 +802,9 @@ export function inspectDeployConfig(root = rootDir) {
     issues.push("package.json must expose npm run check:deploy.");
   }
   if (
-    typeof vercel.installCommand !== "string" ||
-    !vercel.installCommand.trim()
+    hasVercel &&
+    (typeof vercel?.installCommand !== "string" ||
+      !vercel.installCommand.trim())
   ) {
     issues.push("vercel.json must define installCommand explicitly.");
   }
@@ -804,12 +812,14 @@ export function inspectDeployConfig(root = rootDir) {
   for (const stray of ["pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
     if (existsSync(resolve(projectRoot, stray))) {
       issues.push(
-        `${stray} makes Vercel treat this single-package app as an incomplete pnpm workspace and run pnpm instead of npm. Delete it.`,
+        `${stray} makes deployment platforms treat this single-package app as an incomplete pnpm workspace and run pnpm instead of npm. Delete it.`,
       );
     }
   }
 
-  const install = analyzeInstallCommand(vercel.installCommand ?? "");
+  const install = vercel?.installCommand
+    ? analyzeInstallCommand(vercel.installCommand)
+    : { supported: true, includesDev: true, reason: "Cloudflare build with devDependencies" };
   if (!install.supported) issues.push(install.reason);
 
   issues.push(...packageLockIssues(projectRoot, manifest));

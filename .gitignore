@@ -9,6 +9,7 @@ out/
 .output/
 .vercel/
 .nitro/
+.wrangler/
 .tanstack/
 *.tsbuildinfo
 
